@@ -37,6 +37,8 @@ env/
 !models/lstm_model/.gitkeep
 
 # ── IDE / OS ────────────────────────────────────────
+.claude/
+.cursor/
 .vscode/
 .idea/
 *.swp
@@ -45,6 +47,9 @@ env/
 .DS_Store
 Thumbs.db
 .env
+
+# ── Local logs ─────────────────────────────────────
+logs/
 
 # ── Node / Frontend ────────────────────────────────
 frontend/node_modules/
