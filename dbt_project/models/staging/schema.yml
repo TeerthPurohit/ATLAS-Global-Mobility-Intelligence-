@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: nyc_tlc
+    description: "NYC TLC Trip Record Data — yellow taxi parquet files"
+    database: nyc_tlc
+    schema: main
+    tables:
+      - name: yellow_tripdata
+        description: "Raw yellow taxi trip records (loaded via DuckDB parquet scans)"
+
+models:
+  - name: stg_trips
+    description: "Cleaned and typed trip records from raw parquet data"
+    columns:
+      - name: trip_id
+        tests: [unique, not_null]
+      - name: pickup_at
+        tests: [not_null]
+      - name: dropoff_at
+        tests: [not_null]
+      - name: pickup_location_id
+        tests: [not_null]
+      - name: dropoff_location_id
+        tests: [not_null]
+      - name: total_amount
+        tests: [not_null]
+
+  - name: stg_zones
+    description: "Processed taxi zone lookups"
+    columns:
+      - name: location_id
+        tests: [unique, not_null]
+      - name: borough
+        tests: [not_null]
+      - name: zone_name
+        tests: [not_null]

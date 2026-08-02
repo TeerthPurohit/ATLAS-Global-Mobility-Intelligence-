@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: int_trips_enriched
+    description: "Trip records joined with zone metadata, plus computed time & speed columns"
+    columns:
+      - name: trip_id
+        tests: [unique, not_null]
+      - name: pickup_at
+        tests: [not_null]
+      - name: avg_speed_mph
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 0 OR avg_speed_mph IS NULL"

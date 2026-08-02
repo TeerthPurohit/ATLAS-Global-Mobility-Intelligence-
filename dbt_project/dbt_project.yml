@@ -1,0 +1,31 @@
+name: nyc_tlc_rides
+version: "1.0"
+config-version: 2
+
+profile: nyc_tlc_rides
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+
+clean-targets:
+  - target
+  - dbt_packages
+
+seeds:
+  nyc_tlc_rides:
+    taxi_zone_lookup:
+      +column_types:
+        LocationID: integer
+        Borough: varchar
+        Zone: varchar
+        service_zone: varchar
+
+models:
+  nyc_tlc_rides:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: table

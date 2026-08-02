@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: zone_hourly_demand
+    description: "Aggregated hourly demand per pickup zone"
+    columns:
+      - name: pickup_date
+        tests: [not_null]
+      - name: pickup_hour
+        tests: [not_null]
+      - name: pickup_location_id
+        tests: [not_null]
+
+  - name: zone_fare_stats
+    description: "Fare statistics for each zone-to-zone pair"
+
+  - name: zone_pair_flows
+    description: "Daily origin-destination flow counts with ranking"

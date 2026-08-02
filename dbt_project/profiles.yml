@@ -1,0 +1,7 @@
+nyc_tlc_rides:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/warehouse/nyc_rides.duckdb') }}"
+      threads: 4
