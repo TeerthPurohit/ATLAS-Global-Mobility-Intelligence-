@@ -11,4 +11,5 @@ models:
       - name: avg_speed_mph
         tests:
           - dbt_utils.expression_is_true:
-              expression: ">= 0 OR avg_speed_mph IS NULL"
+              arguments:
+                expression: ">= 0 OR avg_speed_mph IS NULL"

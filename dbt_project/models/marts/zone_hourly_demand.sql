@@ -10,7 +10,6 @@ SELECT
     pickup_zone,
 
     COUNT(*)           AS total_trips,
-    SUM(passenger_count) AS total_passengers,
     AVG(trip_distance) AS avg_trip_distance_miles,
     AVG(total_amount)  AS avg_fare
 

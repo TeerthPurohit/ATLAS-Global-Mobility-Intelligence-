@@ -2,12 +2,12 @@ version: 2
 
 sources:
   - name: nyc_tlc
-    description: "NYC TLC Trip Record Data — yellow taxi parquet files"
-    database: nyc_tlc
+    description: "NYC TLC Trip Record Data — HVFHV (Uber/Lyft) parquet files loaded by scripts/load_raw_to_duckdb.py"
+    database: nyc_rides
     schema: main
     tables:
-      - name: yellow_tripdata
-        description: "Raw yellow taxi trip records (loaded via DuckDB parquet scans)"
+      - name: raw_trips
+        description: "Raw HVFHV trip records (High Volume For-Hire Vehicle — Uber/Lyft)"
 
 models:
   - name: stg_trips
@@ -24,7 +24,13 @@ models:
       - name: dropoff_location_id
         tests: [not_null]
       - name: total_amount
-        tests: [not_null]
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1000
+                inclusive: false
 
   - name: stg_zones
     description: "Processed taxi zone lookups"

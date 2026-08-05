@@ -1,0 +1,35 @@
+{
+  "seed": null,
+  "note": "no training -- last known EWMA value used directly as the next-hour forecast",
+  "hyperparameters": {
+    "alpha": 0.5
+  },
+  "date_range": {
+    "train": [
+      "2024-01-08 00:00:00",
+      "2024-03-24 18:00:00"
+    ],
+    "val": [
+      "2024-03-24 19:00:00",
+      "2024-03-31 23:00:00"
+    ],
+    "test": [
+      "2024-06-08 00:00:00",
+      "2024-06-30 23:00:00"
+    ]
+  },
+  "n_rows": {
+    "train": 252121,
+    "val": 44669,
+    "test": 142993
+  },
+  "metrics": {
+    "test_rmse": 7.456322958223632,
+    "test_mae": 4.617096721011698,
+    "test_inference_latency_ms_per_row": 1.0986549962307893e-06
+  },
+  "library_versions": {
+    "pandas": "3.0.3",
+    "numpy": "2.5.1"
+  }
+}

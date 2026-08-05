@@ -28,7 +28,7 @@ Grounded in [`requirements.txt`](../requirements.txt) and [`.env.example`](../.e
 | Frontend | React (Vite) | see [`frontend/package.json`](../frontend/package.json) |
 | Viz / Dev | matplotlib, seaborn, Jupyter, pytest | `matplotlib`, `seaborn`, `jupyter`, `pytest`, `httpx` |
 
-> ⚠️ The root plan mentions "Gemini" for the RAG layer. **This repo is wired for OpenAI + LangChain + ChromaDB.**
+> ⚠️ The root plan mentions "Gemini" for the RAG layer. **This repo is wired for OpenAI + LangChain + Qdrant (DuckDB fallback).**
 > Set `OPENAI_API_KEY` in `.env`. If you deliberately switch providers, update `requirements.txt`, `.env.example`, and this table together.
 
 ---
@@ -181,7 +181,7 @@ Grounded in [`requirements.txt`](../requirements.txt) and [`.env.example`](../.e
 
 ### Steps
 1. [`generate_insight_docs.py`](../rag/insight_generation/generate_insight_docs.py): per zone/zone-hour, generate a short NL insight paragraph from marts + algorithm outputs. **Template every number from your real computed tables** — the LLM phrases, it never invents values.
-2. [`build_vector_store.py`](../rag/embeddings/build_vector_store.py): embed insight docs (OpenAI embeddings or local sentence-transformer) into **ChromaDB**.
+2. [`build_vector_store.py`](../rag/embeddings/build_vector_store.py): embed insight docs (OpenAI embeddings or local sentence-transformer) into **Qdrant** (default) or a DuckDB cosine-similarity table as a lighter-footprint fallback.
 3. [`sql_agent.py`](../rag/nl_to_sql/sql_agent.py): NL→SQL path — prompt with the **mart schemas only**, generate SQL, execute against DuckDB, return the grounded number *with the query shown*.
 4. [`query_classifier.py`](../rag/router/query_classifier.py): route each question as `numeric` vs. `explanatory` (a short LLM intent prompt — don't train a separate classifier).
 5. [`rag_pipeline.py`](../rag/rag_pipeline.py): router → dispatch to NL→SQL or vector retrieval → grounded final answer.

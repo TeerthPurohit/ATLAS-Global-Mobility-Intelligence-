@@ -30,7 +30,8 @@ SELECT
     extract('hour' FROM pickup_at)     AS pickup_hour,
     extract('dow'  FROM pickup_at)     AS pickup_day_of_week,
     extract('month' FROM pickup_at)    AS pickup_month,
-    CAST(pickup_at AS DATE)            AS pickup_date
+    CAST(pickup_at AS DATE)            AS pickup_date,
+    extract('dow' FROM pickup_at) IN (0, 6) AS is_weekend
 
 FROM trips
 LEFT JOIN zones AS pickup  ON trips.pickup_location_id  = pickup.location_id

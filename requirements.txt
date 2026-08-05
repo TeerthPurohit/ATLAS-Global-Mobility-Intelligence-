@@ -18,11 +18,25 @@ statsmodels>=0.14,<0.15
 shapely>=2.0,<3.0
 geohash2>=1.1,<2.0
 
+# ── Graph ───────────────────────────────────────────
+networkx>=3.0,<4.0
+scipy>=1.11,<2.0  # reference implementation for KD-tree correctness test
+
 # ── RAG / LLM ───────────────────────────────────────
 openai>=1.0,<2.0
 langchain>=0.3,<1.0
 langchain-community>=0.3,<1.0
-chromadb>=0.5,<1.0
+qdrant-client>=1.9,<2.0
+# Local embedding model for rag/embeddings/build_vector_store.py -- avoids
+# spending API budget / needing network at query time for a step that only
+# runs once at precompute time (rule 8). We use the DuckDB
+# array_cosine_similarity fallback (not qdrant-client above) since no Qdrant
+# service is provisioned in docker-compose and standing one up for ~261
+# short paragraphs isn't worth it at this scale -- see ADR-004 / SPEC-008
+# and docs/architecture/Infrastructure.md.
+sentence-transformers>=3.0,<4.0
+# .env loading for rag/config.py (OPENAI_API_KEY, OPENAI_MODEL).
+python-dotenv>=1.0,<2.0
 
 # ── Backend ─────────────────────────────────────────
 fastapi>=0.110,<1.0
