@@ -1,0 +1,76 @@
+site_name: NYC TLC / Journey Intelligence Engine
+site_description: >-
+  Applied data engineering + ML platform on NYC TLC + London Santander Cycles
+  data, generalized into a global mobility intelligence engine.
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: README.md
+  - Live API Reference (Swagger): "http://localhost:8000/docs"
+  - Reference:
+      - Capabilities & basis contract: reference/capabilities.md
+      - External data adapters: reference/adapters.md
+  - Guides:
+      - Adding a city: guides/adding-a-city.md
+      - Getting started: getting-started/README.md
+  - Architecture:
+      - System design: architecture/System-Design.md
+      - Architecture overview: architecture/Architecture.md
+      - Data flow: architecture/Data-Flow.md
+      - Infrastructure: architecture/Infrastructure.md
+      - Security: architecture/Security.md
+      - Deployment: architecture/Deployment.md
+  - Data & Models:
+      - Source data & registries: data/README.md
+      - Algorithms: algorithms/README.md
+      - Model ladder: models/README.md
+  - Decision Records:
+      - ADR-001 DuckDB over Postgres: adr/ADR-001-duckdb-over-postgres.md
+      - ADR-002 dbt layering: adr/ADR-002-dbt-layering.md
+      - ADR-003 Chronological split: adr/ADR-003-chronological-split.md
+      - ADR-004 Hybrid RAG / NL-to-SQL: adr/ADR-004-hybrid-rag-nl-to-sql.md
+      - ADR-005 Precompute for deployment: adr/ADR-005-precompute-for-deployment.md
+      - ADR-006 AI tooling investment: adr/ADR-006-ai-tooling-investment.md
+      - ADR-007 Predictor basis field: adr/ADR-007-predictor-basis-field.md
+      - ADR-008 Adapter pattern, $0 budget: adr/ADR-008-adapter-pattern-zero-budget.md
+      - ADR-010 Query-plan fine-tuning budget exception: adr/ADR-010-query-plan-finetuning-budget-exception.md
+  - Product:
+      - Vision: product/Vision.md
+      - PRD: product/PRD.md
+      - Roadmap: product/Roadmap.md
+      - Use cases: product/Use-Cases.md
+      - Personas: product/Personas.md
+      - Success metrics: product/Success-Metrics.md
+  - Operations:
+      - Operations: operations/README.md
+      - Deployment: deployment/README.md
+      - Changelog: changelog/README.md

@@ -1,3 +1,3 @@
-id,name,country_code,latitude,longitude,timezone,currency,status,data_source,geography_type,mobility_mode,model_status,last_updated
-nyc,New York City,US,40.7128,-74.0060,America/New_York,USD,active,nyc_tlc,tlc_zone,ride_hailing,active,2026-08-08
-london,London,GB,51.5074,-0.1278,Europe/London,GBP,active,tfl_cycles,cycle_station,cycle_share,active,2026-08-08
+id,name,country_code,latitude,longitude,timezone,currency,status,data_source,geography_type,mobility_mode,model_status,last_updated,population,land_area_km2
+nyc,New York City,US,40.7128,-74.0060,America/New_York,USD,active,nyc_tlc,tlc_zone,ride_hailing,active,2026-08-08,8804190,778.2
+london,London,GB,51.5074,-0.1278,Europe/London,GBP,active,tfl_cycles,cycle_station,cycle_share,active,2026-08-08,9089736,1572.0

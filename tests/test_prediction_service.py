@@ -50,8 +50,11 @@ def test_predict_fare_matches_model_service_directly():
 
 
 def test_predict_demand_unknown_city_raises_city_not_found():
+    # "atlantis" alone is a real place (a town in South Africa) and now
+    # correctly resolves via global_geography_service's broadened city
+    # resolution -- only a genuinely unresolvable string 404s.
     with pytest.raises(DomainError) as exc_info:
-        prediction_service.predict_demand("atlantis", 132, 8, 1)
+        prediction_service.predict_demand("atlantis-nonexistent-city-xyz", 132, 8, 1)
     assert exc_info.value.code == ErrorCode.CITY_NOT_FOUND
 
 

@@ -65,6 +65,34 @@ class JourneyRequest(BaseModel):
     vehicle_type: str
 
 
+class CityJourneyRequest(BaseModel):
+    """City-scoped journey estimate request -- deliberately smaller than
+    JourneyRequest (no vehicle_type): this endpoint works for any resolvable
+    city, not just NYC's vehicle-profile-aware pipeline."""
+
+    pickup_lat: float
+    pickup_lon: float
+    dropoff_lat: float
+    dropoff_lon: float
+    departure_time: datetime
+
+
+class CityJourneyEstimate(BaseModel):
+    """Deliberately a 4-field subset of JourneyEstimate: distance/duration
+    (real, via OSRM, for any city on Earth) plus demand/fare (computed for
+    NYC/London where a real model exists, modeled_estimate everywhere else).
+    Reusing the full 11-field JourneyEstimate here would force most fields to
+    `unavailable` for every non-NYC city -- noisy, not what "any resolvable
+    city gets a real answer" means."""
+
+    city_id: str
+    distance: PredictionOut
+    duration: PredictionOut
+    demand: PredictionOut
+    fare: PredictionOut
+    mode: Literal["zone_enriched", "osrm_only"]
+
+
 class JourneyEstimate(BaseModel):
     distance: PredictionOut
     duration: PredictionOut
@@ -166,6 +194,8 @@ class Capabilities(BaseModel):
     chat: bool
     area_analysis: bool
     forecast: bool = True
+    transit_coverage: bool = False
+    chat_tier: Literal["full_rag", "sql_only", "context_only"] = "context_only"
 
 
 class Area(BaseModel):
@@ -203,6 +233,8 @@ class PredictionEnvelope(BaseModel):
     generated_at: datetime
     data_timestamp: str | None = None
     source: str
+    basis: Literal["computed", "modeled_estimate"] = "computed"
+    reason: str | None = None
 
 
 class ForecastPoint(BaseModel):

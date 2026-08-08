@@ -63,10 +63,9 @@ def _heuristic_classify(question: str) -> str:
 
 def classify(question: str, model: str = OPENAI_MODEL) -> str:
     try:
-        from openai import OpenAI
+        from llm_client import chat_completion
 
-        client = OpenAI()
-        resp = client.chat.completions.create(
+        resp = chat_completion(
             model=model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},

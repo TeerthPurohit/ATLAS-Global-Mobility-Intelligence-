@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
-from backend.adapters import holidays_nager, routing_osrm, weather_openweather  # noqa: E402
+from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402
 from backend.services import geography_service, model_service, pricing_engine, vehicle_profiles  # noqa: E402
@@ -125,7 +125,7 @@ def build_context(
         departure_time=departure_time, vehicle_type=vehicle_type,
         pickup_zone_id=pickup_zone_id, dropoff_zone_id=dropoff_zone_id,
         vehicle_profile=vehicle_profiles.resolve(vehicle_type),
-        weather=weather_openweather.fetch(pickup_lat, pickup_lon, departure_time),
+        weather=weather_openmeteo.fetch(pickup_lat, pickup_lon, departure_time),
         holiday=holidays_nager.fetch(pickup_lat, pickup_lon, departure_time),
     )
 

@@ -1,0 +1,4 @@
+# Dev-time only: builds/serves the MkDocs documentation site (mkdocs.yml).
+# Not needed at runtime or during model training -- see requirements-backend.txt
+# and requirements.txt for those.
+mkdocs-material>=9.5,<10.0

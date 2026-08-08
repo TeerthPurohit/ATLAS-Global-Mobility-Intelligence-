@@ -21,12 +21,14 @@ from backend.schemas import (
     City,
     CityDemandPredictRequest,
     CityFarePredictRequest,
+    CityJourneyEstimate,
+    CityJourneyRequest,
     ErrorCode,
     ErrorResponse,
     ForecastEnvelope,
     PredictionEnvelope,
 )
-from backend.services import geography_service, prediction_service, rag_service
+from backend.services import city_journey_service, geography_service, global_geography_service, prediction_service, rag_service
 
 router = APIRouter(tags=["Cities"])
 
@@ -133,6 +135,21 @@ def predict_fare(city_id: str, req: CityFarePredictRequest) -> PredictionEnvelop
     return prediction_service.predict_fare(city_id, req.pickup_area_id, req.dropoff_area_id, req.hour)
 
 
+@router.post(
+    "/api/cities/{city_id}/journey/estimate",
+    response_model=CityJourneyEstimate,
+    summary="City-scoped journey estimate (any resolvable city)",
+    description="Real OSRM route distance/duration for any city on Earth GeoNames can resolve, "
+    "plus demand/fare -- computed for nyc/london where a real model exists, an honestly labeled "
+    "modeled_estimate everywhere else. Not the full NYC-only /journey/estimate pipeline.",
+    responses={404: {"model": ErrorResponse, "description": "City not resolvable"}},
+)
+def city_journey_estimate(city_id: str, req: CityJourneyRequest) -> CityJourneyEstimate:
+    return city_journey_service.estimate(
+        city_id, req.pickup_lat, req.pickup_lon, req.dropoff_lat, req.dropoff_lon, req.departure_time,
+    )
+
+
 @router.get(
     "/api/cities/{city_id}/forecast",
     response_model=ForecastEnvelope | CapabilityUnavailable,
@@ -160,9 +177,13 @@ def forecast(
     responses={404: {"model": ErrorResponse, "description": "City not found"}, 500: {"model": ErrorResponse, "description": "Chat failed"}},
 )
 def city_chat(city_id: str, req: ChatRequest) -> ChatResponse:
-    _require_city(city_id)
+    # Broadened existence check (any resolvable city, not registered-only)
+    # -- chat never flatly refuses a real city, only a genuinely nonexistent
+    # one 404s here.
+    if global_geography_service.get_city_profile(city_id) is None:
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
     try:
-        res = rag_service.answer_question(question=req.question, session_id=req.session_id)
+        res = rag_service.answer_question(question=req.question, session_id=req.session_id, city_id=city_id)
     except Exception as exc:  # noqa: BLE001 -- surfaced as a typed DomainError, never a bare 500
         raise DomainError(ErrorCode.CHAT_FAILED, str(exc), 500) from exc
     return ChatResponse(

@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
 from nyc_schema import NYC_SCHEMA  # noqa: E402
-from query_plan import QueryPlan  # noqa: E402
+from query_plan import CityMobilitySchema, QueryPlan  # noqa: E402
 from query_plan_compiler import compile as compile_plan  # noqa: E402
 
 ALLOWED_TABLES = {"zone_hourly_demand", "zone_fare_stats", "zone_pair_flows"}
@@ -46,7 +46,7 @@ _STARTS_SELECT = re.compile(r"^\s*(with|select)\b", re.IGNORECASE)
 _CTE_NAME_RE = re.compile(r"\b(\w+)\s+as\s*\(", re.IGNORECASE)
 _TABLE_REF_RE = re.compile(r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
 
-SYSTEM_PROMPT_TEMPLATE = """You are a query planner for a NYC ride-hailing data \
+SYSTEM_PROMPT_TEMPLATE = """You are a query planner for a {city_name} mobility data \
 platform. Given a user's question, respond with ONLY a JSON object matching \
 this shape -- never SQL, never markdown, never an explanation:
 
@@ -74,11 +74,12 @@ def _strip_fences(text: str) -> str:
     return text
 
 
-def _validate_sql(sql: str) -> None:
+def _validate_sql(sql: str, allowed_tables: set[str] = ALLOWED_TABLES) -> None:
     """Defense-in-depth guard (ADR-004): compile_plan() only ever emits
     schema-declared table/column names, this independently re-checks the
     compiled text against a table allow-list and DDL/DML keyword blocklist
-    before execution."""
+    before execution. `allowed_tables` defaults to NYC's for backward
+    compatibility; other schemas pass their own metric tables."""
     if not _STARTS_SELECT.match(sql):
         raise ValueError(f"generated SQL must start with SELECT or WITH: {sql!r}")
     if ";" in sql:
@@ -88,22 +89,22 @@ def _validate_sql(sql: str) -> None:
 
     cte_names = {m.lower() for m in _CTE_NAME_RE.findall(sql)}
     referenced = {m.lower() for m in _TABLE_REF_RE.findall(sql)}
-    allowed = {t.lower() for t in ALLOWED_TABLES} | cte_names
+    allowed = {t.lower() for t in allowed_tables} | cte_names
     illegal = referenced - allowed
     if illegal:
         raise ValueError(f"generated SQL references disallowed table(s) {illegal}: {sql!r}")
 
 
-def generate_plan(question: str, model: str = OPENAI_MODEL) -> QueryPlan:
+def generate_plan(question: str, schema: CityMobilitySchema = NYC_SCHEMA, model: str = OPENAI_MODEL) -> QueryPlan:
     """The one place an LLM is called on the numeric-question path -- its
-    entire output is a QueryPlan JSON object, never SQL text."""
-    from openai import OpenAI
+    entire output is a QueryPlan JSON object, never SQL text. DeepSeek is
+    tried first (llm_client.py), OpenAI as fallback."""
+    from llm_client import chat_completion
 
-    client = OpenAI()
-    resp = client.chat.completions.create(
+    resp = chat_completion(
         model=model,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(schema=NYC_SCHEMA.describe())},
+            {"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(city_name=schema.name, schema=schema.describe())},
             {"role": "user", "content": question},
         ],
         temperature=0,
@@ -113,13 +114,15 @@ def generate_plan(question: str, model: str = OPENAI_MODEL) -> QueryPlan:
     return QueryPlan.from_json(text)
 
 
-def answer(question: str, db_path: Path = DEFAULT_DB_PATH, model: str = OPENAI_MODEL) -> dict:
+def answer(
+    question: str, db_path: Path = DEFAULT_DB_PATH, schema: CityMobilitySchema = NYC_SCHEMA, model: str = OPENAI_MODEL,
+) -> dict:
     """Question -> QueryPlan -> deterministically compiled SQL -> real,
     read-only result -- never a value the LLM invented, and never SQL text
     the LLM wrote directly (SPEC-013 FR-10)."""
-    plan = generate_plan(question, model=model)
-    sql = compile_plan(plan, NYC_SCHEMA)
-    _validate_sql(sql)
+    plan = generate_plan(question, schema=schema, model=model)
+    sql = compile_plan(plan, schema)
+    _validate_sql(sql, {m.table for m in schema.metrics.values()})
 
     con = duckdb.connect(str(db_path), read_only=True)
     try:

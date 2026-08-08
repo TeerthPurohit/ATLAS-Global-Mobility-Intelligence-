@@ -27,6 +27,13 @@ seeds:
         name: varchar
         latitude: double
         longitude: double
+    weather_hourly:
+      +column_types:
+        city_id: varchar
+        date: date
+        hour: integer
+        temperature_c: double
+        precipitation_mm: double
 
 models:
   nyc_tlc_rides:

@@ -104,7 +104,7 @@ def get_city_profile(city_id: str) -> dict | None:
             },
             "timezone": registered.get("timezone", "UTC"),
             "currency": registered.get("currency", "USD"),
-            "population": registered.get("population") or (8804190 if city_id == "nyc" else 9089736 if city_id == "london" else None),
+            "population": registered.get("population"),
             "administrative_hierarchy": [
                 {"name": registered["name"], "type": "city"},
                 {"name": registered.get("country_code"), "type": "country"},
@@ -112,14 +112,16 @@ def get_city_profile(city_id: str) -> dict | None:
             "alternate_names": [registered["name"]],
             "geographic_classification": {
                 "feature_class": "P",
-                "feature_code": "PPLC" if city_id in ("nyc", "london") else "P",
+                "feature_code": "PPL",  # generic "populated place" -- a real per-city GeoNames
+                                         # feature code (e.g. PPLC for a capital) was never looked
+                                         # up for these seeded rows, so this doesn't claim one.
                 "place_type": "city",
             },
             "capabilities": {
                 "geographic": True,
                 "context": True,
                 "observed_mobility": capabilities.get("demand", False),
-                "cross_city_model": True,
+                "cross_city_model": resolve_modeling_availability(registered.get("population"), registered.get("latitude")),
             },
         }
 
@@ -198,7 +200,7 @@ def get_city_profile(city_id: str) -> dict | None:
             "geographic": True,
             "context": True,
             "observed_mobility": False,
-            "cross_city_model": True,
+            "cross_city_model": resolve_modeling_availability(population, lat),
         },
     }
 
@@ -224,7 +226,7 @@ def search_cities(query: str, limit: int = 10, country_code: str | None = None) 
                 "latitude": city["latitude"],
                 "longitude": city["longitude"],
                 "timezone": city["timezone"],
-                "population": 8804190 if city["id"] == "nyc" else 9089736 if city["id"] == "london" else None,
+                "population": city.get("population"),
                 "place_type": "city",
                 "mobility_available": caps.get("demand", False) or caps.get("area_analysis", False),
                 "modeling_available": True,

@@ -27,7 +27,9 @@
     "lag_24h",
     "lag_168h",
     "ewma",
-    "rolling_7d_avg"
+    "rolling_7d_avg",
+    "temperature_c",
+    "precipitation_mm"
   ],
   "target": "total_trips",
   "hyperparameters": {
@@ -40,47 +42,49 @@
       "max_depth": 4,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 4.966819148101848,
-      "val_mae": 3.239684820175171
+      "val_rmse": 4.968458059119499,
+      "val_mae": 3.239351511001587
     },
     {
       "max_depth": 6,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 4.923247034086607,
-      "val_mae": 3.1923975944519043
+      "val_rmse": 4.9024227303149805,
+      "val_mae": 3.1828956604003906
     },
     {
       "max_depth": 6,
       "learning_rate": 0.05,
       "n_estimators": 500,
-      "val_rmse": 4.913602919685691,
-      "val_mae": 3.191181182861328
+      "val_rmse": 4.899077986561165,
+      "val_mae": 3.1805319786071777
     },
     {
       "max_depth": 8,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 4.9352663033627096,
-      "val_mae": 3.1900954246520996
+      "val_rmse": 4.924002051544382,
+      "val_mae": 3.179893970489502
     }
   ],
   "feature_importances": {
-    "hour": 0.012817963026463985,
-    "day_of_week": 0.009744657203555107,
+    "hour": 0.01264257077127695,
+    "day_of_week": 0.009543591178953648,
     "is_weekend": 0.0,
-    "lag_1h": 0.32197144627571106,
-    "lag_24h": 0.034219350665807724,
-    "lag_168h": 0.5964362621307373,
-    "ewma": 0.014984436333179474,
-    "rolling_7d_avg": 0.009825844317674637
+    "lag_1h": 0.3216893970966339,
+    "lag_24h": 0.03438130393624306,
+    "lag_168h": 0.5808772444725037,
+    "ewma": 0.015617331489920616,
+    "rolling_7d_avg": 0.009618472307920456,
+    "temperature_c": 0.005020139738917351,
+    "precipitation_mm": 0.01060996949672699
   },
   "metrics": {
-    "val_rmse": 4.913602919685691,
-    "val_mae": 3.191181182861328,
-    "test_rmse": 5.089047185905823,
-    "test_mae": 3.2592315673828125,
-    "test_inference_latency_ms_per_row": 0.002794531900113029
+    "val_rmse": 4.899077986561165,
+    "val_mae": 3.1805319786071777,
+    "test_rmse": 5.188950301430231,
+    "test_mae": 3.3626649379730225,
+    "test_inference_latency_ms_per_row": 0.002084377556950244
   },
   "library_versions": {
     "xgboost": "3.3.0",

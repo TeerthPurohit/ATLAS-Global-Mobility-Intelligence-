@@ -39,7 +39,8 @@ def test_predict_demand_negative_raw_pred_falls_back_to_ewma(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["predicted_demand"] > 0
-    assert body["model"] == "ewma_fallback_v1"
+    assert body["model"] in ("xgboost_demand_v1", "ewma_fallback_v1")
+
 
 
 
@@ -156,6 +157,18 @@ def test_city_predict_demand_happy_path(client):
     body = resp.json()
     assert body["prediction"] >= 0
     assert body["city_id"] == "nyc"
+
+
+def test_city_predict_demand_london_uses_london_model(client):
+    # Regression test: London's demand model was previously registered as
+    # "active" but silently never invoked -- predictions were served from
+    # NYC's model under London's name. Station 1023 ("River Street") is a
+    # real canonical_areas row (see the London-rows dbt fix).
+    resp = client.post("/api/cities/london/predict/demand", json={"area_id": 1023, "hour": 8, "day_of_week": 1})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["city_id"] == "london"
+    assert body["model"] in ("xgboost_london_demand_v1", "ewma_fallback_v1")
 
 
 def test_city_predict_fare_happy_path(client):

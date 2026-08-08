@@ -21,10 +21,13 @@ from pathlib import Path
 from typing import Generator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import OPENAI_MODEL  # noqa: E402
+from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
 from embeddings.build_vector_store import search as vector_search  # noqa: E402
 from insight_generation.generate_insight_docs import extract_numbers, validate_grounding  # noqa: E402
+from llm_client import chat_completion  # noqa: E402
 from nl_to_sql import sql_agent  # noqa: E402
+from nl_to_sql.nyc_schema import NYC_SCHEMA  # noqa: E402
+from nl_to_sql.query_plan import CityMobilitySchema  # noqa: E402
 from router.query_classifier import EXPLANATORY, NUMERIC, classify  # noqa: E402
 import session_store  # noqa: E402
 
@@ -77,8 +80,8 @@ def _format_numeric_answer(result: dict) -> str:
     return "Based on the marts:\n" + "\n".join(f"- {line}" for line in lines) + suffix
 
 
-def _answer_numeric(question: str) -> dict:
-    result = sql_agent.answer(question)
+def _answer_numeric(question: str, db_path: Path = DEFAULT_DB_PATH, schema: CityMobilitySchema = NYC_SCHEMA) -> dict:
+    result = sql_agent.answer(question, db_path=db_path, schema=schema)
     return {
         "question": question,
         "route": NUMERIC,
@@ -94,10 +97,7 @@ def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
     allowed = set(extract_numbers(context))
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI()
-        resp = client.chat.completions.create(
+        resp = chat_completion(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT.format(context=context)},
@@ -139,13 +139,22 @@ def _answer_explanatory(question: str, k: int = 3) -> dict:
     }
 
 
-def answer(question: str, session_id: str | None = None) -> dict:
+def answer(
+    question: str, session_id: str | None = None, db_path: Path = DEFAULT_DB_PATH,
+    schema: CityMobilitySchema = NYC_SCHEMA, allow_explanatory: bool = True,
+) -> dict:
     active_session_id = session_id or str(uuid.uuid4())
     route = classify(question)
     if route == NUMERIC:
-        res = _answer_numeric(question)
-    else:
+        res = _answer_numeric(question, db_path=db_path, schema=schema)
+    elif allow_explanatory:
         res = _answer_explanatory(question)
+    else:
+        res = {
+            "question": question, "route": EXPLANATORY,
+            "answer": f"No insight documents exist for {schema.name} yet -- ask a specific numeric question about demand instead.",
+            "sql": None, "rows": None, "sources": [],
+        }
 
     res["session_id"] = active_session_id
     session_store.save_message(active_session_id, "user", question)
@@ -191,10 +200,7 @@ def answer_stream(question: str, session_id: str | None = None) -> Generator[dic
     accumulated_text = ""
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI()
-        stream = client.chat.completions.create(
+        stream = chat_completion(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT.format(context=context)},

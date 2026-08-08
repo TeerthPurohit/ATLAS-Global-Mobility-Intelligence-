@@ -1,47 +1,43 @@
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useMobility } from "../../context/MobilityContext";
 import { GlobalCitySearchResult, searchGlobalCities } from "../../api/client";
 import { Sparkles, Search, MapPin, ArrowRight, Bot, Building2, CheckCircle2, ChevronLeft, Globe } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+// A handful of example queries to seed "Featured Global Cities" -- NOT a
+// claim of support. Every card shown is whatever the backend's own search
+// actually returns for these (real mobility_available/modeling_available
+// flags, real population), never a hardcoded per-city record.
+const FEATURED_QUERIES = ["Mumbai", "Dubai", "Tokyo", "New York City", "London"];
 
 export const ConversationalCityPicker: React.FC = () => {
   const { selectedCountry, countryCities, selectGlobalCity, resetToWorld } = useMobility();
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<GlobalCitySearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [debouncedTerm, setDebouncedTerm] = useState("");
   const navigate = useNavigate();
 
-
-  // Initial suggested cities
-  const DEFAULT_SUGGESTED: GlobalCitySearchResult[] = [
-    { id: "mumbai", name: "Mumbai", country: "India", country_code: "IN", timezone: "Asia/Kolkata", population: 20961000, place_type: "city", mobility_available: false, modeling_available: true },
-    { id: "dubai", name: "Dubai", country: "United Arab Emirates", country_code: "AE", timezone: "Asia/Dubai", population: 3331420, place_type: "city", mobility_available: false, modeling_available: true },
-    { id: "tokyo", name: "Tokyo", country: "Japan", country_code: "JP", timezone: "Asia/Tokyo", population: 37400000, place_type: "city", mobility_available: false, modeling_available: true },
-    { id: "nyc", name: "New York City", country: "United States", country_code: "US", timezone: "America/New_York", population: 8467513, place_type: "city", mobility_available: true, modeling_available: true },
-    { id: "london", name: "London", country: "United Kingdom", country_code: "GB", timezone: "Europe/London", population: 8982000, place_type: "city", mobility_available: true, modeling_available: true },
-  ];
-
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setSearchResults(DEFAULT_SUGGESTED);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const results = await searchGlobalCities(searchTerm, 8);
-        setSearchResults(results);
-      } catch (e) {
-        console.error("City search error:", e);
-      } finally {
-        setLoading(false);
-      }
-    }, 200);
-
+    const timer = setTimeout(() => setDebouncedTerm(searchTerm.trim()), 200);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  const { data: featured = [] } = useQuery({
+    queryKey: ["citypickerFeatured"],
+    queryFn: async () => {
+      const results = await Promise.all(FEATURED_QUERIES.map((q) => searchGlobalCities(q, 1).catch(() => [])));
+      return results.flat();
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const { data: liveResults = [], isFetching: loading } = useQuery({
+    queryKey: ["citypickerSearch", debouncedTerm],
+    queryFn: () => searchGlobalCities(debouncedTerm, 8),
+    enabled: debouncedTerm.length > 0,
+  });
+
+  const searchResults = debouncedTerm ? liveResults : featured;
 
   const handleSelectCity = (city: GlobalCitySearchResult) => {
     selectGlobalCity(city.id);

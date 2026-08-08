@@ -94,16 +94,57 @@ _DENSITY_MULTIPLIER_MIN = 0.5
 _DENSITY_MULTIPLIER_MAX = 2.0
 
 
-def estimate_demand_per_capita(population: int, density: float | None = None) -> tuple[float, str]:
+# ---- Weather/holiday elasticity (SPEC-015-adjacent, added once the weather
+# backfill made real joined data available -- see
+# scripts/backfill_weather_openmeteo.py) -----------------------------------
+# Real ratios, each a single SQL aggregate against the actual warehouse, run
+# 2026-08-09:
+#   NYC:    SELECT AVG(total_trips) FILTER (precipitation_mm > 0) /
+#                  AVG(total_trips) FILTER (precipitation_mm = 0 OR NULL)
+#           FROM zone_hourly_demand -> 1.116 (wet hours UP ~12%: people
+#           avoid walking/biking, take a ride-hail trip instead)
+#   London: same query against london_station_hourly_demand -> 0.893 (wet
+#           hours DOWN ~11%: people avoid biking a Santander Cycle in the rain)
+# The two real cities disagree on direction -- a real, honest finding, not a
+# bug to paper over. Averaging nets close to neutral; the multiplier is
+# clamped tight (not the wider 0.5-2.0x density band) specifically because
+# N=2 disagreeing points give no basis for a confident directional swing.
+_NYC_WET_RATIO = 1.116
+_LONDON_WET_RATIO = 0.893
+_WET_DAY_MULTIPLIER = (_NYC_WET_RATIO + _LONDON_WET_RATIO) / 2
+_WET_MULTIPLIER_MIN = 0.85
+_WET_MULTIPLIER_MAX = 1.15
+
+# Holiday ratios (same query shape, filtered on real Nager.Date-confirmed
+# holiday dates within each warehouse's real date range) -- both cities
+# agree in direction here (demand down on holidays), so this one gets used
+# with more confidence than the wet-day multiplier above:
+#   NYC:    0.942 (4 real 2024 holidays in Jan/Mar/Jun: New Year's Day,
+#           MLK Day, Good Friday, Juneteenth)
+#   London: 0.929 (5 real 2026 holidays in Jan/Mar/May: New Year's Day, 2 Jan,
+#           St Patrick's Day, Early May bank holiday, Spring bank holiday)
+_NYC_HOLIDAY_RATIO = 0.942
+_LONDON_HOLIDAY_RATIO = 0.929
+_HOLIDAY_MULTIPLIER = (_NYC_HOLIDAY_RATIO + _LONDON_HOLIDAY_RATIO) / 2
+_HOLIDAY_MULTIPLIER_MIN = 0.85
+_HOLIDAY_MULTIPLIER_MAX = 1.0
+
+
+def estimate_demand_per_capita(
+    population: int, density: float | None = None, is_wet: bool | None = None, is_holiday: bool | None = None,
+) -> tuple[float, str]:
     """Rough order-of-magnitude estimate of daily mobility-demand volume for
     a city of the given population, scaled from the NYC/London demand-per-
     capita reference points (mirrors `model_service.predict_demand()`'s
     `(value, reason)` return convention).
 
-    `density` is people/km^2, optional. N=2 calibration points -- see module
-    docstring's honesty caveat. Never presented as a validated model; the
-    returned `reason` always states the real low/high range implied by the
-    two reference rates, not just a single point estimate.
+    `density` is people/km^2, `is_wet`/`is_holiday` are optional real signals
+    (from weather_openmeteo.py / holidays_nager.py) that apply the measured
+    elasticity multipliers above. N=2 calibration points throughout -- see
+    module docstring's honesty caveat. Never presented as a validated model;
+    the returned `reason` always states the real low/high range implied by
+    the two reference rates, not just a single point estimate, and names
+    every adjustment applied.
     """
     if population <= 0:
         raise ValueError(f"population must be positive, got {population}")
@@ -112,31 +153,61 @@ def estimate_demand_per_capita(population: int, density: float | None = None) ->
     high_rate = max(NYC_DAILY_RATE_PER_CAPITA, LONDON_DAILY_RATE_PER_CAPITA)
     mid_rate = (low_rate + high_rate) / 2
 
-    density_note = ""
+    notes = []
     if density is not None and density > 0:
         multiplier = max(_DENSITY_MULTIPLIER_MIN, min(_DENSITY_MULTIPLIER_MAX, density / _AVG_REFERENCE_DENSITY))
         mid_rate *= multiplier
-        density_note = (
-            f" density-adjusted by a clamped {multiplier:.2f}x multiplier "
+        notes.append(
+            f"density-adjusted by a clamped {multiplier:.2f}x multiplier "
             f"(target {density:.0f}/km^2 vs. the two references' average "
-            f"{_AVG_REFERENCE_DENSITY:.0f}/km^2 -- not a fitted elasticity, "
-            "just a bounded nudge)."
+            f"{_AVG_REFERENCE_DENSITY:.0f}/km^2 -- not a fitted elasticity, just a bounded nudge)"
+        )
+    if is_wet:
+        multiplier = max(_WET_MULTIPLIER_MIN, min(_WET_MULTIPLIER_MAX, _WET_DAY_MULTIPLIER))
+        mid_rate *= multiplier
+        notes.append(
+            f"wet-weather-adjusted by {multiplier:.3f}x (NYC and London's real wet-hour "
+            f"demand ratios disagree in direction -- {_NYC_WET_RATIO}x vs {_LONDON_WET_RATIO}x -- "
+            "so this is tightly clamped near neutral rather than asserting a direction)"
+        )
+    if is_holiday:
+        multiplier = max(_HOLIDAY_MULTIPLIER_MIN, min(_HOLIDAY_MULTIPLIER_MAX, _HOLIDAY_MULTIPLIER))
+        mid_rate *= multiplier
+        notes.append(
+            f"holiday-adjusted by {multiplier:.3f}x (both real reference cities show lower "
+            f"demand on holidays -- {_NYC_HOLIDAY_RATIO}x NYC, {_LONDON_HOLIDAY_RATIO}x London)"
         )
 
     value = round(population * mid_rate, 1)
     low = round(population * low_rate, 1)
     high = round(population * high_rate, 1)
 
+    adjustment_note = f" {'; '.join(notes)}." if notes else ""
     reason = (
         "very rough, N=2 calibration (NYC ride-hailing pickups vs. London "
         "Santander Cycle Hire bike-share departures -- not the same mobility "
         f"product, see module docstring): implied daily-demand range for a "
         f"population of {population:,} is roughly {low:,.0f}-{high:,.0f} "
         f"trips/day (midpoint used as the point value below)."
-        f"{density_note} Treat this as an order-of-magnitude guide only, "
+        f"{adjustment_note} Treat this as an order-of-magnitude guide only, "
         "never a validated model."
     )
     return value, reason
+
+
+# ---- Fare-per-mile reference point (for the World-Bank-PPP-adjusted fare
+# estimate in backend/services/estimation_service.py) -----------------------
+# Trip-count-weighted average, not a simple mean of per-hour averages --
+# SELECT SUM(avg_fare*total_trips)/SUM(total_trips),
+#        SUM(avg_trip_distance_miles*total_trips)/SUM(total_trips)
+# FROM zone_hourly_demand (7,998,849 real trips, 92 real dates) against
+# data/warehouse/nyc_rides.duckdb, run 2026-08-09.
+# Weighted avg_fare = $31.93, weighted avg_trip_distance_miles = 4.99mi.
+NYC_FARE_PER_MILE = 6.40
+NYC_FARE_PER_MILE_SOURCE = (
+    "trip-count-weighted avg_fare / avg_trip_distance_miles across zone_hourly_demand's "
+    "7,998,849 real NYC trips (92 real dates, Jan/Mar/Jun 2024)"
+)
 
 
 def demo() -> None:
@@ -153,6 +224,15 @@ def demo() -> None:
     value_dense, reason_dense = estimate_demand_per_capita(1_000_000, density=15000)
     assert value_dense != value
     assert "density-adjusted" in reason_dense
+
+    value_wet, reason_wet = estimate_demand_per_capita(1_000_000, is_wet=True)
+    assert value_wet != value and "wet-weather-adjusted" in reason_wet
+    assert _WET_MULTIPLIER_MIN <= _WET_DAY_MULTIPLIER <= _WET_MULTIPLIER_MAX
+
+    value_holiday, reason_holiday = estimate_demand_per_capita(1_000_000, is_holiday=True)
+    assert value_holiday < value and "holiday-adjusted" in reason_holiday
+    assert _HOLIDAY_MULTIPLIER_MIN <= _HOLIDAY_MULTIPLIER <= _HOLIDAY_MULTIPLIER_MAX
+
     print(f"NYC daily rate/capita:    {NYC_DAILY_RATE_PER_CAPITA:.6f}")
     print(f"London daily rate/capita: {LONDON_DAILY_RATE_PER_CAPITA:.6f}")
     print(f"1M population estimate:  {value:,.0f} trips/day -- {reason}")

@@ -27,8 +27,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from backend.adapters import holidays_nager, routing_osrm, weather_openweather  # noqa: E402
-from backend.services import global_geography_service  # noqa: E402
+from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
+from backend.registry import cities as cities_registry  # noqa: E402
+from backend.registry import transit as transit_registry  # noqa: E402
+from backend.services import estimation_service, global_geography_service, transit_service  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +87,7 @@ def get_city_context(city_id: str) -> dict:
     # 2. Weather Context
     if lat is not None and lng is not None:
         try:
-            weather_res = weather_openweather.get_weather(lat, lng)
+            weather_res = weather_openmeteo.fetch(lat, lng, datetime.now(timezone.utc))
             if weather_res.basis == "computed":
                 context_map["weather"] = {
                     "status": "available",
@@ -127,7 +129,7 @@ def get_city_context(city_id: str) -> dict:
     if country_code:
         try:
             today = datetime.now(timezone.utc)
-            holiday_res = holidays_nager.get_holiday_status(country_code, today)
+            holiday_res = holidays_nager.fetch(lat or 0.0, lng or 0.0, today, country_code=country_code)
             context_map["calendar"] = {
                 "status": "available" if holiday_res.basis == "computed" else "unavailable",
                 "data": {
@@ -159,9 +161,12 @@ def get_city_context(city_id: str) -> dict:
 
     # 4. Urban Density Context
     if population:
-        # Land area approximations for reference cities where available
-        known_areas = {"nyc": 778.2, "london": 1572.0}
-        land_area_km2 = known_areas.get(city_id.lower())
+        # Real land_area_km2 from the cities seed (Census/ONS-sourced, see
+        # dbt_project/seeds/cities.csv) when this is a registered city;
+        # unregistered cities honestly get no density figure rather than a
+        # hardcoded 2-city lookup masquerading as general coverage.
+        registered_city = cities_registry.get_city(city_id)
+        land_area_km2 = (registered_city or {}).get("land_area_km2")
         density = round(population / land_area_km2, 1) if land_area_km2 else None
         context_map["urban_density"] = {
             "status": "available",
@@ -186,7 +191,7 @@ def get_city_context(city_id: str) -> dict:
 
     # 5. Routing Capability Context
     try:
-        route_check = routing_osrm.get_route(
+        route_check = routing_osrm.fetch_duration(
             lat or 40.7128, lng or -74.0060, (lat or 40.7128) + 0.01, (lng or -74.0060) + 0.01
         )
         context_map["routing"] = {
@@ -212,18 +217,79 @@ def get_city_context(city_id: str) -> dict:
 
     # 6. Mobility Capability Context
     obs_available = profile["capabilities"]["observed_mobility"]
-    context_map["mobility_capability"] = {
-        "status": "available",
-        "data": {
-            "observed_mobility_available": obs_available,
-            "cross_city_modeling_available": profile["capabilities"]["cross_city_model"],
-            "model_status": "active" if obs_available else "estimated",
-        },
-        "source": "atlas_model_registry",
-        "timestamp": _now_iso(),
-        "freshness": "live",
-        "coverage": "platform_registry",
-    }
+    if obs_available:
+        context_map["mobility_capability"] = {
+            "status": "available",
+            "data": {
+                "observed_mobility_available": True,
+                "cross_city_modeling_available": profile["capabilities"]["cross_city_model"],
+                "model_status": "active",
+            },
+            "source": "atlas_model_registry",
+            "timestamp": _now_iso(),
+            "freshness": "live",
+            "coverage": "platform_registry",
+        }
+    else:
+        # Not an observed-data city -- only claim "estimated" once a real
+        # cross-city estimate actually computes, never as a bare assertion.
+        estimate = (
+            estimation_service.estimate_city_demand(city_id, population, lat=lat, lon=lng, at=datetime.now(timezone.utc))
+            if population else None
+        )
+        if estimate is not None and estimate.basis == "modeled_estimate":
+            context_map["mobility_capability"] = {
+                "status": "available",
+                "data": {
+                    "observed_mobility_available": False,
+                    "cross_city_modeling_available": True,
+                    "model_status": "estimated",
+                    "estimated_daily_demand": estimate.value,
+                    "estimate_reason": estimate.reason,
+                },
+                "source": estimate.source,
+                "timestamp": _now_iso(),
+                "freshness": "live",
+                "coverage": "platform_registry",
+            }
+        else:
+            context_map["mobility_capability"] = {
+                "status": "unavailable",
+                "data": None,
+                "source": "cross_city_estimation",
+                "timestamp": _now_iso(),
+                "reason": (estimate.reason if estimate else "population covariate unresolvable for this location"),
+            }
+
+    # 7. Transit Coverage Context
+    feed = transit_registry.get_feed(city_id)
+    if feed is None or not transit_registry.has_feed(city_id):
+        context_map["transit_coverage"] = {
+            "status": "unavailable",
+            "data": None,
+            "source": "gtfs_feeds_registry",
+            "timestamp": _now_iso(),
+            "reason": f"no ingested GTFS feed for city_id={city_id!r}",
+        }
+    elif lat is not None and lng is not None:
+        stop_count = transit_service.count_stops_near(city_id, lat, lng, radius_km=5.0)
+        context_map["transit_coverage"] = {
+            "status": "available" if stop_count is not None else "unavailable",
+            "data": {"agency_name": feed["agency_name"], "stop_count": stop_count, "radius_km": 5.0} if stop_count is not None else None,
+            "source": feed["agency_name"],
+            "timestamp": _now_iso(),
+            "freshness": "static_reference_data",
+            "coverage": "point_radius",
+            "reason": None if stop_count is not None else "no gtfs_stops rows loaded for this city yet",
+        }
+    else:
+        context_map["transit_coverage"] = {
+            "status": "unavailable",
+            "data": None,
+            "source": "gtfs_feeds_registry",
+            "timestamp": _now_iso(),
+            "reason": "latitude/longitude unresolvable",
+        }
 
     return {
         "city_id": profile["city_id"],

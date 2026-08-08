@@ -29,60 +29,64 @@
     "lag_24h",
     "lag_168h",
     "ewma",
-    "rolling_7d_avg"
+    "rolling_7d_avg",
+    "temperature_c",
+    "precipitation_mm"
   ],
   "target": "total_trips",
   "hyperparameters": {
-    "max_depth": 4,
-    "learning_rate": 0.1,
-    "n_estimators": 200
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "n_estimators": 300
   },
   "hyperparameter_search": [
     {
       "max_depth": 4,
       "learning_rate": 0.1,
       "n_estimators": 200,
-      "val_rmse": 1.3499848082358747,
-      "val_mae": 0.8503125309944153
+      "val_rmse": 1.3522446955871075,
+      "val_mae": 0.858378529548645
     },
     {
       "max_depth": 6,
       "learning_rate": 0.1,
       "n_estimators": 200,
-      "val_rmse": 1.3508132445394625,
-      "val_mae": 0.8449258208274841
+      "val_rmse": 1.350823966873771,
+      "val_mae": 0.849807858467102
     },
     {
       "max_depth": 6,
       "learning_rate": 0.05,
       "n_estimators": 300,
-      "val_rmse": 1.3512806240143944,
-      "val_mae": 0.8452346920967102
+      "val_rmse": 1.349190190051074,
+      "val_mae": 0.8511629104614258
     },
     {
       "max_depth": 8,
       "learning_rate": 0.1,
       "n_estimators": 200,
-      "val_rmse": 1.3624804749095996,
-      "val_mae": 0.846284806728363
+      "val_rmse": 1.3569843712386709,
+      "val_mae": 0.8503948450088501
     }
   ],
   "feature_importances": {
-    "hour": 0.04090989753603935,
-    "day_of_week": 0.03225760906934738,
+    "hour": 0.051951710134744644,
+    "day_of_week": 0.03737761825323105,
     "is_weekend": 0.0,
-    "lag_1h": 0.08528236299753189,
-    "lag_24h": 0.16211038827896118,
-    "lag_168h": 0.554573118686676,
-    "ewma": 0.08992379158735275,
-    "rolling_7d_avg": 0.03494282439351082
+    "lag_1h": 0.05599310249090195,
+    "lag_24h": 0.11071398854255676,
+    "lag_168h": 0.5938348174095154,
+    "ewma": 0.07733465731143951,
+    "rolling_7d_avg": 0.032177846878767014,
+    "temperature_c": 0.01180886011570692,
+    "precipitation_mm": 0.02880738489329815
   },
   "metrics": {
-    "val_rmse": 1.3499848082358747,
-    "val_mae": 0.8503125309944153,
-    "test_rmse": 1.6772617300490213,
-    "test_mae": 0.9967936873435974,
-    "test_inference_latency_ms_per_row": 0.0015877369437361146
+    "val_rmse": 1.349190190051074,
+    "val_mae": 0.8511629104614258,
+    "test_rmse": 1.6894590521030424,
+    "test_mae": 1.0471959114074707,
+    "test_inference_latency_ms_per_row": 0.0012339473940575912
   },
   "library_versions": {
     "xgboost": "3.3.0",

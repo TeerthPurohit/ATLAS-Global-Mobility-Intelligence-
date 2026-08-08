@@ -17,3 +17,11 @@
 Every page here describes what's actually implemented -- "not yet measured"
 or an explicit "out of scope this phase" stands in for anything aspirational
 (rule 2, `.claude/rules.md`).
+
+## Browsable site
+
+`pip install -r requirements-docs.txt && mkdocs serve` renders this whole
+tree (plus [`reference/`](reference/) and [`guides/`](guides/), new since
+the global-city pass) as a searchable site with sidebar nav, linking out to
+the live Swagger API reference rather than duplicating it. See
+`mkdocs.yml` at the repo root.

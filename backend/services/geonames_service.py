@@ -91,6 +91,7 @@ def _normalize_place(row: dict, source: str) -> dict:
         "feature_code": row.get("fcode"),
         "latitude": _num(row.get("lat")),
         "longitude": _num(row.get("lng")),
+        "population": row.get("population") or None,
         "source": source,
     }
 
@@ -177,10 +178,13 @@ def get_hierarchy(geoname_id: int) -> list[dict]:
         {
             "geoname_id": r.get("geonameId"),
             "name": r.get("name"),
+            "country_code": r.get("countryCode"),
+            "country_name": r.get("countryName"),
             "feature_class": r.get("fcl"),
             "feature_code": r.get("fcode"),
             "latitude": _num(r.get("lat")),
             "longitude": _num(r.get("lng")),
+            "population": r.get("population") or None,
         }
         for r in rows
     ]

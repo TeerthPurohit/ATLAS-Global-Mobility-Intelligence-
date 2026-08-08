@@ -19,14 +19,14 @@ router = APIRouter(prefix="/chat", tags=["chat"])
     "text, SPEC-013 FR-10); explanatory questions retrieve grounded insight docs.",
 )
 def post_chat(req: ChatRequest) -> ChatResponse:
-    res = rag_service.answer_question(question=req.question, session_id=req.session_id)
+    # city_id now actually routes (SPEC-013 FR-11) -- old clients that never
+    # send it default to "nyc"/full_rag, identical behavior to before.
+    res = rag_service.answer_question(question=req.question, session_id=req.session_id, city_id=req.city_id or "nyc")
     return ChatResponse(
         answer=res["answer"],
         route=res["route"],
         sql=res.get("sql"),
         session_id=res["session_id"],
-        # city_id/area_id are context echoes only this phase (SPEC-013 FR-11)
-        # -- the RAG pipeline itself is still NYC-only, unchanged.
         city_id=req.city_id,
         area_id=req.area_id,
     )

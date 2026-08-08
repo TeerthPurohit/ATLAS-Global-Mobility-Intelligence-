@@ -18,32 +18,67 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
 from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
-from data_prep.build_features import FEATURE_COLUMNS, build_features  # noqa: E402
+from data_prep.build_features import FEATURE_COLUMNS as NYC_FEATURE_COLUMNS  # noqa: E402
+from data_prep.build_features import build_features as nyc_build_features  # noqa: E402
+from london_demand.build_features import FEATURE_COLUMNS as LONDON_FEATURE_COLUMNS  # noqa: E402
+from london_demand.build_features import build_features as london_build_features  # noqa: E402
 
-DEMAND_MODEL_PATH = REPO_ROOT / "models" / "xgboost_model" / "xgb_model.json"
 FARE_MODEL_PATH = REPO_ROOT / "models" / "fare_prediction" / "fare_xgb_model.json"
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
-DEMAND_MODEL_NAME = "xgboost_demand_v1"
 EWMA_FALLBACK_NAME = "ewma_fallback_v1"
 FARE_MODEL_NAME = "xgboost_fare_v1"
 FARE_DEFAULT_DAY_OF_WEEK = 2  # Wednesday; see module docstring ponytail note
 
-_demand_model: xgb.XGBRegressor | None = None
+# Per-city demand-model artifacts. Fare stays NYC-only below (no other city
+# has a trained fare model) rather than genericizing a dict for one populated
+# key -- see model_registry.csv, which has no london/fare row.
+_CITY_ARTIFACTS: dict[str, dict] = {
+    "nyc": {
+        "demand_model_path": REPO_ROOT / "models" / "xgboost_model" / "xgb_model.json",
+        "warehouse_path": WAREHOUSE_PATH,
+        "build_features": nyc_build_features,
+        "feature_columns": NYC_FEATURE_COLUMNS,
+        "area_column": "pickup_location_id",
+        "demand_model_name": "xgboost_demand_v1",
+        "ewma_fallback_name": EWMA_FALLBACK_NAME,
+    },
+    "london": {
+        "demand_model_path": REPO_ROOT / "models" / "london_demand" / "xgb_model.json",
+        "warehouse_path": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
+        "build_features": london_build_features,
+        "feature_columns": LONDON_FEATURE_COLUMNS,
+        "area_column": "station_id",
+        "demand_model_name": "xgboost_london_demand_v1",
+        "ewma_fallback_name": EWMA_FALLBACK_NAME,
+    },
+}
+
+_demand_models: dict[str, xgb.XGBRegressor] = {}
 _fare_model: xgb.XGBRegressor | None = None
-_zone_momentum: dict[int, dict[str, float]] = {}
+_zone_momentum: dict[str, dict[int, dict[str, float]]] = {}  # city_id -> area_id -> momentum
 _fare_categories: dict[str, list[int]] = {}
 _zone_centroids: dict[int, tuple[float, float]] = {}
 
 
 def load() -> None:
     """Load all artifacts once. Call this from FastAPI's startup hook."""
-    global _demand_model, _fare_model
+    global _fare_model
 
-    print("[startup] Loading demand XGBoost model...", flush=True)
-    _demand_model = xgb.XGBRegressor()
-    _demand_model._estimator_type = "regressor"
-    _demand_model.load_model(str(DEMAND_MODEL_PATH))
+    print("[startup] Loading per-city demand XGBoost models...", flush=True)
+    _demand_models.clear()
+    _zone_momentum.clear()
+    for city_id, cfg in _CITY_ARTIFACTS.items():
+        model = xgb.XGBRegressor()
+        model._estimator_type = "regressor"
+        model.load_model(str(cfg["demand_model_path"]))
+        _demand_models[city_id] = model
+
+        con = duckdb.connect(str(cfg["warehouse_path"]), read_only=True)
+        try:
+            _load_zone_momentum(con, city_id, cfg)
+        finally:
+            con.close()
 
     print("[startup] Loading fare XGBoost model...", flush=True)
     _fare_model = xgb.XGBRegressor(enable_categorical=True)
@@ -53,8 +88,6 @@ def load() -> None:
     print(f"[startup] Connecting to DuckDB warehouse at {WAREHOUSE_PATH}...", flush=True)
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
-        print("[startup] Loading zone momentum features...", flush=True)
-        _load_zone_momentum(con)
         print("[startup] Loading fare categories...", flush=True)
         _load_fare_categories(con)
     finally:
@@ -65,18 +98,26 @@ def load() -> None:
     print("[startup] All artifacts loaded successfully!", flush=True)
 
 
-def _load_zone_momentum(con: duckdb.DuckDBPyConnection) -> None:
-    df = build_features(con)
-    latest = df.sort_values("ts").groupby("pickup_location_id").tail(1)
-    _zone_momentum.clear()
+def _load_zone_momentum(con: duckdb.DuckDBPyConnection, city_id: str, cfg: dict) -> None:
+    df = cfg["build_features"](con)
+    area_column = cfg["area_column"]
+    latest = df.sort_values("ts").groupby(area_column).tail(1)
+    momentum: dict[int, dict[str, float]] = {}
     for row in latest.itertuples():
-        _zone_momentum[int(row.pickup_location_id)] = {
+        momentum[int(getattr(row, area_column))] = {
             "lag_1h": float(row.lag_1h),
             "lag_24h": float(row.lag_24h),
             "lag_168h": float(row.lag_168h),
             "ewma": float(row.ewma),
             "rolling_7d_avg": float(row.rolling_7d_avg),
+            # Last known real weather reading (city-level, from the same
+            # frozen-snapshot discipline the lag features already use) -- the
+            # model is trained on real historical weather, so inference needs
+            # a real value here too, not a silent NaN every time.
+            "temperature_c": float(row.temperature_c) if row.temperature_c == row.temperature_c else None,
+            "precipitation_mm": float(row.precipitation_mm) if row.precipitation_mm == row.precipitation_mm else None,
         }
+    _zone_momentum[city_id] = momentum
 
 
 def _load_fare_categories(con: duckdb.DuckDBPyConnection) -> None:
@@ -99,12 +140,12 @@ def _haversine_miles(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * 3958.8 * math.asin(math.sqrt(h))
 
 
-def get_zone_momentum(zone_id: int) -> dict[str, float] | None:
+def get_zone_momentum(zone_id: int, city_id: str = "nyc") -> dict[str, float] | None:
     """Real historical demand-momentum features (lag/EWMA/rolling-avg) for a
     zone, loaded once at startup by _load_zone_momentum(). Used by journey
     predictors (availability/surge/congestion) that need a real demand
     signal without invoking the trained model itself."""
-    return _zone_momentum.get(zone_id)
+    return _zone_momentum.get(city_id, {}).get(zone_id)
 
 
 def get_zone_centroid(zone_id: int) -> tuple[float, float] | None:
@@ -115,30 +156,32 @@ def haversine_miles(a: tuple[float, float], b: tuple[float, float]) -> float:
     return _haversine_miles(a, b)
 
 
-def predict_demand(zone_id: int, hour: int, day_of_week: int) -> tuple[float, str]:
-    if _demand_model is None:
-        raise RuntimeError("model_service.load() must run before predict_demand()")
-    if zone_id not in _zone_momentum:
-        raise KeyError(f"no demand history for zone_id={zone_id}")
+def predict_demand(zone_id: int, hour: int, day_of_week: int, city_id: str = "nyc") -> tuple[float, str]:
+    if city_id not in _demand_models:
+        raise KeyError(f"no demand model loaded for city_id={city_id!r}")
+    momentum_by_area = _zone_momentum.get(city_id, {})
+    if zone_id not in momentum_by_area:
+        raise KeyError(f"no demand history for city_id={city_id!r} zone_id={zone_id}")
 
-    momentum = _zone_momentum[zone_id]
+    cfg = _CITY_ARTIFACTS[city_id]
+    momentum = momentum_by_area[zone_id]
     row = {
         "hour": hour,
         "day_of_week": day_of_week,
         "is_weekend": int(day_of_week in (5, 6)),
         **momentum,
     }
-    features = pd.DataFrame([row], columns=FEATURE_COLUMNS)
-    pred = float(_demand_model.predict(features)[0])
+    features = pd.DataFrame([row], columns=cfg["feature_columns"])
+    pred = float(_demand_models[city_id].predict(features)[0])
     if pred > 0:
-        return pred, DEMAND_MODEL_NAME
+        return pred, cfg["demand_model_name"]
     # XGBoost has no non-negativity constraint and can extrapolate negative
     # for low-volume zones (their frozen momentum snapshot sits at the edge
     # of what the model saw in training). A flat 0 across every hour reads
     # as broken; fall back to the zone's own EWMA estimate instead -- it's
     # already computed, already part of the model ladder, and honestly
     # labeled via the returned model name rather than passed off as XGBoost.
-    return momentum["ewma"], EWMA_FALLBACK_NAME
+    return momentum["ewma"], cfg["ewma_fallback_name"]
 
 
 def predict_fare(pickup_zone: int, dropoff_zone: int, hour: int) -> tuple[float, str]:

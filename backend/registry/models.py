@@ -61,10 +61,14 @@ def load() -> None:
 
 
 def get_model(model_id: str) -> dict | None:
+    if not _models:
+        load()  # defensive lazy-load -- see backend/registry/cities.py's get_city() for why
     return _models.get(model_id)
 
 
 def list_models_for(city_id: str, metric: str | None = None) -> list[dict]:
+    if not _models:
+        load()  # defensive lazy-load -- see backend/registry/cities.py's get_city() for why
     return [
         m for m in _models.values()
         if m["city_id"] == city_id and (metric is None or m["metric"] == metric)

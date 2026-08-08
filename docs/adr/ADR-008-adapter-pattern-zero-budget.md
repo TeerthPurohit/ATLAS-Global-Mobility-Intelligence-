@@ -63,3 +63,30 @@ traffic number) would violate rule 2 directly.
   pattern) is the documented upgrade path, not done this phase since it
   requires downloading and preprocessing an OSM extract, a genuinely
   separate infra task.
+
+### Update (2026-08-09)
+
+The "weather can never become a retrainable historical feature" ceiling
+above is lifted: Open-Meteo's free historical archive endpoint
+(`archive-api.open-meteo.com/v1/era5`) provides real hourly temperature/
+precipitation back through the exact NYC (Jan-Jun 2024) and London
+(2026-01 to 2026-06, gapped) dates already in each warehouse, keylessly.
+`weather_openweather.py` is replaced by `weather_openmeteo.py` (same
+`fetch(lat, lon, at) -> PredictionResult` contract) at both call sites
+(`journey_service.py`, `context_orchestrator.py`); `scripts/
+backfill_weather_openmeteo.py` backfills `dbt_project/seeds/weather_hourly.csv`,
+joined into `zone_hourly_demand`/`london_station_hourly_demand` at
+`(date, hour)` grain and added to both demand models' `FEATURE_COLUMNS`
+(`temperature_c`, `precipitation_mm`). Both models were retrained
+(`model_registry.csv` bumped to `v2`); real feature importance is small but
+nonzero (NYC: ~0.5% temperature, ~1.1% precipitation) — an honest secondary
+signal, not the dominant one (lag/EWMA features still dominate).
+
+Also found and fixed while wiring this: `holidays_nager.py` was calling
+Nager.Date's `IsTodayPublicHoliday` endpoint, which always checks the
+server's real *current* date regardless of what `at` was passed — silently
+wrong for any historical/future date. Switched to the `PublicHolidays/
+{year}/{country}` endpoint (fetch a year's real holiday list, check
+membership), which is what the file's own comment already claimed it did.
+This does not change the adapter Protocol or the caching strategy described
+above.

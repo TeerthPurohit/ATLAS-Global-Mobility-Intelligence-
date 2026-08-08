@@ -1,33 +1,42 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 import { useMobility } from "../../context/MobilityContext";
-import { GeographyCountry } from "../../api/client";
+import { GeographyCountry, GlobalCitySearchResult, searchGlobalCities } from "../../api/client";
 import { Search, Globe, Sparkles, CheckCircle2, ArrowRight, ShieldCheck, Navigation, Activity, Cpu } from "lucide-react";
 import { CommandPalette } from "../navigation/CommandPalette";
 import { useNavigate } from "react-router-dom";
 
-// Major global city nodes for global cartographic rendering
-const GLOBAL_MAJOR_NODES: { id: string; name: string; countryCode: string; lat: number; lng: number; mode: "OBSERVED_MOBILITY" | "MODELED_MOBILITY" }[] = [
-  { id: "nyc", name: "New York City", countryCode: "US", lat: 40.7128, lng: -74.006, mode: "OBSERVED_MOBILITY" },
-  { id: "london", name: "London", countryCode: "GB", lat: 51.5074, lng: -0.1278, mode: "OBSERVED_MOBILITY" },
-  { id: "mumbai", name: "Mumbai", countryCode: "IN", lat: 19.076, lng: 72.8777, mode: "MODELED_MOBILITY" },
-  { id: "tokyo", name: "Tokyo", countryCode: "JP", lat: 35.6762, lng: 139.6503, mode: "MODELED_MOBILITY" },
-  { id: "dubai", name: "Dubai", countryCode: "AE", lat: 25.2048, lng: 55.2708, mode: "MODELED_MOBILITY" },
-  { id: "cape_town", name: "Cape Town", countryCode: "ZA", lat: -33.9249, lng: 18.4241, mode: "MODELED_MOBILITY" },
-];
+// A handful of example queries to seed the map with on load -- NOT a claim
+// of support. Every marker plotted is whatever the backend's own
+// /api/geography/search/global actually returns for these, including real
+// mobility_available/modeling_available flags -- never a hardcoded status.
+const FEATURED_CITY_QUERIES = ["New York City", "London", "Mumbai", "Tokyo", "Dubai", "Cape Town"];
 
 export const WorldMapView: React.FC = () => {
   const { geographyCountries, allCountries, selectGlobalCity, setIsAnalyzing } = useMobility();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const navigate = useNavigate();
 
+  const { data: nodes = [] } = useQuery({
+    queryKey: ["worldMapFeaturedCities"],
+    queryFn: async () => {
+      const results = await Promise.all(FEATURED_CITY_QUERIES.map((q) => searchGlobalCities(q, 1).catch(() => [])));
+      return results.flat().filter((r): r is GlobalCitySearchResult => Boolean(r && r.latitude != null && r.longitude != null));
+    },
+    staleTime: 1000 * 60 * 30, // featured cities barely change; no need to refetch often
+  });
+
   const totalGeographicCountries = geographyCountries.length || 248;
   const totalMobilityCountries = allCountries.filter((c) => c.supported).length || 2;
 
-  const handleCityClick = (cityId: string, countryCode: string) => {
+  const observedNames = nodes.filter((n) => n.mobility_available).map((n) => n.name).join(", ") || "—";
+  const modeledNames = nodes.filter((n) => !n.mobility_available && n.modeling_available).map((n) => n.name).join(", ") || "—";
+
+  const handleCityClick = (cityId: string, countryCode?: string | null) => {
     selectGlobalCity(cityId);
     setIsAnalyzing(true);
-    navigate(`/explore/${countryCode.toLowerCase()}/${cityId}`);
+    navigate(`/explore/${(countryCode || "xx").toLowerCase()}/${cityId}`);
   };
 
   return (
@@ -48,16 +57,16 @@ export const WorldMapView: React.FC = () => {
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
-          {/* Render status-encoded global nodes */}
-          {GLOBAL_MAJOR_NODES.map((node) => {
-            const isObserved = node.mode === "OBSERVED_MOBILITY";
-            const nodeColor = isObserved ? "#2dd4a7" : "#f59e0b";
+          {/* Render status-encoded global nodes -- real backend data, never a hardcoded list */}
+          {nodes.map((node) => {
+            const isObserved = node.mobility_available;
+            const nodeColor = isObserved ? "#2dd4a7" : node.modeling_available ? "#f59e0b" : "#64748b";
 
             return (
               <React.Fragment key={node.id}>
                 {/* Outer Pulse */}
                 <CircleMarker
-                  center={[node.lat, node.lng]}
+                  center={[node.latitude!, node.longitude!]}
                   radius={isObserved ? 18 : 12}
                   pathOptions={{
                     color: nodeColor,
@@ -68,7 +77,7 @@ export const WorldMapView: React.FC = () => {
                 />
                 {/* Core Node Marker */}
                 <CircleMarker
-                  center={[node.lat, node.lng]}
+                  center={[node.latitude!, node.longitude!]}
                   radius={6}
                   pathOptions={{
                     color: "#ffffff",
@@ -77,7 +86,7 @@ export const WorldMapView: React.FC = () => {
                     weight: 2,
                   }}
                   eventHandlers={{
-                    click: () => handleCityClick(node.id, node.countryCode),
+                    click: () => handleCityClick(node.id, node.country_code),
                   }}
                 >
                   <Tooltip direction="top" offset={[0, -8]} opacity={1} permanent={false}>
@@ -85,7 +94,7 @@ export const WorldMapView: React.FC = () => {
                       <div className="font-bold flex items-center gap-1.5" style={{ color: nodeColor }}>
                         <span>● {node.name}</span>
                         <span className="text-[9px] uppercase px-1 rounded bg-slate-900 border border-slate-700">
-                          {isObserved ? "Observed" : "Modeled"}
+                          {isObserved ? "Observed" : node.modeling_available ? "Modeled" : "Context Only"}
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-300 font-sans font-normal">
@@ -162,7 +171,7 @@ export const WorldMapView: React.FC = () => {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
               <div>
                 <p className="text-[10px] text-slate-400">OBSERVED</p>
-                <p className="font-bold text-slate-200">NYC, London</p>
+                <p className="font-bold text-slate-200">{observedNames}</p>
               </div>
             </div>
 
@@ -170,7 +179,7 @@ export const WorldMapView: React.FC = () => {
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
               <div>
                 <p className="text-[10px] text-slate-400">MODELED</p>
-                <p className="font-bold text-slate-200">Mumbai, Tokyo, Dubai</p>
+                <p className="font-bold text-slate-200">{modeledNames}</p>
               </div>
             </div>
 

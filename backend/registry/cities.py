@@ -19,6 +19,7 @@ from pathlib import Path
 import duckdb
 
 from backend.registry import models as models_registry
+from backend.registry import transit as transit_registry
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -26,12 +27,25 @@ WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
 logger = logging.getLogger(__name__)
 
-# rag_pipeline.py / nl_to_sql/sql_agent.py are hardcoded to NYC's DuckDB
-# warehouse and mart allow-list today (rag/config.py's DEFAULT_DB_PATH) --
-# this becomes data-driven once the RAG stack gains per-city routing, which
-# is out of scope this phase. Documented limitation, not a fabricated
-# per-city capability.
-_CHAT_CAPABLE_CITIES = {"nyc"}
+# Chat tier is a pure function of two real infrastructure facts, not a
+# curated allowlist: does this city have a registered, queryable warehouse
+# (needed for any SQL-grounded answer at all), and does it have a generated
+# insight-doc corpus for vector RAG (only NYC today -- no insight docs exist
+# for London's bike-share marts yet). Adding a third city's real chat
+# capability later means registering its warehouse path (infrastructure it
+# needs anyway for predictions/journey) and, optionally, generating its
+# insight docs -- never a chat-specific code change here.
+_CITY_WAREHOUSE_PATHS = {
+    "nyc": REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb",
+    "london": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
+}
+_CITY_HAS_INSIGHT_DOCS = {"nyc"}
+
+
+def get_chat_tier(city_id: str) -> str:
+    if city_id not in _CITY_WAREHOUSE_PATHS:
+        return "context_only"
+    return "full_rag" if city_id in _CITY_HAS_INSIGHT_DOCS else "sql_only"
 
 _CITY_COLUMNS = (
     "id", "name", "country_code", "latitude", "longitude", "timezone",
@@ -80,9 +94,11 @@ def get_capabilities(city_id: str) -> dict | None:
         "demand": has_demand,
         "fare": has_fare,
         "journey": models_registry.resolve_model(city_id, "journey") is not None,
-        "chat": city_id in _CHAT_CAPABLE_CITIES,
+        "chat": get_chat_tier(city_id) != "context_only",
+        "chat_tier": get_chat_tier(city_id),
         "area_analysis": _area_count(city_id) > 0,
         "forecast": has_demand or has_fare,
+        "transit_coverage": transit_registry.has_feed(city_id),
     }
     logger.info("capability check city_id=%s -> %s", city_id, capabilities)
     return capabilities
@@ -105,6 +121,15 @@ def list_cities(country_code: str | None = None) -> list[dict]:
 
 
 def get_city(city_id: str) -> dict | None:
+    if not _cities:
+        # Defensive lazy-load: real traffic always goes through the FastAPI
+        # lifespan hook (backend/main.py), which calls load() before serving
+        # requests, so this never fires in production. It matters for tests
+        # that exercise this module directly without that startup event --
+        # without it, an empty registry silently reads as "city not found"
+        # and callers (e.g. global_geography_service) fall through to
+        # treating a real, registered city_id as a free-text search query.
+        load()
     city = _cities.get(city_id)
     logger.info("city resolution city_id=%s -> %s", city_id, "found" if city else "not_found")
     return _with_computed_fields(city) if city else None

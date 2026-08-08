@@ -24,6 +24,7 @@ from backend.errors_geography import GeographyError  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import countries as countries_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
+from backend.registry import transit as transit_registry  # noqa: E402
 from backend.routers import chat, cities, countries, geography, journey, platform, predictions, zones  # noqa: E402
 from backend.services import journey_service, model_service, platform_service  # noqa: E402
 
@@ -35,6 +36,7 @@ async def lifespan(app: FastAPI):
     journey_service.load()
     countries_registry.load()
     models_registry.load()  # must load before cities_registry (model_status resolution reads it)
+    transit_registry.load()
     cities_registry.load()
     yield
 

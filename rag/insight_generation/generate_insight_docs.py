@@ -176,13 +176,12 @@ def _template_sentence(facts: dict) -> str:
 
 def _phrase_with_llm(facts: dict) -> str | None:
     try:
-        from openai import OpenAI
+        from llm_client import chat_completion
     except ImportError:
         return None
     try:
-        client = OpenAI()
         user_prompt = "Fact list:\n" + json.dumps({k: v for k, v in facts.items() if k != "sources"}, indent=2)
-        resp = client.chat.completions.create(
+        resp = chat_completion(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},

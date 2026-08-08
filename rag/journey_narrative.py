@@ -92,12 +92,11 @@ def _phrase_with_llm(facts: dict) -> str | None:
     import json
 
     try:
-        from openai import OpenAI
+        from llm_client import chat_completion
     except ImportError:
         return None
     try:
-        client = OpenAI()
-        resp = client.chat.completions.create(
+        resp = chat_completion(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},

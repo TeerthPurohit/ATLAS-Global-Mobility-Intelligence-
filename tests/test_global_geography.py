@@ -64,7 +64,23 @@ def test_global_geography_service_unseen_cities():
 # ── Phase 2: Global City Search API ───────────────────────────────────────
 
 
-def test_global_city_search_api(client):
+def test_global_city_search_api(client, monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.geonames_service.search_places",
+        lambda q, country=None: [
+            {
+                "geoname_id": 1275339,
+                "name": "Mumbai",
+                "country_code": "IN",
+                "country_name": "India",
+                "latitude": 19.076,
+                "longitude": 72.8777,
+                "feature_class": "P",
+                "feature_code": "PPLA",
+                "source": "geonames",
+            }
+        ] if "mumbai" in q.lower() else []
+    )
     resp = client.get("/api/geography/search/global?q=Mumbai")
     assert resp.status_code == 200
     data = resp.json()
@@ -75,6 +91,7 @@ def test_global_city_search_api(client):
     assert "Mumbai" in mumbai["name"]
     assert mumbai["mobility_available"] is False
     assert mumbai["modeling_available"] is True
+
 
 
 def test_global_city_search_api_nyc(client):

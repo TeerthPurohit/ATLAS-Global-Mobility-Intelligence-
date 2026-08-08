@@ -84,6 +84,17 @@ def _block_features(block: pd.Series, alpha: float) -> pd.DataFrame:
     return df.dropna()
 
 
+def _load_weather_lookup(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+    """Real hourly temperature/precipitation, city-level (not per-station).
+    Backfilled by scripts/backfill_weather_openmeteo.py, joined into
+    london_station_hourly_demand at (date, hour) grain."""
+    df = con.execute(
+        "SELECT DISTINCT trip_date, hour, temperature_c, precipitation_mm FROM london_station_hourly_demand ORDER BY 1, 2"
+    ).df()
+    df["ts"] = pd.to_datetime(df["trip_date"]) + pd.to_timedelta(df["hour"], unit="h")
+    return df.set_index("ts")[["temperature_c", "precipitation_mm"]]
+
+
 def build_features(
     con: duckdb.DuckDBPyConnection, station_ids: list[str] | None = None, alpha: float = DEFAULT_ALPHA
 ) -> pd.DataFrame:
@@ -102,7 +113,11 @@ def build_features(
             feats = feats.reset_index().rename(columns={"index": "ts"})
             feats["station_id"] = sid
             frames.append(feats)
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if not result.empty:
+        weather = _load_weather_lookup(con)
+        result = result.merge(weather, left_on="ts", right_index=True, how="left")
+    return result
 
 
 FEATURE_COLUMNS = [
@@ -114,6 +129,8 @@ FEATURE_COLUMNS = [
     "lag_168h",
     "ewma",
     "rolling_7d_avg",
+    "temperature_c",
+    "precipitation_mm",
 ]
 TARGET_COLUMN = "total_trips"
 
@@ -141,4 +158,6 @@ if __name__ == "__main__":
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
     df = build_features(con)
     print(f"built {len(df)} feature rows across {df['station_id'].nunique()} stations")
+    missing_weather = df["temperature_c"].isna().sum()
+    print(f"{missing_weather} rows missing weather (of {len(df)}) -- should be 0 given the backfill covers every real date")
     demo()
