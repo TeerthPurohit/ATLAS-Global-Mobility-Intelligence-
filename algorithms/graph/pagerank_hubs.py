@@ -65,6 +65,28 @@ def top_hubs(graph: nx.DiGraph, k: int = 10) -> list[tuple[str, float]]:
     return sorted(rank.items(), key=lambda kv: kv[1], reverse=True)[:k]
 
 
+def hub_summary(graph: nx.DiGraph, k: int = 10) -> dict:
+    """Top-k hubs with rank/score/raw-degree, for persisting as a real
+    artifact instead of a hand-typed list in the UI."""
+    rank = pagerank(graph)
+    degree = dict(graph.degree(weight="weight"))
+    ranked = sorted(rank.items(), key=lambda kv: kv[1], reverse=True)[:k]
+    return {
+        "damping": DAMPING,
+        "n_zones": graph.number_of_nodes(),
+        "n_edges": graph.number_of_edges(),
+        "top_hubs": [
+            {
+                "rank": i + 1,
+                "zone": zone,
+                "pagerank_score": score,
+                "raw_weighted_degree": degree.get(zone, 0.0),
+            }
+            for i, (zone, score) in enumerate(ranked)
+        ],
+    }
+
+
 def demo() -> None:
     import sys
     from pathlib import Path

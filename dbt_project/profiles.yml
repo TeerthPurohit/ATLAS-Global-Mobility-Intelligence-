@@ -5,3 +5,10 @@ nyc_tlc_rides:
       type: duckdb
       path: "{{ env_var('DUCKDB_PATH', 'data/warehouse/nyc_rides.duckdb') }}"
       threads: 4
+      # London's Santander Cycle Hire data (SPEC-015) lives in its own
+      # warehouse file, attached read/write alongside the primary NYC
+      # connection so one dbt project/run can build both cities' models
+      # without NYC's source/database wiring changing at all.
+      attach:
+        - path: "{{ env_var('LONDON_DUCKDB_PATH', 'data/warehouse/london_cycles.duckdb') }}"
+          alias: london_cycles

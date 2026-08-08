@@ -1,0 +1,12 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+node_modules
+data
+notebooks
+frontend/dist
+frontend/node_modules
+**/output
+.env

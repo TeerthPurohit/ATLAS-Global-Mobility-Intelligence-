@@ -11,7 +11,14 @@ from backend.services import model_service
 router = APIRouter(prefix="/predict", tags=["predictions"])
 
 
-@router.get("/demand", response_model=DemandPrediction)
+@router.get(
+    "/demand",
+    response_model=DemandPrediction,
+    summary="Predict pickup demand",
+    description="Trained XGBoost demand model, honestly falling back to the zone's own EWMA "
+    "estimate (relabeled in `model`) if the raw prediction extrapolates negative.",
+    responses={400: {"description": "zone_id has no demand history"}},
+)
 def predict_demand(
     zone_id: int = Query(..., description="TLC LocationID"),
     hour: int = Query(..., ge=0, le=23),
@@ -26,7 +33,13 @@ def predict_demand(
     )
 
 
-@router.get("/fare", response_model=FarePrediction)
+@router.get(
+    "/fare",
+    response_model=FarePrediction,
+    summary="Predict trip fare",
+    description="Trained XGBoost fare model over a pickup/dropoff zone pair and hour.",
+    responses={400: {"description": "pickup_zone or dropoff_zone is unknown"}},
+)
 def predict_fare(
     pickup_zone: int = Query(..., description="TLC LocationID"),
     dropoff_zone: int = Query(..., description="TLC LocationID"),

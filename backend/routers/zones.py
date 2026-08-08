@@ -56,12 +56,15 @@ def _load_zones() -> dict[int, Zone]:
 _zones.update(_load_zones())
 
 
-@router.get("", response_model=list[Zone])
+@router.get("", response_model=list[Zone], summary="List all NYC TLC zones", description="~265 zones, loaded once at startup.")
 def list_zones() -> list[Zone]:
     return list(_zones.values())
 
 
-@router.get("/{zone_id}", response_model=Zone)
+@router.get(
+    "/{zone_id}", response_model=Zone, summary="Get one zone",
+    responses={400: {"description": "unknown zone_id"}},
+)
 def get_zone(zone_id: int) -> Zone:
     zone = _zones.get(zone_id)
     if zone is None:

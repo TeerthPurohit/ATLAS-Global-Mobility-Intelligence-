@@ -54,6 +54,10 @@ logs/
 # ── Node / Frontend ────────────────────────────────
 frontend/node_modules/
 frontend/dist/
+frontend-web/node_modules/
+frontend-web/.next/
+frontend-web/*.tsbuildinfo
+frontend-web/dev.log
 
 # ── Docker ──────────────────────────────────────────
 .docker/

@@ -1,0 +1,25 @@
+{
+  "base_model": "gpt-5.4-nano",
+  "fine_tuned_model": null,
+  "note": "base-model-only numbers -- no fine-tuning job has been submitted (spec-014 FR-7 is deliberately out of scope for this pass; run again once a fine-tuned model id exists)",
+  "eval_nyc_holdout": {
+    "n_examples": 13,
+    "exact_match_accuracy": 0.5384615384615384,
+    "field_accuracy": {
+      "intent": 0.8461538461538461,
+      "metric": 1.0,
+      "aggregation": 0.6153846153846154,
+      "filters": 0.9230769230769231
+    }
+  },
+  "eval_unseen_schema": {
+    "n_examples": 63,
+    "exact_match_accuracy": 0.6666666666666666,
+    "field_accuracy": {
+      "intent": 0.8571428571428571,
+      "metric": 1.0,
+      "aggregation": 0.8571428571428571,
+      "filters": 0.8888888888888888
+    }
+  }
+}

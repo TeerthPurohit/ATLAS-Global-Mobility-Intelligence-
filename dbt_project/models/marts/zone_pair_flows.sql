@@ -12,7 +12,8 @@ flows AS (
 
         COUNT(*)              AS trip_count,
         SUM(total_amount)     AS total_revenue,
-        AVG(trip_duration_minutes) AS avg_duration_min
+        AVG(trip_duration_minutes) AS avg_duration_min,
+        AVG(avg_speed_mph)    AS avg_speed_mph
 
     FROM enriched
     GROUP BY 1, 2, 3, 4, 5

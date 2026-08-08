@@ -1,9 +1,8 @@
 """Embed insight docs into Qdrant (FR-2).
 
-Local sentence-transformer (`all-MiniLM-L6-v2`) rather than an embeddings
-API call -- this step runs once at precompute time (rule 8), so there's no
-reason to spend API budget on it, and no reason to require a network round
-trip at query time either. Qdrant runs as a docker-compose service
+Uses OpenAI's `text-embedding-3-small` (1536-dim) -- this step runs once at
+precompute time (rule 8), so the API cost is a one-off batch call, not a
+per-request charge. Qdrant runs as a docker-compose service
 (`qdrant/qdrant`, port 6333, persistent volume) and is reached via
 `QDRANT_URL` (`rag/config.py`, defaults to `http://localhost:6333` for
 local dev outside Docker).
@@ -16,16 +15,15 @@ to real numbers, not just similarity-ranked prose (rule 2).
 from __future__ import annotations
 
 import sys
-from functools import lru_cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import QDRANT_URL  # noqa: E402
+from config import OPENAI_EMBEDDING_MODEL, QDRANT_URL  # noqa: E402
 from insight_generation.generate_insight_docs import OUTPUT_PATH as INSIGHT_DOCS_PATH  # noqa: E402
 from insight_generation.generate_insight_docs import load_insight_docs  # noqa: E402
 
-MODEL_NAME = "all-MiniLM-L6-v2"
-EMBED_DIM = 384
+MODEL_NAME = OPENAI_EMBEDDING_MODEL
+EMBED_DIM = 1536
 COLLECTION = "insight_docs"
 
 _PAYLOAD_FIELDS = (
@@ -35,11 +33,13 @@ _PAYLOAD_FIELDS = (
 )
 
 
-@lru_cache(maxsize=1)
-def _get_model():
-    from sentence_transformers import SentenceTransformer
+def _embed(texts: list[str]) -> list[list[float]]:
+    """OpenAI embeddings are already unit-normalized, so cosine distance in
+    Qdrant works directly on the raw vectors."""
+    from openai import OpenAI
 
-    return SentenceTransformer(MODEL_NAME)
+    resp = OpenAI().embeddings.create(model=MODEL_NAME, input=texts)
+    return [d.embedding for d in resp.data]
 
 
 def _get_client(url: str = QDRANT_URL):
@@ -55,7 +55,7 @@ def build_vector_store(docs_path: Path = INSIGHT_DOCS_PATH, url: str = QDRANT_UR
     if not docs:
         raise ValueError(f"no insight docs found at {docs_path} -- run generate_insight_docs.py first")
 
-    embeddings = _get_model().encode([d["text"] for d in docs], normalize_embeddings=True, show_progress_bar=False)
+    embeddings = _embed([d["text"] for d in docs])
 
     client = _get_client(url)
     client.recreate_collection(
@@ -65,7 +65,7 @@ def build_vector_store(docs_path: Path = INSIGHT_DOCS_PATH, url: str = QDRANT_UR
     points = [
         PointStruct(
             id=int(doc["zone_id"]),
-            vector=emb.tolist(),
+            vector=emb,
             payload={"doc_text": doc["text"], **{k: doc.get(k) for k in _PAYLOAD_FIELDS if k in doc}},
         )
         for doc, emb in zip(docs, embeddings)
@@ -81,7 +81,7 @@ def search(query: str, k: int = 3, url: str = QDRANT_URL) -> list[dict]:
     templated from, not just the similarity-ranked text -- so a caller can
     trace the retrieval back to the source numbers (rule 2).
     """
-    q_emb = _get_model().encode([query], normalize_embeddings=True)[0].tolist()
+    q_emb = _embed([query])[0]
     client = _get_client(url)
     hits = client.query_points(collection_name=COLLECTION, query=q_emb, limit=k).points
     return [{"score": float(h.score), **h.payload} for h in hits]

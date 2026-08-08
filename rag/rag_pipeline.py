@@ -16,7 +16,9 @@ grounded) text is returned verbatim instead of the LLM's rewrite.
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
+from typing import Generator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import OPENAI_MODEL  # noqa: E402
@@ -24,6 +26,7 @@ from embeddings.build_vector_store import search as vector_search  # noqa: E402
 from insight_generation.generate_insight_docs import extract_numbers, validate_grounding  # noqa: E402
 from nl_to_sql import sql_agent  # noqa: E402
 from router.query_classifier import EXPLANATORY, NUMERIC, classify  # noqa: E402
+import session_store  # noqa: E402
 
 SYNTHESIS_SYSTEM_PROMPT = """Answer the user's question in 2-4 plain-language \
 sentences using ONLY facts and numbers that literally appear in the \
@@ -37,18 +40,40 @@ Retrieved context:
 """
 
 
+_MONEY_COLS = ("fare", "amount", "price", "cost", "tip", "toll", "revenue")
+
+
+def _format_label(col: str) -> str:
+    return col.replace("_", " ").title()
+
+
+def _format_value(col: str, val) -> str:
+    if isinstance(val, bool) or val is None:
+        return str(val)
+    if isinstance(val, (int, float)):
+        is_money = any(m in col.lower() for m in _MONEY_COLS)
+        if is_money or isinstance(val, float):
+            return f"${val:,.2f}" if is_money else f"{val:,.2f}"
+        return f"{val:,}"
+    return str(val)
+
+
 def _format_numeric_answer(result: dict) -> str:
     rows = result["rows"]
     if not rows:
         return "The query ran but returned no matching rows."
+
     if len(rows) == 1:
         row = rows[0]
-        parts = [f"{col.replace('_', ' ')} = {val}" for col, val in row.items()]
-        return "Based on the marts: " + "; ".join(parts) + "."
+        lines = [f"- {_format_label(col)}: {_format_value(col, val)}" for col, val in row.items()]
+        return "Based on the marts:\n" + "\n".join(lines)
 
     shown = rows[:10]
-    lines = [", ".join(f"{col}={val}" for col, val in row.items()) for row in shown]
-    suffix = f" (showing first 10 of {len(rows)} rows)" if len(rows) > 10 else ""
+    lines = [
+        ", ".join(f"{_format_label(col)}: {_format_value(col, val)}" for col, val in row.items())
+        for row in shown
+    ]
+    suffix = f"\n\n(showing first 10 of {len(rows)} rows)" if len(rows) > 10 else ""
     return "Based on the marts:\n" + "\n".join(f"- {line}" for line in lines) + suffix
 
 
@@ -114,11 +139,97 @@ def _answer_explanatory(question: str, k: int = 3) -> dict:
     }
 
 
-def answer(question: str) -> dict:
+def answer(question: str, session_id: str | None = None) -> dict:
+    active_session_id = session_id or str(uuid.uuid4())
     route = classify(question)
     if route == NUMERIC:
-        return _answer_numeric(question)
-    return _answer_explanatory(question)
+        res = _answer_numeric(question)
+    else:
+        res = _answer_explanatory(question)
+
+    res["session_id"] = active_session_id
+    session_store.save_message(active_session_id, "user", question)
+    session_store.save_message(active_session_id, "assistant", res["answer"], route=res["route"], sql=res.get("sql"))
+    return res
+
+
+def answer_stream(question: str, session_id: str | None = None) -> Generator[dict, None, None]:
+    """Streaming generator variant yielding tokens/chunks and final complete payload."""
+    active_session_id = session_id or str(uuid.uuid4())
+    route = classify(question)
+
+    session_store.save_message(active_session_id, "user", question)
+
+    if route == NUMERIC:
+        res = _answer_numeric(question)
+        res["session_id"] = active_session_id
+        session_store.save_message(active_session_id, "assistant", res["answer"], route=NUMERIC, sql=res.get("sql"))
+        yield {"type": "chunk", "text": res["answer"]}
+        yield {"type": "done", "payload": res}
+        return
+
+    # Explanatory route with streaming LLM synthesis
+    hits = vector_search(question, k=3)
+    if not hits:
+        fallback_ans = "No insight documents are available yet for this question -- not yet measured."
+        payload = {
+            "question": question,
+            "route": EXPLANATORY,
+            "answer": fallback_ans,
+            "sql": None,
+            "rows": None,
+            "sources": [],
+            "session_id": active_session_id,
+        }
+        session_store.save_message(active_session_id, "assistant", fallback_ans, route=EXPLANATORY)
+        yield {"type": "chunk", "text": fallback_ans}
+        yield {"type": "done", "payload": payload}
+        return
+
+    context = "\n\n".join(f"[{h['zone_name']}, {h['borough']}] {h['doc_text']}" for h in hits)
+    allowed = set(extract_numbers(context))
+    accumulated_text = ""
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI()
+        stream = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT.format(context=context)},
+                {"role": "user", "content": question},
+            ],
+            temperature=0.2,
+            max_completion_tokens=250,
+            stream=True,
+        )
+        for chunk in stream:
+            token = chunk.choices[0].delta.content or ""
+            if token:
+                accumulated_text += token
+                yield {"type": "chunk", "text": token}
+    except Exception as exc:  # noqa: BLE001
+        print(f"[warn] streaming synthesis failed ({exc}); falling back to retrieved doc", file=sys.stderr)
+        accumulated_text = hits[0]["doc_text"]
+        yield {"type": "chunk", "text": accumulated_text}
+
+    final_text = accumulated_text.strip()
+    if not final_text or not validate_grounding(final_text, allowed):
+        print("[warn] synthesis introduced an ungrounded number; returning retrieved doc verbatim", file=sys.stderr)
+        final_text = hits[0]["doc_text"]
+
+    payload = {
+        "question": question,
+        "route": EXPLANATORY,
+        "answer": final_text,
+        "sql": None,
+        "rows": None,
+        "sources": [{"zone_name": h["zone_name"], "borough": h["borough"], "score": h["score"]} for h in hits],
+        "session_id": active_session_id,
+    }
+    session_store.save_message(active_session_id, "assistant", final_text, route=EXPLANATORY)
+    yield {"type": "done", "payload": payload}
 
 
 def demo() -> None:
@@ -127,7 +238,7 @@ def demo() -> None:
         "Why is JFK Airport such an important hub in the network?",
     ]:
         result = answer(question)
-        print(f"\nQ: {question}\nroute: {result['route']}")
+        print(f"\nQ: {question}\nroute: {result['route']}\nsession_id: {result['session_id']}")
         if result["sql"]:
             print(f"SQL: {result['sql']}")
         print(f"A: {result['answer']}")

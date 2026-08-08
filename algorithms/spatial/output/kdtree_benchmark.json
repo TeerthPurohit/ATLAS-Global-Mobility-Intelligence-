@@ -1,0 +1,10 @@
+{
+  "n_zones": 263,
+  "tree_depth": 9,
+  "n_queries": 2000,
+  "linear_scan_seconds": 0.13551140006165951,
+  "linear_scan_us_per_query": 67.75570003082976,
+  "kdtree_seconds": 0.023672099923714995,
+  "kdtree_us_per_query": 11.836049961857498,
+  "speedup_x": 5.724519603176504
+}

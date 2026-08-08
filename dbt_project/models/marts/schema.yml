@@ -16,3 +16,88 @@ models:
 
   - name: zone_pair_flows
     description: "Daily origin-destination flow counts with ranking"
+
+  - name: london_station_hourly_demand
+    description: >
+      Aggregated demand per Santander Cycle Hire docking station per real
+      calendar date per hour (SPEC-015). Grain/column shape (station_id,
+      trip_date, hour, day_of_week, total_trips, avg_duration_min)
+      deliberately mirrors zone_hourly_demand's pickup_date/pickup_hour/
+      pickup_location_id grain -- a real date column (not just day-of-week)
+      is required for the chronological split (rule 3) demand-model training
+      depends on. This is bike-share departure volume, not ride-hailing
+      pickups -- not directly comparable to zone_hourly_demand's trip counts.
+    columns:
+      - name: station_id
+        tests:
+          - not_null
+          # warn not error: same documented, measured station-churn gap as
+          # int_london_journeys_enriched (see that model's schema.yml entry).
+          - relationships:
+              arguments:
+                to: ref('stg_london_stations')
+                field: station_id
+              config:
+                severity: warn
+      - name: trip_date
+        tests: [not_null]
+      - name: hour
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 23
+                inclusive: true
+      - name: day_of_week
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 6
+                inclusive: true
+      - name: total_trips
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: avg_duration_min
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1440
+                inclusive: false
+
+  - name: canonical_areas
+    description: >
+      Cross-city area dimension (SPEC-013 FR-3) -- wraps the existing NYC
+      zone dimension (stg_zones + zone_centroids) into a generic
+      (area_id, city_id, area_type, parent_area_id) shape backend/services/
+      geography_service.py's list_areas()/get_area() read from. Additive:
+      does not replace or rename the NYC `Zone` schema or `zone_id`.
+    columns:
+      - name: area_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_zones')
+                field: location_id
+      - name: area_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["zone"]
+      - name: city_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('cities')
+                field: id

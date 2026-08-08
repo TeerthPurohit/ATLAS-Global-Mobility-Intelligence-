@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Navigational-instrument token system (design pass, see task brief):
+   dark chart-table palette is the primary, designed-for mode. Light mode is
+   a parchment-dominant fallback, not a polished second identity. */
+:root {
+  --surface-0: #0b1220;
+  --surface-1: #121b2e;
+  --surface-2: #1a2540;
+  --surface-border: #2a3550;
+  --parchment: #f4efe4;
+  --ink-primary: #f4efe4;
+  --ink-secondary: #b8bfd1;
+  --ink-muted: #6e7791;
+  --brass: #c9922a;
+  --brass-fg: #1b1002;
+  --verdigris: #6b8f84;
+  --oxide: #8c4a3c;
+  --success: var(--verdigris);
+  --warning: var(--brass);
+  --danger: var(--oxide);
+  /* back-compat alias: components still reference `accent`/`accent-fg` */
+  --accent: var(--brass);
+  --accent-fg: var(--brass-fg);
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+/* Light fallback -- deliberately not the primary design target. */
+:root[data-theme="light"] {
+  --surface-0: #f4efe4;
+  --surface-1: #ece4d2;
+  --surface-2: #e2d6bc;
+  --surface-border: #cbb98f;
+  --ink-primary: #1b1a17;
+  --ink-secondary: #4a4640;
+  --ink-muted: #7a7466;
+  --brass: #a3701c;
+  --brass-fg: #f4efe4;
+  --verdigris: #4f6b62;
+  --oxide: #7a3d31;
+  --accent: var(--brass);
+  --accent-fg: var(--brass-fg);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --surface-0: #f4efe4;
+    --surface-1: #ece4d2;
+    --surface-2: #e2d6bc;
+    --surface-border: #cbb98f;
+    --ink-primary: #1b1a17;
+    --ink-secondary: #4a4640;
+    --ink-muted: #7a7466;
+    --brass: #a3701c;
+    --brass-fg: #f4efe4;
+    --verdigris: #4f6b62;
+    --oxide: #7a3d31;
+    --accent: var(--brass);
+    --accent-fg: var(--brass-fg);
+  }
+}
+
+body {
+  background: var(--surface-1);
+  color: var(--ink-primary);
+}

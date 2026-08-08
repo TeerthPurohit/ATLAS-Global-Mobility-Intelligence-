@@ -29,8 +29,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from algorithms.graph.build_zone_graph import build_zone_graph  # noqa: E402
-from algorithms.graph.pagerank_hubs import pagerank  # noqa: E402
 
 OUTPUT_PATH = Path(__file__).resolve().parent / "output" / "insight_docs.jsonl"
 
@@ -212,6 +210,13 @@ def load_insight_docs(path: Path = OUTPUT_PATH) -> list[dict]:
 
 
 def generate_all(db_path: Path = DEFAULT_DB_PATH, output_path: Path = OUTPUT_PATH, use_llm: bool = True) -> list[dict]:
+    # Lazy: networkx is a training/precompute-only dep, deliberately absent
+    # from requirements-backend.txt (rule 8) -- importing it at module level
+    # would drag it onto the backend's request-time import chain even though
+    # only this offline precompute path needs it.
+    from algorithms.graph.build_zone_graph import build_zone_graph
+    from algorithms.graph.pagerank_hubs import pagerank
+
     con = duckdb.connect(str(db_path), read_only=True)
     try:
         demand = con.execute(

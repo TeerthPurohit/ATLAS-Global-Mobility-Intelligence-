@@ -9,6 +9,18 @@ sources:
       - name: raw_trips
         description: "Raw HVFHV trip records (High Volume For-Hire Vehicle — Uber/Lyft)"
 
+  - name: tfl_cycling
+    description: >
+      TfL Santander Cycle Hire journey extracts (SPEC-015, bike-share, NOT
+      ride-hailing) loaded by scripts/ingest_tfl_cycle_hire.py into the
+      separate london_cycles.duckdb file, attached alongside the primary NYC
+      connection (see dbt_project/profiles.yml's `attach` block).
+    database: london_cycles
+    schema: main
+    tables:
+      - name: raw_journeys
+        description: "Raw Santander Cycle Hire journeys — see data/raw/london/manifest.json for the exact files/date range pulled."
+
 models:
   - name: stg_trips
     description: "Cleaned and typed trip records from raw parquet data"
@@ -41,3 +53,48 @@ models:
         tests: [not_null]
       - name: zone_name
         tests: [not_null]
+
+  - name: stg_london_cycle_journeys
+    description: "Cleaned and typed Santander Cycle Hire journey records (SPEC-015)"
+    columns:
+      - name: journey_id
+        tests: [unique, not_null]
+      - name: start_at
+        tests: [not_null]
+      - name: end_at
+        tests: [not_null]
+      - name: start_station_id
+        tests: [not_null]
+      - name: end_station_id
+        tests: [not_null]
+      - name: duration_minutes
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: stg_london_stations
+    description: "Santander Cycle Hire docking station locations, from TfL's live BikePoint API (dbt_project/seeds/london_stations.csv)"
+    columns:
+      - name: station_id
+        tests: [unique, not_null]
+      - name: station_name
+        tests: [not_null]
+      - name: latitude
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 51.2
+                max_value: 51.8
+                inclusive: true
+      - name: longitude
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -0.6
+                max_value: 0.3
+                inclusive: true

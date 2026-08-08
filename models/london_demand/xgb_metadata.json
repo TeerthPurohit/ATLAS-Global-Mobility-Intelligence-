@@ -1,0 +1,92 @@
+{
+  "model_id": "xgboost_london_demand_v1",
+  "city_id": "london",
+  "seed": 42,
+  "date_range": {
+    "train": [
+      "2026-01-08 00:00:00",
+      "2026-03-24 19:00:00"
+    ],
+    "val": [
+      "2026-03-24 20:00:00",
+      "2026-04-01 00:00:00"
+    ],
+    "test": [
+      "2026-05-08 00:00:00",
+      "2026-06-01 00:00:00"
+    ]
+  },
+  "n_rows": {
+    "train": 764663,
+    "val": 135914,
+    "test": 451584
+  },
+  "features": [
+    "hour",
+    "day_of_week",
+    "is_weekend",
+    "lag_1h",
+    "lag_24h",
+    "lag_168h",
+    "ewma",
+    "rolling_7d_avg"
+  ],
+  "target": "total_trips",
+  "hyperparameters": {
+    "max_depth": 4,
+    "learning_rate": 0.1,
+    "n_estimators": 200
+  },
+  "hyperparameter_search": [
+    {
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "n_estimators": 200,
+      "val_rmse": 1.3499848082358747,
+      "val_mae": 0.8503125309944153
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "n_estimators": 200,
+      "val_rmse": 1.3508132445394625,
+      "val_mae": 0.8449258208274841
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "n_estimators": 300,
+      "val_rmse": 1.3512806240143944,
+      "val_mae": 0.8452346920967102
+    },
+    {
+      "max_depth": 8,
+      "learning_rate": 0.1,
+      "n_estimators": 200,
+      "val_rmse": 1.3624804749095996,
+      "val_mae": 0.846284806728363
+    }
+  ],
+  "feature_importances": {
+    "hour": 0.04090989753603935,
+    "day_of_week": 0.03225760906934738,
+    "is_weekend": 0.0,
+    "lag_1h": 0.08528236299753189,
+    "lag_24h": 0.16211038827896118,
+    "lag_168h": 0.554573118686676,
+    "ewma": 0.08992379158735275,
+    "rolling_7d_avg": 0.03494282439351082
+  },
+  "metrics": {
+    "val_rmse": 1.3499848082358747,
+    "val_mae": 0.8503125309944153,
+    "test_rmse": 1.6772617300490213,
+    "test_mae": 0.9967936873435974,
+    "test_inference_latency_ms_per_row": 0.0015877369437361146
+  },
+  "library_versions": {
+    "xgboost": "3.3.0",
+    "pandas": "3.0.3",
+    "numpy": "2.5.1"
+  }
+}

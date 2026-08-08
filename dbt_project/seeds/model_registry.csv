@@ -1,0 +1,6 @@
+model_id,city_id,metric,model_type,version,artifact_path,training_period,status,metrics_ref
+xgboost_demand_v1,nyc,demand,xgboost,v1,models/xgboost_model/xgb_model.json,2024-01/2024-03/2024-06,active,models/xgboost_model/xgb_metadata.json
+ewma_fallback_v1,nyc,demand,ewma,v1,models/ewma_baseline/ewma_baseline_metadata.json,2024-01/2024-03/2024-06,active,models/ewma_baseline/ewma_baseline_metadata.json
+xgboost_fare_v1,nyc,fare,xgboost,v1,models/fare_prediction/fare_xgb_model.json,2024-01/2024-03/2024-06,active,models/fare_prediction/fare_xgb_metadata.json
+journey_predictors_v1,nyc,journey,rule_based_ensemble,v1,backend/predictors/journey_predictors.py,n/a,active,docs/adr/ADR-007-predictor-basis-field.md
+xgboost_london_demand_v1,london,demand,xgboost,v1,models/london_demand/xgb_model.json,2026-01/2026-03/2026-05,active,models/london_demand/xgb_metadata.json

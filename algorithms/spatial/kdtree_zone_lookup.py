@@ -108,7 +108,10 @@ def linear_nearest(points: list[ZonePoint], lat: float, lon: float) -> ZonePoint
     return min(points, key=lambda p: _sq_dist(lat, lon, p))
 
 
-def _benchmark(points: list[ZonePoint], n_queries: int = 2000) -> None:
+def benchmark_summary(points: list[ZonePoint], n_queries: int = 2000) -> dict:
+    """Run the linear-scan-vs-KD-tree benchmark and return measured results
+    (used both by the CLI printout and by scripts/generate_algorithm_artifacts.py
+    to persist a real artifact instead of a hand-typed number in the UI)."""
     import random
 
     random.seed(0)
@@ -116,7 +119,6 @@ def _benchmark(points: list[ZonePoint], n_queries: int = 2000) -> None:
     queries = [(random.uniform(40.49, 40.92), random.uniform(-74.26, -73.68)) for _ in range(n_queries)]
 
     tree = KDTree(points)
-    print(f"n zones = {len(points)}, tree depth = {tree.depth()} (balanced depth ~= {len(points).bit_length()})")
 
     t0 = time.perf_counter()
     linear_results = [linear_nearest(points, lat, lon).location_id for lat, lon in queries]
@@ -128,9 +130,24 @@ def _benchmark(points: list[ZonePoint], n_queries: int = 2000) -> None:
 
     assert linear_results == tree_results, "KD-tree and linear scan disagree"
 
-    print(f"{n_queries} queries, linear scan: {t_linear:.4f}s ({t_linear / n_queries * 1e6:.2f} us/query)")
-    print(f"{n_queries} queries, KD-tree:     {t_tree:.4f}s ({t_tree / n_queries * 1e6:.2f} us/query)")
-    print(f"speedup: {t_linear / t_tree:.2f}x")
+    return {
+        "n_zones": len(points),
+        "tree_depth": tree.depth(),
+        "n_queries": n_queries,
+        "linear_scan_seconds": t_linear,
+        "linear_scan_us_per_query": t_linear / n_queries * 1e6,
+        "kdtree_seconds": t_tree,
+        "kdtree_us_per_query": t_tree / n_queries * 1e6,
+        "speedup_x": t_linear / t_tree,
+    }
+
+
+def _benchmark(points: list[ZonePoint], n_queries: int = 2000) -> None:
+    summary = benchmark_summary(points, n_queries)
+    print(f"n zones = {summary['n_zones']}, tree depth = {summary['tree_depth']} (balanced depth ~= {len(points).bit_length()})")
+    print(f"{n_queries} queries, linear scan: {summary['linear_scan_seconds']:.4f}s ({summary['linear_scan_us_per_query']:.2f} us/query)")
+    print(f"{n_queries} queries, KD-tree:     {summary['kdtree_seconds']:.4f}s ({summary['kdtree_us_per_query']:.2f} us/query)")
+    print(f"speedup: {summary['speedup_x']:.2f}x")
 
 
 if __name__ == "__main__":

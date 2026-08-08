@@ -1,12 +1,10 @@
 """RAG layer: the non-trivial, LLM-independent logic gets a real test
-(standards.md) -- the grounding validator and the NL-to-SQL security guard
+(standards.md) -- the grounding validator, session store, and NL-to-SQL security guard
 are both branch-heavy parsing logic where a silent regression would be
-exactly the failure mode this project exists to avoid. Live LLM calls
-(classify(), generate_sql()) aren't covered here -- flaky/costly in CI,
-consistent with rule 7; `python -m rag.router.query_classifier` /
-`sql_agent.py` demo() runs against the documented test set instead.
+exactly the failure mode this project exists to avoid.
 """
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -18,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "router"))
 
 from generate_insight_docs import validate_grounding  # noqa: E402
 from query_classifier import _heuristic_classify, EXPLANATORY, NUMERIC  # noqa: E402
+import session_store  # noqa: E402
 from sql_agent import _validate_sql  # noqa: E402
 
 
@@ -81,3 +80,26 @@ def test_heuristic_classify_ambiguous_defaults_numeric():
     # ADR-004: SQL beats LLM reasoning in the precedence order -- an
     # ambiguous question should route to NL-to-SQL first, not explanation.
     assert _heuristic_classify("Tell me about Zone 161") == NUMERIC
+
+
+# ---- session_store SQLite conversation persistence ----
+
+def test_session_store_crud():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test_session_history.db"
+        session_id = "test-session-123"
+
+        assert not session_store.session_exists(session_id, db_path=db_path)
+
+        session_store.save_message(session_id, "user", "Hello", db_path=db_path)
+        session_store.save_message(session_id, "assistant", "Hi there", route="numeric", sql="SELECT 1", db_path=db_path)
+
+        assert session_store.session_exists(session_id, db_path=db_path)
+
+        history = session_store.get_session_history(session_id, db_path=db_path)
+        assert len(history) == 2
+        assert history[0]["role"] == "user"
+        assert history[0]["content"] == "Hello"
+        assert history[1]["role"] == "assistant"
+        assert history[1]["route"] == "numeric"
+        assert history[1]["sql"] == "SELECT 1"

@@ -20,6 +20,13 @@ seeds:
         Borough: varchar
         Zone: varchar
         service_zone: varchar
+    london_stations:
+      +database: london_cycles
+      +column_types:
+        station_id: varchar
+        name: varchar
+        latitude: double
+        longitude: double
 
 models:
   nyc_tlc_rides:
