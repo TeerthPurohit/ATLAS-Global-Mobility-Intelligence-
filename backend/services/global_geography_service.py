@@ -211,6 +211,7 @@ def get_city_profile(city_id: str) -> dict | None:
     if not population:
         population = get_worldmove_population(leaf.get("name"), country_code)
         if population:
+            population = int(round(population))
             population_source = "worldmove_estimate"
 
     model_status, confidence = resolve_city_tier(leaf.get("name"), country_code, population, lat)
@@ -310,6 +311,7 @@ def search_cities(query: str, limit: int = 10, country_code: str | None = None) 
         if not population:
             population = get_worldmove_population(name, cc)
             if population:
+                population = int(round(population))
                 population_source = "worldmove_estimate"
         if not population:
             continue
