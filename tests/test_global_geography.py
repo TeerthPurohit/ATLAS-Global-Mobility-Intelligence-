@@ -178,6 +178,14 @@ def test_city_profile_registered_city_is_observed_tier():
     assert prof["confidence"] == 1.0
 
 
+def test_city_profile_api_exposes_model_status(client):
+    resp = client.get("/api/geography/jaipur")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["model_status"] == "TRANSFER"
+    assert 0.0 < body["confidence"] < 1.0
+
+
 if __name__ == "__main__":
     test_global_geography_service_registered_cities()
     test_global_geography_service_unseen_cities()

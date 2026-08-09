@@ -165,6 +165,9 @@ class CityProfileResponse(BaseModel):
     timezone: str | None = None
     currency: str | None = None
     population: int | None = None
+    population_source: str | None = None
+    model_status: str
+    confidence: float
     administrative_hierarchy: list[dict[str, str | int | None]] = []
     alternate_names: list[str] = []
     geographic_classification: CityGeographicClassification
