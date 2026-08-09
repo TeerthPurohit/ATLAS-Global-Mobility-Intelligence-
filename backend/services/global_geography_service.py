@@ -12,49 +12,63 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
+import duckdb
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from backend.registry import cities as cities_registry  # noqa: E402
+from backend.registry import global_cities as global_cities_registry  # noqa: E402
 from backend.services import geonames_service  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# Standard country code -> currency mapping (standard ISO 4217, data-driven).
-_COUNTRY_CURRENCIES: dict[str, str] = {
-    "US": "USD",
-    "GB": "GBP",
-    "IN": "INR",
-    "AE": "AED",
-    "ZA": "ZAR",
-    "JP": "JPY",
-    "KR": "KRW",
-    "SG": "SGD",
-    "DE": "EUR",
-    "FR": "EUR",
-    "NL": "EUR",
-    "ES": "EUR",
-    "IT": "EUR",
-    "CA": "CAD",
-    "AU": "AUD",
-    "BR": "BRL",
-    "AR": "ARS",
-    "MX": "MXN",
-    "EG": "EGP",
-    "TR": "TRY",
-    "SA": "SAR",
-    "QA": "QAR",
-    "KE": "KES",
-    "TH": "THB",
-    "ID": "IDR",
-    "PH": "PHP",
-}
+_WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
+
+
+@lru_cache(maxsize=1)
+def _worldmove_population() -> dict[tuple[str, str], float]:
+    """(country_code, city_name.lower()) -> population_total, from the 522-city
+    WorldMove grid summaries (scripts/load_worldmove_to_duckdb.py). This is a
+    modeled population signal, not a GeoNames-measured figure -- callers must
+    keep it labeled as such, never presented as an authoritative population."""
+    try:
+        con = duckdb.connect(str(_WAREHOUSE_PATH), read_only=True)
+        try:
+            rows = con.execute(
+                "SELECT country_code, city_name, population_total FROM worldmove_city_population"
+            ).fetchall()
+        finally:
+            con.close()
+    except duckdb.Error:  # noqa: BLE001 -- table/file missing degrades to no fallback, never a crash
+        return {}
+    return {(cc, name.lower()): pop for cc, name, pop in rows}
+
+
+def get_worldmove_population(city_name: str | None, country_code: str | None) -> float | None:
+    if not city_name or not country_code:
+        return None
+    return _worldmove_population().get((country_code.upper(), city_name.lower()))
+
+@lru_cache(maxsize=1)
+def _country_currencies() -> dict[str, str]:
+    """ISO 4217 currency per country, straight from GeoNames'
+    `countryInfoJSON` -- covers every country, not a hand-maintained
+    shortlist that silently defaults the rest of the world to USD."""
+    return {
+        c["iso2"]: c["currency"]
+        for c in geonames_service.get_all_countries()
+        if c.get("iso2") and c.get("currency")
+    }
 
 
 def get_currency_for_country(country_code: str | None) -> str:
     if not country_code:
         return "USD"
-    return _COUNTRY_CURRENCIES.get(country_code.upper(), "USD")
+    try:
+        return _country_currencies().get(country_code.upper(), "USD")
+    except Exception:  # noqa: BLE001 -- GeoNames unavailable degrades to USD, never a hard failure
+        return "USD"
 
 
 def _classify_place_type(fcl: str | None, fcode: str | None) -> str:
@@ -93,6 +107,31 @@ def resolve_modeling_availability(population: int | None, latitude: float | None
     return population is not None and population > 0
 
 
+def resolve_city_tier(city_name: str | None, country_code: str | None, population: float | None, lat: float | None) -> tuple[str, float]:
+    """(model_status, confidence). Checks the 524-city global_cities registry
+    first (Task 2) -- exact (country_code, name) match -- before falling back
+    to a population-only heuristic for cities outside that registry.
+
+    Confidence is a 2-signal heuristic (data tier + feature completeness),
+    not the full 5-signal formula from the spec -- that needs city
+    embeddings and multiple trained models this repo doesn't have yet.
+    # ponytail: 2-signal confidence, add model-similarity/prediction-stability
+    # signals once city embeddings (a separate, larger plan) exist.
+    """
+    registered = global_cities_registry.find_by_name(city_name, country_code) if city_name and country_code else None
+    if registered:
+        status = registered["model_status"]
+    elif population and population > 0:
+        status = "PRIOR_ONLY"
+    else:
+        status = "INSUFFICIENT_DATA"
+
+    tier_score = {"OBSERVED": 1.0, "TRANSFER": 0.6, "PRIOR_ONLY": 0.3, "INSUFFICIENT_DATA": 0.0}[status]
+    completeness = sum([population is not None, lat is not None]) / 2
+    confidence = round((tier_score + completeness) / 2, 2) if status != "OBSERVED" else 1.0
+    return status, confidence
+
+
 def get_city_profile(city_id: str) -> dict | None:
     """Phase 3: Fetch authoritative geographic facts for a city_id or geoname_id."""
     # Check registered cities first
@@ -129,6 +168,8 @@ def get_city_profile(city_id: str) -> dict | None:
                 "observed_mobility": capabilities.get("demand", False),
                 "cross_city_model": resolve_modeling_availability(registered.get("population"), registered.get("latitude")),
             },
+            "model_status": "OBSERVED",
+            "confidence": 1.0,
         }
 
     # Search via GeoNames by ID if numeric or search by string name
@@ -166,6 +207,13 @@ def get_city_profile(city_id: str) -> dict | None:
     country_code = leaf.get("country_code") or leaf.get("countryCode")
     country_name = leaf.get("country_name") or leaf.get("countryName")
     population = leaf.get("population")
+    population_source = "geonames" if population else None
+    if not population:
+        population = get_worldmove_population(leaf.get("name"), country_code)
+        if population:
+            population_source = "worldmove_estimate"
+
+    model_status, confidence = resolve_city_tier(leaf.get("name"), country_code, population, lat)
 
     tz_id = "UTC"
     if lat is not None and lng is not None:
@@ -195,6 +243,9 @@ def get_city_profile(city_id: str) -> dict | None:
         "timezone": tz_id,
         "currency": currency,
         "population": population,
+        "population_source": population_source,
+        "model_status": model_status,
+        "confidence": confidence,
         "administrative_hierarchy": hierarchy_nodes,
         "alternate_names": [place_name],
         "geographic_classification": {
@@ -250,14 +301,19 @@ def search_cities(query: str, limit: int = 10, country_code: str | None = None) 
         gid = str(p.get("geoname_id")) if p.get("geoname_id") else None
         if not gid or gid in seen_ids:
             continue
-        population = p.get("population")
-        if not population:
-            continue
-        seen_ids.add(gid)
-
         name = p.get("name") or query_clean.title()
         cc = p.get("country_code")
         cname = p.get("country_name") or cc
+
+        population = p.get("population")
+        population_source = "geonames" if population else None
+        if not population:
+            population = get_worldmove_population(name, cc)
+            if population:
+                population_source = "worldmove_estimate"
+        if not population:
+            continue
+        seen_ids.add(gid)
 
         results.append({
             "id": gid,
@@ -268,6 +324,7 @@ def search_cities(query: str, limit: int = 10, country_code: str | None = None) 
             "longitude": p.get("longitude"),
             "timezone": None,
             "population": population,
+            "population_source": population_source,
             "place_type": _classify_place_type(p.get("feature_class"), p.get("feature_code")),
             "mobility_available": False,
             "modeling_available": True,

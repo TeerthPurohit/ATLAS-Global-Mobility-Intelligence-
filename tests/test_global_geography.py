@@ -165,6 +165,19 @@ def test_city_context_api_endpoint(client):
     assert body["context"]["geography"]["data"]["currency"] == "GBP"
 
 
+def test_city_profile_worldmove_city_is_transfer_tier():
+    prof = global_geography_service.get_city_profile("jaipur")
+    assert prof is not None
+    assert prof["model_status"] == "TRANSFER"
+    assert 0.0 < prof["confidence"] < 1.0
+
+
+def test_city_profile_registered_city_is_observed_tier():
+    prof = global_geography_service.get_city_profile("nyc")
+    assert prof["model_status"] == "OBSERVED"
+    assert prof["confidence"] == 1.0
+
+
 if __name__ == "__main__":
     test_global_geography_service_registered_cities()
     test_global_geography_service_unseen_cities()
