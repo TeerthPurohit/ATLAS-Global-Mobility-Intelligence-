@@ -129,6 +129,7 @@ class GlobalCitySearchResult(BaseModel):
     longitude: float | None = None
     timezone: str | None = None
     population: int | None = None
+    population_source: str | None = None
     place_type: str = "city"
     mobility_available: bool = False
     modeling_available: bool = True

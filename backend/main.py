@@ -27,12 +27,13 @@ from backend.registry import global_cities as global_cities_registry  # noqa: E4
 from backend.registry import models as models_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
 from backend.routers import chat, cities, countries, geography, journey, platform, predictions, zones  # noqa: E402
-from backend.services import journey_service, model_service, platform_service  # noqa: E402
+from backend.services import journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     model_service.load()  # runs once, before the app accepts traffic (rule 8)
+    tariff_profiles.load()  # read-only; profiles themselves are generated offline (scripts/generate_tariff_profile.py)
     platform_service.load()
     journey_service.load()
     countries_registry.load()
