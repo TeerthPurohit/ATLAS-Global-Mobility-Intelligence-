@@ -45,4 +45,6 @@ def test_list_cities_filters_by_tier():
     assert {c["city_id"] for c in observed} == {"nyc", "london"}
 
     transfer = global_cities.list_cities(model_status="TRANSFER")
-    assert len(transfer) == 522
+    # 522 WorldMove rows minus London, which collides by (country_code, name)
+    # with the already-registered "london" city and is skipped at build time.
+    assert len(transfer) == 521

@@ -28,7 +28,9 @@ def con():
 def test_global_cities_table_exists_and_populated(con):
     assert _table_exists(con), "run scripts/build_global_cities.py first"
     n = con.execute("SELECT count(*) FROM global_cities").fetchone()[0]
-    assert n == 524, f"expected 2 registered + 522 WorldMove cities, got {n}"
+    # 2 registered + 522 WorldMove, minus WorldMove rows that collide by
+    # (country_code, name) with an already-registered city (London).
+    assert n == 523, f"expected 523 rows (2 registered + 521 non-colliding WorldMove), got {n}"
 
 
 def test_global_cities_no_duplicate_ids(con):
@@ -36,6 +38,13 @@ def test_global_cities_no_duplicate_ids(con):
         "SELECT city_id, count(*) c FROM global_cities GROUP BY 1 HAVING count(*) > 1"
     ).fetchall()
     assert dupes == []
+
+
+def test_global_cities_no_duplicate_names(con):
+    dupes = con.execute(
+        "SELECT upper(country_code), lower(name), count(*) c FROM global_cities GROUP BY 1, 2 HAVING count(*) > 1"
+    ).fetchall()
+    assert dupes == [], "a (country_code, name) pair must resolve to exactly one row, else find_by_name is ambiguous"
 
 
 def test_registered_cities_are_observed(con):
