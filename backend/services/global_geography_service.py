@@ -83,8 +83,14 @@ def resolve_mobility_availability(city_id: str | None) -> bool:
 
 
 def resolve_modeling_availability(population: int | None, latitude: float | None) -> bool:
-    """True if geographical/population covariates allow cross-city modeling estimates."""
-    return population is not None or latitude is not None
+    """True iff cross-city modeling estimates are actually possible.
+    `estimation_service.estimate_city_demand` hard-requires a population
+    covariate (latitude alone isn't enough for it to return a number) --
+    this used to say `population is not None or latitude is not None`,
+    which claimed modeling was available for any resolvable place on Earth
+    (nearly all of them have a latitude) even when population was null,
+    silently overclaiming a capability the backend would then refuse."""
+    return population is not None and population > 0
 
 
 def get_city_profile(city_id: str) -> dict | None:
@@ -233,11 +239,19 @@ def search_cities(query: str, limit: int = 10, country_code: str | None = None) 
             })
             seen_ids.add(city["id"])
 
-    # Search GeoNames places
+    # Search GeoNames places. Only include ones GeoNames actually gives a
+    # population for -- estimation_service.estimate_city_demand hard-requires
+    # a population covariate, so a result without one is a dead end (real
+    # geography, but no honest demand/fare estimate possible) rather than a
+    # usable "modeled" city. Was previously letting every GeoNames hit
+    # through with modeling_available hardcoded True regardless.
     raw_places = geonames_service.search_places(query_clean, country=country_code)
-    for p in raw_places[:limit]:
+    for p in raw_places:
         gid = str(p.get("geoname_id")) if p.get("geoname_id") else None
         if not gid or gid in seen_ids:
+            continue
+        population = p.get("population")
+        if not population:
             continue
         seen_ids.add(gid)
 
@@ -253,10 +267,12 @@ def search_cities(query: str, limit: int = 10, country_code: str | None = None) 
             "latitude": p.get("latitude"),
             "longitude": p.get("longitude"),
             "timezone": None,
-            "population": p.get("population"),
+            "population": population,
             "place_type": _classify_place_type(p.get("feature_class"), p.get("feature_code")),
             "mobility_available": False,
             "modeling_available": True,
         })
+        if len(results) >= limit:
+            break
 
     return results[:limit]

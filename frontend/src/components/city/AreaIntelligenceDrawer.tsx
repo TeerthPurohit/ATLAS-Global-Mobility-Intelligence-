@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Area, PredictionEnvelope, predictCityDemand, predictDemand } from "../../api/client";
+import { Area, predictCityDemand, predictCityFare, predictDemand } from "../../api/client";
 import { X, Sparkles, MapPin, TrendingUp, DollarSign, Clock, Bot, Cpu } from "lucide-react";
 import { Provenance } from "../ui/Provenance";
 
 interface AreaIntelligenceDrawerProps {
   area: Area | null;
+  areas: Area[];
   cityId: string;
   onClose: () => void;
   onAskAI: (area: Area, question?: string) => void;
@@ -12,40 +13,59 @@ interface AreaIntelligenceDrawerProps {
 
 export const AreaIntelligenceDrawer: React.FC<AreaIntelligenceDrawerProps> = ({
   area,
+  areas,
   cityId,
   onClose,
   onAskAI,
 }) => {
   const [selectedHour, setSelectedHour] = useState<number>(8);
   const [selectedDay, setSelectedDay] = useState<number>(1);
-  const [prediction, setPrediction] = useState<{ demand: number; model: string } | null>(null);
+  const [dropoffAreaId, setDropoffAreaId] = useState<number | null>(null);
+  const [prediction, setPrediction] = useState<{ demand: number; model: string; basis: string } | null>(null);
   const [loadingPred, setLoadingPred] = useState<boolean>(false);
+  const [fare, setFare] = useState<{ value: number; model: string } | "unavailable" | null>(null);
+  const [loadingFare, setLoadingFare] = useState<boolean>(false);
 
   useEffect(() => {
     if (!area) return;
+    setDropoffAreaId(null);
+    setFare(null);
 
     setLoadingPred(true);
-    // Try city scoped prediction first, fallback to predictDemand
     predictCityDemand(cityId, area.area_id, selectedHour, selectedDay)
       .then((res) => {
         if ("prediction" in res) {
-          setPrediction({ demand: res.prediction, model: res.model });
+          setPrediction({ demand: res.prediction, model: res.model, basis: res.basis });
         } else {
-          // Fallback legacy predict for NYC
+          // No model or modeled estimate available at all -- fall back to
+          // the legacy NYC-only endpoint rather than fabricating a number.
           return predictDemand(area.area_id, selectedHour, selectedDay).then((p) => {
-            setPrediction({ demand: p.predicted_demand, model: p.model });
+            setPrediction({ demand: p.predicted_demand, model: p.model, basis: "computed" });
           });
         }
       })
       .catch((err) => {
         console.error("Area prediction error:", err);
-        // Fallback to legacy
         predictDemand(area.area_id, selectedHour, selectedDay)
-          .then((p) => setPrediction({ demand: p.predicted_demand, model: p.model }))
+          .then((p) => setPrediction({ demand: p.predicted_demand, model: p.model, basis: "computed" }))
           .catch(() => setPrediction(null));
       })
       .finally(() => setLoadingPred(false));
   }, [area, cityId, selectedHour, selectedDay]);
+
+  useEffect(() => {
+    if (!area || dropoffAreaId == null) {
+      setFare(null);
+      return;
+    }
+    setLoadingFare(true);
+    predictCityFare(cityId, area.area_id, dropoffAreaId, selectedHour)
+      .then((res) => {
+        setFare("prediction" in res ? { value: res.prediction, model: res.model } : "unavailable");
+      })
+      .catch(() => setFare("unavailable"))
+      .finally(() => setLoadingFare(false));
+  }, [area, cityId, dropoffAreaId, selectedHour]);
 
   if (!area) return null;
 
@@ -122,24 +142,49 @@ export const AreaIntelligenceDrawer: React.FC<AreaIntelligenceDrawerProps> = ({
                 <span className="text-2xl font-extrabold font-mono text-slate-100">
                   {Math.round(prediction.demand)}
                 </span>
-                <span className="text-[10px] text-slate-400 ml-1">trips/hr</span>
+                <span className="text-[10px] text-slate-400 ml-1">
+                  {area.area_type === "station" ? "trips/hr at this station" : "trips/hr"}
+                </span>
+                {prediction.basis === "modeled_estimate" && (
+                  <div className="text-[9px] uppercase font-bold text-amber-400 mt-0.5">Modeled estimate, not observed</div>
+                )}
               </div>
             ) : (
               <span className="text-xs text-slate-500">Unavailable</span>
             )}
           </div>
 
-          {/* Average Fare Estimate */}
+          {/* Zone-to-zone fare estimate (real model, not a placeholder) */}
           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>Est. Avg Fare</span>
+              <span>Est. Fare To</span>
               <DollarSign className="w-3.5 h-3.5 text-amber-400" />
             </div>
-            <div>
-              <span className="text-2xl font-extrabold font-mono text-slate-100">
-                ${(16.5 + (area.area_id % 15) * 1.2).toFixed(2)}
-              </span>
-            </div>
+            <select
+              value={dropoffAreaId ?? ""}
+              onChange={(e) => setDropoffAreaId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[11px] text-slate-200 focus:outline-none"
+            >
+              <option value="">Choose destination...</option>
+              {areas
+                .filter((a) => a.area_id !== area.area_id)
+                .map((a) => (
+                  <option key={a.area_id} value={a.area_id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+            {dropoffAreaId != null && (
+              <div className="pt-1">
+                {loadingFare ? (
+                  <p className="text-xs text-slate-500 font-mono animate-pulse">Calculating...</p>
+                ) : fare === "unavailable" ? (
+                  <span className="text-xs text-slate-500">No fare model for this city</span>
+                ) : fare ? (
+                  <span className="text-xl font-extrabold font-mono text-slate-100">${fare.value.toFixed(2)}</span>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
 

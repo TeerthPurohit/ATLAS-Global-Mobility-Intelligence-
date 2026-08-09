@@ -273,6 +273,8 @@ export interface PredictionEnvelope {
   generated_at: string;
   data_timestamp?: string | null;
   source: string;
+  basis: "computed" | "modeled_estimate";
+  reason?: string | null;
 }
 
 export interface ForecastPoint {
@@ -366,6 +368,49 @@ export async function predictCityFare(
     body: JSON.stringify({ pickup_area_id: pickupAreaId, dropoff_area_id: dropoffAreaId, hour }),
   });
   if (!res.ok) throw new Error(`City fare prediction failed: ${res.statusText}`);
+  return res.json();
+}
+
+export interface PredictionOut {
+  value: number | string | null;
+  unit: string | null;
+  basis: "computed" | "modeled_estimate" | "unavailable";
+  source: string;
+  reason?: string | null;
+  ui_label?: string | null;
+}
+
+export interface CityJourneyEstimate {
+  city_id: string;
+  distance: PredictionOut;
+  duration: PredictionOut;
+  demand: PredictionOut;
+  fare: PredictionOut;
+  mode: "zone_enriched" | "osrm_only";
+}
+
+// Works for ANY resolvable city -- computed where a real model exists
+// (NYC/London), an honestly-labeled modeled_estimate everywhere else.
+export async function fetchCityJourneyEstimate(
+  cityId: string,
+  pickupLat: number,
+  pickupLon: number,
+  dropoffLat: number,
+  dropoffLon: number,
+  departureTime: string = new Date().toISOString()
+): Promise<CityJourneyEstimate> {
+  const res = await fetch(`${API_BASE_URL}/api/cities/${cityId}/journey/estimate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      pickup_lat: pickupLat,
+      pickup_lon: pickupLon,
+      dropoff_lat: dropoffLat,
+      dropoff_lon: dropoffLon,
+      departure_time: departureTime,
+    }),
+  });
+  if (!res.ok) throw new Error(`City journey estimate failed: ${res.statusText}`);
   return res.json();
 }
 
