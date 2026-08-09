@@ -82,6 +82,18 @@ def resolve(lat: float, lon: float) -> int | None:
     return point.location_id if point else None
 
 
+def detect_city_from_coords(lat: float, lon: float) -> str | None:
+    """NYC/London bbox detection for a journey request that didn't specify
+    city_id explicitly -- None means "no zone-enriched city recognizes this
+    point," not "no city exists here" (the caller falls back to reverse
+    geocoding via global_geography_service for anywhere else on Earth)."""
+    if in_coverage(lat, lon):
+        return "nyc"
+    if _in_london_coverage(lat, lon):
+        return "london"
+    return None
+
+
 def resolve_for_city(city_id: str, lat: float, lon: float) -> int | None:
     """Like resolve(), generalized to any city with a real zone/station KD-tree.
     None means "outside this city's coverage" -- never snaps to the nearest

@@ -4,8 +4,8 @@ import os
 con = duckdb.connect(os.environ.get("DUCKDB_PATH", "data/warehouse/nyc_rides.duckdb"))
 
 con.execute("""
-    CREATE OR REPLACE TABLE raw_trips AS
-    SELECT * FROM read_parquet('data/raw/fhvhv_tripdata_*.parquet');
+    CREATE OR REPLACE VIEW raw_trips AS
+    SELECT * FROM read_parquet('data/raw/fhvhv_tripdata_*.parquet', union_by_name=true);
 """)
 
 con.execute("""

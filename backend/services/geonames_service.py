@@ -115,6 +115,7 @@ def get_all_countries() -> list[dict]:
                 "name": r.get("countryName"),
                 "capital": r.get("capital"),
                 "continent": r.get("continent"),
+                "currency": r.get("currencyCode"),
                 "latitude": (north + south) / 2 if north is not None and south is not None else None,
                 "longitude": (east + west) / 2 if east is not None and west is not None else None,
             }

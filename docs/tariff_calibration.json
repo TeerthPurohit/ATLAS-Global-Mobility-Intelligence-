@@ -1,0 +1,11 @@
+{
+  "blind_guess": {
+    "base_fare": 2.5,
+    "per_mile": 2.5,
+    "per_min": 0.5,
+    "min_fare": 3.5,
+    "notes": "Based on typical NYC yellow cab metered rates and common Uber/Lyft base-plus-distance-time structures."
+  },
+  "mape_pct": 24.8,
+  "n": 49992
+}

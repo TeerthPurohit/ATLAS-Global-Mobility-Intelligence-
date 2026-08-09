@@ -1,0 +1,98 @@
+{
+  "methodology": "leave-one-city-out transfer calibration: fit population-scaling ratio on one city's own real (population, measured daily demand) only, apply to the other city's real population, compare against that city's own real measured demand",
+  "ground_truth_source": {
+    "nyc": "zone_hourly_demand aggregated to (pickup_date, SUM(total_trips))",
+    "london": "london_station_hourly_demand aggregated to (trip_date, SUM(total_trips))"
+  },
+  "population_source": "global_cities.population (same table backend/services/global_geography_service.py reads)",
+  "experiments": {
+    "train_nyc_eval_london": {
+      "train_city": "nyc",
+      "eval_city": "london",
+      "train_period": [
+        "2024-01-01 00:00:00",
+        "2026-04-30 00:00:00"
+      ],
+      "evaluation_period": [
+        "2026-01-01 00:00:00",
+        "2026-06-01 00:00:00"
+      ],
+      "train_population": 8804190.0,
+      "eval_population": 9089736.0,
+      "fitted_rate_per_capita": 0.05242201863486567,
+      "note": "train_period/evaluation_period are each city's own real date range in the warehouse -- NYC and London are NOT time-aligned, no synchronized period exists or is pretended here",
+      "baselines": {
+        "A_global_mean": {
+          "mae": 438456.0122448982,
+          "rmse": 438509.2001585674,
+          "mape_pct": 649764.0669532282,
+          "mape_note": "zero-actual-demand rows excluded from the MAPE denominator only; all rows count for MAE/RMSE/sMAPE/WAPE",
+          "smape_pct": 181.0286048332081,
+          "wape_pct": 1899.9367877009463
+        },
+        "B_training_city_percapita_scaling": {
+          "mae": 453424.90997800924,
+          "rmse": 453476.34220384003,
+          "mape_pct": 670841.0865157577,
+          "mape_note": "zero-actual-demand rows excluded from the MAPE denominator only; all rows count for MAE/RMSE/sMAPE/WAPE",
+          "smape_pct": 181.5948866468858,
+          "wape_pct": 1964.8006706908457
+        },
+        "C_current_production_formula": {
+          "mae": 33343.2,
+          "rmse": 34035.46585913613,
+          "mape_pct": 79343.26370131965,
+          "mape_note": "zero-actual-demand rows excluded from the MAPE denominator only; all rows count for MAE/RMSE/sMAPE/WAPE",
+          "smape_pct": 86.24408583665128,
+          "wape_pct": 144.4842139929108,
+          "circularity_warning": "estimate.py's rates are hardcoded from BOTH real cities' measured demand -- this baseline is not a clean held-out test"
+        }
+      }
+    },
+    "train_london_eval_nyc": {
+      "train_city": "london",
+      "eval_city": "nyc",
+      "train_period": [
+        "2026-01-01 00:00:00",
+        "2026-06-01 00:00:00"
+      ],
+      "evaluation_period": [
+        "2024-01-01 00:00:00",
+        "2026-04-30 00:00:00"
+      ],
+      "train_population": 9089736.0,
+      "eval_population": 8804190.0,
+      "fitted_rate_per_capita": 0.002538841612121628,
+      "note": "train_period/evaluation_period are each city's own real date range in the warehouse -- NYC and London are NOT time-aligned, no synchronized period exists or is pretended here",
+      "baselines": {
+        "A_global_mean": {
+          "mae": 438456.0122448977,
+          "rmse": 530669.4083982845,
+          "mape_pct": 87.74210131374412,
+          "mape_note": "zero-actual-demand rows excluded from the MAPE denominator only; all rows count for MAE/RMSE/sMAPE/WAPE",
+          "smape_pct": 159.92736389348858,
+          "wape_pct": 94.99984196425741
+        },
+        "B_training_city_percapita_scaling": {
+          "mae": 439180.96831187286,
+          "rmse": 531268.5472182985,
+          "mape_pct": 88.12717233651813,
+          "mape_note": "zero-actual-demand rows excluded from the MAPE denominator only; all rows count for MAE/RMSE/sMAPE/WAPE",
+          "smape_pct": 160.96950947926462,
+          "wape_pct": 95.15691749719639
+        },
+        "C_current_production_formula": {
+          "mae": 406885.2122448979,
+          "rmse": 504897.9325365305,
+          "mape_pct": 70.97280893921119,
+          "mape_note": "zero-actual-demand rows excluded from the MAPE denominator only; all rows count for MAE/RMSE/sMAPE/WAPE",
+          "smape_pct": 122.98001902558313,
+          "wape_pct": 88.15942712918849,
+          "circularity_warning": "estimate.py's rates are hardcoded from BOTH real cities' measured demand -- this baseline is not a clean held-out test"
+        }
+      }
+    }
+  },
+  "confidence_basis": "limited_two_city_leave_one_out",
+  "confidence_basis_note": "Only 2 real OBSERVED cities exist in this warehouse, so a universal error->confidence mapping would be fit on N=2 -- not enough evidence to trust as a general TRANSFER-tier calibration. The measured WAPE for baseline B (training-city per-capita scaling, the non-circular method) in both directions is reported above; treat it as the honest current error bound for TRANSFER-tier demand estimates, not as a precise per-city confidence score."
+}

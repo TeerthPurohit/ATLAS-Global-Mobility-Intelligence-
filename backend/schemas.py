@@ -45,6 +45,8 @@ class PredictionOut(BaseModel):
     source: str
     reason: str | None = None
     ui_label: str | None = None
+    data_vintage: str | None = None
+    value_usd: float | None = None
 
     def model_post_init(self, __context: typing.Any) -> None:
         if self.ui_label is None:
@@ -63,6 +65,11 @@ class JourneyRequest(BaseModel):
     dropoff_lon: float
     departure_time: datetime
     vehicle_type: str
+    # Explicit city (registered id, GeoNames id, or free-text place name).
+    # Omit only for NYC/London -- auto-detected from pickup coordinates for
+    # backward compatibility; every other city must be named explicitly
+    # (see journey_service._resolve_city_id).
+    city_id: str | None = None
 
 
 class CityJourneyRequest(BaseModel):
@@ -94,6 +101,7 @@ class CityJourneyEstimate(BaseModel):
 
 
 class JourneyEstimate(BaseModel):
+    city_id: str
     distance: PredictionOut
     duration: PredictionOut
     fare: PredictionOut

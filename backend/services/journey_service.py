@@ -23,7 +23,7 @@ from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402
-from backend.services import geography_service, model_service, pricing_engine, vehicle_profiles  # noqa: E402
+from backend.services import geography_service, global_geography_service, model_service, pricing_engine, vehicle_profiles  # noqa: E402
 
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 DEPARTURE_TIME_SWEEP_WINDOW_HOURS = 6
@@ -74,14 +74,17 @@ def _historical_pair(pickup_zone_id: int, dropoff_zone_id: int) -> tuple[float |
 
 def _resolve_distance_duration(
     pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float,
-    pickup_zone_id: int | None, dropoff_zone_id: int | None,
+    pickup_zone_id: int | None, dropoff_zone_id: int | None, city_id: str,
 ) -> tuple[PredictionResult, PredictionResult, PredictionResult]:
     """Returns (distance, duration, historical_traffic_score)."""
     distance = routing_osrm.fetch_distance(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
     duration = routing_osrm.fetch_duration(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
 
+    # zone_pair_flows/_zone_names are NYC-only (built from NYC's
+    # zone_centroids.csv) -- a London/other-city zone/station id is a small
+    # int too and could otherwise collide with an unrelated NYC zone id.
     hist_duration, hist_speed = (None, None)
-    if pickup_zone_id is not None and dropoff_zone_id is not None:
+    if city_id == "nyc" and pickup_zone_id is not None and dropoff_zone_id is not None:
         hist_duration, hist_speed = _historical_pair(pickup_zone_id, dropoff_zone_id)
 
     if distance.basis == "unavailable":
@@ -113,12 +116,34 @@ def _resolve_distance_duration(
     return distance, duration, traffic_score
 
 
+_UNRESOLVED_CITY = "unresolved"
+
+
+def _resolve_city_id(pickup_lat: float, pickup_lon: float, city_id: str | None) -> str:
+    """Explicit `city_id` wins (normalized through global_geography_service
+    so "mumbai" and its GeoNames id always resolve to the same
+    city_tariff_profiles row). Otherwise NYC/London bbox auto-detection --
+    same behavior every caller had before city_id existed. Anywhere else, a
+    bare lat/lon pair alone doesn't uniquely identify a city worth caching a
+    tariff profile for -- resolves to a sentinel that carries no zone/tariff
+    coverage, so every city-scoped field honestly degrades to `unavailable`
+    (same "degrade honestly, never fabricate" contract as an unrecognized
+    vehicle_type) rather than erroring out. The caller should pass city_id
+    explicitly whenever it's known (the frontend's city picker always does)."""
+    if city_id:
+        profile = global_geography_service.get_city_profile(city_id)
+        return profile["city_id"] if profile else city_id
+    detected = geography_service.detect_city_from_coords(pickup_lat, pickup_lon)
+    return detected or _UNRESOLVED_CITY
+
+
 def build_context(
     pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float,
-    departure_time: datetime, vehicle_type: str,
+    departure_time: datetime, vehicle_type: str, city_id: str | None = None,
 ) -> JourneyContext:
-    pickup_zone_id = geography_service.resolve(pickup_lat, pickup_lon)
-    dropoff_zone_id = geography_service.resolve(dropoff_lat, dropoff_lon)
+    resolved_city_id = _resolve_city_id(pickup_lat, pickup_lon, city_id)
+    pickup_zone_id = geography_service.resolve_for_city(resolved_city_id, pickup_lat, pickup_lon)
+    dropoff_zone_id = geography_service.resolve_for_city(resolved_city_id, dropoff_lat, dropoff_lon)
     return JourneyContext(
         pickup_lat=pickup_lat, pickup_lon=pickup_lon,
         dropoff_lat=dropoff_lat, dropoff_lon=dropoff_lon,
@@ -127,13 +152,14 @@ def build_context(
         vehicle_profile=vehicle_profiles.resolve(vehicle_type),
         weather=weather_openmeteo.fetch(pickup_lat, pickup_lon, departure_time),
         holiday=holidays_nager.fetch(pickup_lat, pickup_lon, departure_time),
+        city_id=resolved_city_id,
     )
 
 
 def build_features(ctx: JourneyContext) -> JourneyFeatures:
     distance, duration, traffic_score = _resolve_distance_duration(
         ctx.pickup_lat, ctx.pickup_lon, ctx.dropoff_lat, ctx.dropoff_lon,
-        ctx.pickup_zone_id, ctx.dropoff_zone_id,
+        ctx.pickup_zone_id, ctx.dropoff_zone_id, ctx.city_id,
     )
     return JourneyFeatures(
         distance_miles=distance,
@@ -147,13 +173,18 @@ def build_features(ctx: JourneyContext) -> JourneyFeatures:
 
 def estimate(
     pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float,
-    departure_time: datetime, vehicle_type: str,
+    departure_time: datetime, vehicle_type: str, city_id: str | None = None,
 ) -> dict[str, PredictionResult]:
-    ctx = build_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, departure_time, vehicle_type)
+    ctx = build_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, departure_time, vehicle_type, city_id)
     features = build_features(ctx)
 
     fare_terms = pricing_engine.compute_fare(ctx, features)
-    fare_range = journey_predictors.predict_fare_range(fare_terms["total"], test_rmse=12.61)
+    if ctx.city_id == "nyc":
+        # $12.61 -- the trained fare model's real, measured test-split RMSE
+        # (models/fare_prediction/fare_xgb_metadata.json).
+        fare_range = journey_predictors.predict_fare_range(fare_terms["total"], test_rmse=12.61)
+    else:
+        fare_range = journey_predictors.predict_fare_range(fare_terms["total"], fraction=pricing_engine.CALIBRATION_MAPE_PCT)
 
     components: dict[str, PredictionResult] = {
         "distance": features.distance_miles,
@@ -166,7 +197,8 @@ def estimate(
         "ride_availability": journey_predictors.predict_availability(ctx, features),
         "surge_risk": journey_predictors.predict_surge_risk(ctx, features),
         "best_departure_time": journey_predictors.sweep_best_departure_time(
-            ctx.pickup_zone_id, departure_time.hour, departure_time.weekday(), DEPARTURE_TIME_SWEEP_WINDOW_HOURS
+            ctx.pickup_zone_id, departure_time.hour, departure_time.weekday(),
+            DEPARTURE_TIME_SWEEP_WINDOW_HOURS, city_id=ctx.city_id,
         ),
     }
     components["confidence"] = journey_predictors.predict_confidence(
@@ -175,4 +207,5 @@ def estimate(
     for name, term in fare_terms.items():
         if name != "total":
             components[f"fare_breakdown.{name}"] = term
+    components["city_id"] = ctx.city_id
     return components

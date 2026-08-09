@@ -25,6 +25,10 @@ class PredictionResult:
     basis: Basis
     source: str
     reason: str | None = None
+    # Real min/max date the underlying mart covers (model_service.data_vintage),
+    # set only on fields backed by a trained NYC/London model -- so nothing
+    # from a 2024/2026-dated warehouse ever claims to be more current than it is.
+    data_vintage: str | None = None
 
     def __post_init__(self) -> None:
         if self.basis != "computed" and not self.reason:
@@ -62,6 +66,7 @@ class JourneyContext:
     vehicle_profile: VehicleProfile | None
     weather: PredictionResult
     holiday: PredictionResult
+    city_id: str = "nyc"
 
 
 @dataclass

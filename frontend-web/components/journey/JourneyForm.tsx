@@ -15,6 +15,7 @@ const schema = z.object({
   dropoff_lon: z.coerce.number().min(-180).max(180),
   departure_time: z.string().min(1, "required"),
   vehicle_type: z.enum(VEHICLE_CLASSES),
+  city_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -27,6 +28,7 @@ const defaultValues: FormValues = {
   dropoff_lon: -74.0088,
   departure_time: new Date().toISOString().slice(0, 16),
   vehicle_type: "sedan",
+  city_id: "",
 };
 
 interface JourneyFormProps {
@@ -55,6 +57,7 @@ export function JourneyForm({ onSubmit, isPending }: JourneyFormProps) {
     onSubmit({
       ...parsed.data,
       departure_time: new Date(parsed.data.departure_time).toISOString(),
+      city_id: parsed.data.city_id?.trim() || undefined,
     });
   });
 
@@ -62,6 +65,13 @@ export function JourneyForm({ onSubmit, isPending }: JourneyFormProps) {
     <Card>
       <CardTitle className="font-display text-base tracking-wide">Journey log — new entry</CardTitle>
       <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
+        <div>
+          <label className="mb-1 block text-xs uppercase tracking-wider text-ink-muted">
+            City (only needed outside NYC/London — e.g. "mumbai", "tokyo")
+          </label>
+          <Input type="text" placeholder="auto-detected for NYC/London" {...register("city_id")} />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wider text-ink-muted">Pickup lat</label>

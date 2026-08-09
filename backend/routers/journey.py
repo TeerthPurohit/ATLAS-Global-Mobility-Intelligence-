@@ -27,7 +27,7 @@ router = APIRouter(prefix="/journey", tags=["journey"])
 
 
 def _to_out(pr: PredictionResult) -> PredictionOut:
-    return PredictionOut(value=pr.value, unit=pr.unit, basis=pr.basis, source=pr.source, reason=pr.reason)
+    return PredictionOut(value=pr.value, unit=pr.unit, basis=pr.basis, source=pr.source, reason=pr.reason, data_vintage=pr.data_vintage)
 
 
 @router.post("/estimate", response_model=JourneyEstimate)
@@ -35,7 +35,7 @@ def estimate(req: JourneyRequest) -> JourneyEstimate:
     components = journey_service.estimate(
         pickup_lat=req.pickup_lat, pickup_lon=req.pickup_lon,
         dropoff_lat=req.dropoff_lat, dropoff_lon=req.dropoff_lon,
-        departure_time=req.departure_time, vehicle_type=req.vehicle_type,
+        departure_time=req.departure_time, vehicle_type=req.vehicle_type, city_id=req.city_id,
     )
     text, basis = journey_narrative.generate(components)
     # basis is always "modeled_estimate" (grounded LLM/template prose) or
@@ -54,6 +54,7 @@ def estimate(req: JourneyRequest) -> JourneyEstimate:
     }
 
     result = JourneyEstimate(
+        city_id=components["city_id"],
         distance=_to_out(components["distance"]),
         duration=_to_out(components["duration"]),
         fare=_to_out(components["fare"]),
@@ -87,10 +88,12 @@ def features(
     pickup_lat: float = Query(...), pickup_lon: float = Query(...),
     dropoff_lat: float = Query(...), dropoff_lon: float = Query(...),
     departure_time: datetime = Query(...), vehicle_type: str = Query(...),
+    city_id: str | None = Query(None),
 ) -> dict:
-    ctx = journey_service.build_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, departure_time, vehicle_type)
+    ctx = journey_service.build_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, departure_time, vehicle_type, city_id)
     features = journey_service.build_features(ctx)
     return {
+        "city_id": ctx.city_id,
         "pickup_zone_id": ctx.pickup_zone_id,
         "dropoff_zone_id": ctx.dropoff_zone_id,
         "vehicle_profile": features.vehicle_profile.__dict__ if features.vehicle_profile else None,

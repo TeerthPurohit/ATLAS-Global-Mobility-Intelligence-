@@ -8,40 +8,62 @@ too (fixed predictor order, ADR-007 §6).
 from __future__ import annotations
 
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult
-from backend.services import model_service
+from backend.services import estimation_service, model_service
+
+_ZONE_MODEL_CITIES = ("nyc", "london")
 
 
 def predict_demand(ctx: JourneyContext, features: JourneyFeatures) -> PredictionResult:
-    if ctx.pickup_zone_id is None:
+    if ctx.pickup_zone_id is not None and ctx.city_id in _ZONE_MODEL_CITIES:
+        try:
+            value, model_name = model_service.predict_demand(
+                ctx.pickup_zone_id, ctx.departure_time.hour, ctx.departure_time.weekday(),
+                city_id=ctx.city_id, month=ctx.departure_time.month,
+            )
+        except KeyError as exc:
+            return PredictionResult(value=None, unit=None, basis="unavailable", source="demand", reason=str(exc))
         return PredictionResult(
-            value=None, unit=None, basis="unavailable", source="xgboost_demand_v1",
-            reason="pickup location outside NYC zone coverage",
+            value=round(value, 2), unit="trips_per_hour", basis="computed", source=model_name, reason=None,
+            data_vintage=model_service.data_vintage(ctx.city_id),
         )
-    try:
-        value, model_name = model_service.predict_demand(
-            ctx.pickup_zone_id, ctx.departure_time.hour, ctx.departure_time.weekday()
+    if ctx.city_id in _ZONE_MODEL_CITIES:
+        return PredictionResult(
+            value=None, unit=None, basis="unavailable", source="demand",
+            reason=f"pickup location outside {ctx.city_id}'s zone coverage",
         )
-    except KeyError as exc:
-        return PredictionResult(value=None, unit=None, basis="unavailable", source="xgboost_demand_v1", reason=str(exc))
-    return PredictionResult(value=round(value, 2), unit="trips_per_hour", basis="computed", source=model_name, reason=None)
+    # No trained zone-level model for this city -- a population-scaled,
+    # NYC-hourly-shaped transferred estimate instead of a bare unavailable.
+    return estimation_service.estimate_hourly_demand(ctx.city_id, ctx.pickup_lat, ctx.pickup_lon, ctx.departure_time)
 
 
-def predict_fare_range(base_fare: PredictionResult, test_rmse: float) -> PredictionResult:
+def predict_fare_range(base_fare: PredictionResult, test_rmse: float | None = None, fraction: float | None = None) -> PredictionResult:
     # base_fare here is the fare TOTAL (may legitimately be "modeled_estimate"
     # if any pricing adjustment term was a modeled_estimate, per
     # pricing_engine.compute_fare) -- only a missing value makes the range
     # unavailable, not a non-"computed" basis. The range honestly inherits
     # whichever basis the total actually has.
+    #
+    # NYC passes a fixed `test_rmse` (a real dollar figure measured on the
+    # trained fare model's test split). Every other city passes `fraction`
+    # instead -- an absolute USD RMSE has no meaning against a tariff fare
+    # denominated in INR/JPY/NGN; a percentage band (the measured LLM-tariff
+    # calibration MAPE, see pricing_engine.CALIBRATION_MAPE_PCT) scales with
+    # whatever currency the fare is actually in.
     if base_fare.value is None:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="fare_range",
             reason="base fare unavailable, range cannot be computed",
         )
-    low = max(0.0, base_fare.value - test_rmse)
-    high = base_fare.value + test_rmse
+    if test_rmse is not None:
+        low, high = max(0.0, base_fare.value - test_rmse), base_fare.value + test_rmse
+        source = "xgboost_fare_v1_measured_rmse"
+    else:
+        frac = (fraction if fraction is not None else 20.0) / 100.0
+        low, high = max(0.0, base_fare.value * (1 - frac)), base_fare.value * (1 + frac)
+        source = "tariff_profile_measured_mape"
     reason = None if base_fare.basis == "computed" else "range applied on top of a modeled_estimate fare total"
     return PredictionResult(
-        value=f"{low:.2f}-{high:.2f}", unit="usd", basis=base_fare.basis, source="xgboost_fare_v1_measured_rmse",
+        value=f"{low:.2f}-{high:.2f}", unit=base_fare.unit, basis=base_fare.basis, source=source,
         reason=reason,
     )
 
@@ -84,7 +106,7 @@ def _demand_pressure(ctx: JourneyContext) -> float | None:
     compares to its own rolling_7d_avg -- >1 means busier than usual."""
     if ctx.pickup_zone_id is None:
         return None
-    momentum = model_service.get_zone_momentum(ctx.pickup_zone_id)
+    momentum = model_service.get_zone_momentum(ctx.pickup_zone_id, ctx.city_id)
     if momentum is None or momentum["rolling_7d_avg"] <= 0:
         return None
     ratio = momentum["lag_1h"] / momentum["rolling_7d_avg"]
@@ -143,17 +165,19 @@ def predict_surge_risk(ctx: JourneyContext, features: JourneyFeatures) -> Predic
     )
 
 
-def sweep_best_departure_time(pickup_zone_id: int | None, from_hour: int, day_of_week: int, window_hours: int = 6) -> PredictionResult:
-    if pickup_zone_id is None:
+def sweep_best_departure_time(
+    pickup_zone_id: int | None, from_hour: int, day_of_week: int, window_hours: int = 6, city_id: str = "nyc",
+) -> PredictionResult:
+    if pickup_zone_id is None or city_id not in _ZONE_MODEL_CITIES:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="best_departure_time",
-            reason="pickup location outside NYC zone coverage",
+            reason=f"pickup location outside {city_id}'s zone coverage",
         )
     candidates = []
     for offset in range(window_hours):
         hour = (from_hour + offset) % 24
         try:
-            demand, _ = model_service.predict_demand(pickup_zone_id, hour, day_of_week)
+            demand, _ = model_service.predict_demand(pickup_zone_id, hour, day_of_week, city_id=city_id)
         except KeyError:
             continue
         candidates.append((hour, demand))

@@ -13,9 +13,12 @@ export interface PredictionOut {
   basis: Basis;
   source: string;
   reason: string | null;
+  data_vintage: string | null;
+  value_usd: number | null;
 }
 
 export interface JourneyEstimate {
+  city_id: string;
   distance: PredictionOut;
   duration: PredictionOut;
   fare: PredictionOut;
@@ -38,6 +41,22 @@ export interface JourneyRequest {
   dropoff_lon: number;
   departure_time: string; // ISO 8601
   vehicle_type: string;
+  // Explicit city (registered id, GeoNames id, or free-text place name).
+  // Optional only for NYC/London -- auto-detected from pickup coordinates;
+  // every other city must be named explicitly or every city-scoped field
+  // (fare, demand, surge, availability) degrades to "unavailable".
+  city_id?: string;
+}
+
+// A fare's `unit` is its ISO 4217 currency code ("USD", "INR", "JPY", ...).
+// Intl.NumberFormat handles symbol, digit grouping, and decimal precision
+// per currency -- no symbol table or formatting library needed.
+export function formatCurrency(value: number, currencyCode: string, locale = "en-US"): string {
+  try {
+    return new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currencyCode}`;
+  }
 }
 
 export async function estimateJourney(req: JourneyRequest): Promise<JourneyEstimate> {

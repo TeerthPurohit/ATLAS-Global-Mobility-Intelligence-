@@ -12,8 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
-from data_prep.train_test_split import chronological_split  # noqa: E402
-from fare_prediction.train_fare_xgb import DEFAULT_DB_PATH, TEST_BLOCK_START  # noqa: E402
+from fare_prediction.train_fare_xgb import DEFAULT_DB_PATH, split_data  # noqa: E402
 
 pytestmark = pytest.mark.skipif(not DEFAULT_DB_PATH.exists(), reason="warehouse not built")
 
@@ -25,9 +24,10 @@ def test_fare_chronological_split_no_leakage():
     finally:
         con.close()
 
-    train_val = df[df["pickup_at"] < TEST_BLOCK_START]
-    test = df[df["pickup_at"] >= TEST_BLOCK_START]
-    train, val = chronological_split(train_val, "pickup_at", (0.85, 0.15))
+    # split_data() itself computes the test-block cutoff from the data's own
+    # max date (models/fare_prediction/train_fare_xgb.py's _latest_month_start)
+    # -- exercising the real function under test, not a duplicated cutoff.
+    train, val, test = split_data(df)
 
     assert len(train) > 0 and len(val) > 0 and len(test) > 0
     assert train["pickup_at"].max() < val["pickup_at"].min()

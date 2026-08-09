@@ -109,3 +109,31 @@ def estimate_fare_per_mile(country_code: str | None) -> PredictionResult:
         value=value, unit="usd_per_mile", basis="modeled_estimate",
         source="cost_of_living_worldbank + cross_city_estimation", reason=reason,
     )
+
+
+def estimate_hourly_demand(city_id: str, lat: float, lon: float, at: datetime) -> PredictionResult:
+    """Journey-endpoint demand for a city with no trained zone-level model:
+    `estimate_city_demand`'s population-scaled daily trip count, split into
+    an hourly figure via NYC's own measured hour-of-day/day-of-week volume
+    distribution (`model_service.hourly_shape_fraction`) -- a real,
+    transferred shape, not a city-specific fact. Always `modeled_estimate`
+    (never `computed`), same discipline as `estimate_city_demand` itself."""
+    from backend.services import global_geography_service, model_service  # local import: avoids a hard import-order dependency at module load
+
+    profile = global_geography_service.get_city_profile(city_id)
+    population = profile.get("population") if profile else None
+    if not population or population <= 0:
+        return PredictionResult(
+            value=None, unit=None, basis="unavailable", source="cross_city_estimation",
+            reason="no population covariate resolvable for this city",
+        )
+    daily = estimate_city_demand(city_id, population, lat=lat, lon=lon, at=at)
+    if daily.value is None:
+        return daily
+    shape = model_service.hourly_shape_fraction(at.hour, at.weekday(), city_id="nyc") or (1.0 / 24.0)
+    hourly_value = round(daily.value * shape, 2)
+    reason = f"{daily.reason}; hour-of-day split via NYC's measured hourly demand distribution for this day-of-week (a transferred shape, not city-specific)"
+    return PredictionResult(
+        value=hourly_value, unit="trips/hour", basis="modeled_estimate",
+        source=f"{daily.source} + nyc_hourly_shape", reason=reason,
+    )

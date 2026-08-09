@@ -86,7 +86,7 @@
     "val_mae": 0.8511629104614258,
     "test_rmse": 1.6894590521030424,
     "test_mae": 1.0471959114074707,
-    "test_inference_latency_ms_per_row": 0.0012339473940575912
+    "test_inference_latency_ms_per_row": 0.0009462314873955472
   },
   "library_versions": {
     "xgboost": "3.3.0",

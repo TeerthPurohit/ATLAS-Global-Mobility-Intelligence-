@@ -29,7 +29,7 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from data_prep.train_test_split import chronological_split  # noqa: E402
+from data_prep.chronological_split import split_demand_blocks  # noqa: E402
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "warehouse" / "nyc_rides.duckdb"
 ARTIFACT_DIR = Path(__file__).resolve().parent
@@ -38,15 +38,25 @@ FEATURES = ["pickup_location_id", "dropoff_location_id", "pickup_hour", "pickup_
 CATEGORICAL = ["pickup_location_id", "dropoff_location_id", "pickup_hour", "pickup_day_of_week"]
 TARGET = "total_amount"
 SEED = 42
-TEST_BLOCK_START = "2024-06-01"  # June held out whole; see module docstring
+# Optional row cap for a faster retrain on a lower-power machine (ponytail:
+# a reservoir sample, not a date-range cutoff, so the chronological
+# train/val/test split below still sees the full 2024-2026 date range in
+# proportion -- only invoked via train_and_save(sample_rows=...), never
+# silently on by default; the full-data path (None) is what every existing
+# test/CI invocation still gets).
+TRAINING_SAMPLE_ROWS: int | None = None
 
 
-def load_data(db_path: Path = DEFAULT_DB_PATH) -> pd.DataFrame:
+def load_data(db_path: Path = DEFAULT_DB_PATH, sample_rows: int | None = TRAINING_SAMPLE_ROWS) -> pd.DataFrame:
     con = duckdb.connect(str(db_path), read_only=True)
     try:
-        df = con.execute(
-            f"select {', '.join(FEATURES)}, {TARGET}, pickup_at from int_trips_enriched"
-        ).fetchdf()
+        query = f"select {', '.join(FEATURES)}, {TARGET}, pickup_at from int_trips_enriched"
+        if sample_rows is not None:
+            # Reservoir sample (uniform across the whole table, so the
+            # chronological split downstream still spans the real date
+            # range in proportion) with a fixed seed for reproducibility.
+            query += f" USING SAMPLE {sample_rows} ROWS (reservoir, {SEED})"
+        df = con.execute(query).fetchdf()
     finally:
         con.close()
     for col in CATEGORICAL:
@@ -55,10 +65,9 @@ def load_data(db_path: Path = DEFAULT_DB_PATH) -> pd.DataFrame:
 
 
 def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    train_val = df[df["pickup_at"] < TEST_BLOCK_START]
-    test = df[df["pickup_at"] >= TEST_BLOCK_START]
-    train, val = chronological_split(train_val, "pickup_at", (0.85, 0.15))
-    return train, val, test
+    # Delegates entirely to the shared, gap-aware splitter (Phase 2 dedup --
+    # this used to carry its own byte-for-byte copy of this logic).
+    return split_demand_blocks(df, "pickup_at")
 
 
 def rmse_mae(y_true, y_pred) -> tuple[float, float]:
@@ -92,8 +101,8 @@ def tune(train: pd.DataFrame, val: pd.DataFrame) -> tuple[dict, list[dict]]:
     return best, results
 
 
-def main() -> None:
-    df = load_data()
+def main(sample_rows: int | None = TRAINING_SAMPLE_ROWS) -> None:
+    df = load_data(sample_rows=sample_rows)
     train, val, test = split_data(df)
     assert train["pickup_at"].max() < val["pickup_at"].min(), "train must precede val"
     assert val["pickup_at"].max() < test["pickup_at"].min(), "val must precede test"
@@ -113,6 +122,7 @@ def main() -> None:
     model.save_model(str(ARTIFACT_DIR / "fare_xgb_model.json"))
     metadata = {
         "seed": SEED,
+        "training_sample_rows": sample_rows,
         "date_range": {
             "train": [str(train["pickup_at"].min()), str(train["pickup_at"].max())],
             "val": [str(val["pickup_at"].min()), str(val["pickup_at"].max())],
@@ -144,4 +154,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sample-rows", type=int, default=TRAINING_SAMPLE_ROWS)
+    args = parser.parse_args()
+    main(sample_rows=args.sample_rows)

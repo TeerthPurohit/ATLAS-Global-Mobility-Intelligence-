@@ -41,8 +41,9 @@ export function JourneyResultsError({ message }: { message: string }) {
 export function JourneyResults({ estimate }: { estimate: JourneyEstimate }) {
   return (
     <div className="flex flex-col gap-4">
+      <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">City: {estimate.city_id}</p>
       <Section title="Journey">
-        <PredictionField label="Fare" prediction={estimate.fare} emphasis />
+        <PredictionField label="Fare" prediction={estimate.fare} emphasis isCurrency />
         <PredictionField label="Fare range" prediction={estimate.fare_range} />
         <PredictionField label="Duration" prediction={estimate.duration} />
         <PredictionField label="Distance" prediction={estimate.distance} />
@@ -68,7 +69,7 @@ export function JourneyResults({ estimate }: { estimate: JourneyEstimate }) {
       {Object.keys(estimate.fare_breakdown).length > 0 && (
         <Section title="Fare breakdown">
           {Object.entries(estimate.fare_breakdown).map(([key, pred]) => (
-            <PredictionField key={key} label={key} prediction={pred} />
+            <PredictionField key={key} label={key} prediction={pred} isCurrency />
           ))}
         </Section>
       )}
