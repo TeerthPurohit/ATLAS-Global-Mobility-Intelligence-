@@ -1,0 +1,116 @@
+{
+  "model_id": "xgboost_global_transfer_v1",
+  "city_id": "nyc+london",
+  "seed": 42,
+  "date_range": {
+    "train": [
+      "2024-01-08 00:00:00",
+      "2026-03-20 00:00:00"
+    ],
+    "val": [
+      "2026-03-20 01:00:00",
+      "2026-04-22 00:00:00"
+    ],
+    "test": [
+      "2026-04-22 01:00:00",
+      "2026-06-01 00:00:00"
+    ]
+  },
+  "n_rows": {
+    "train": 4562,
+    "val": 1079,
+    "test": 792,
+    "train_by_city": {
+      "nyc": 3697,
+      "london": 865
+    },
+    "val_by_city": {
+      "nyc": 792,
+      "london": 287
+    },
+    "test_by_city": {
+      "london": 577,
+      "nyc": 215
+    }
+  },
+  "features": [
+    "hour",
+    "day_of_week",
+    "is_weekend",
+    "lag_1h",
+    "lag_24h",
+    "lag_168h",
+    "ewma",
+    "rolling_7d_avg",
+    "temperature_c",
+    "precipitation_mm",
+    "population_log",
+    "population_density",
+    "latitude",
+    "longitude",
+    "is_cycle_share",
+    "population_density_known",
+    "latlon_known"
+  ],
+  "target": "total_trips",
+  "hyperparameters": {
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "n_estimators": 200
+  },
+  "hyperparameter_search": [
+    {
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "n_estimators": 200,
+      "val_rmse": 1358.8396887184983,
+      "val_mae": 905.5200733966138
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "n_estimators": 200,
+      "val_rmse": 1269.753499450562,
+      "val_mae": 821.0237083523443
+    },
+    {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "n_estimators": 300,
+      "val_rmse": 1283.3529504731257,
+      "val_mae": 839.2066599622273
+    }
+  ],
+  "feature_importances": {
+    "hour": 0.006845803000032902,
+    "day_of_week": 0.00209336937405169,
+    "is_weekend": 0.0,
+    "lag_1h": 0.1424952894449234,
+    "lag_24h": 0.006899747531861067,
+    "lag_168h": 0.83289635181427,
+    "ewma": 0.0036843938287347555,
+    "rolling_7d_avg": 0.0033280448988080025,
+    "temperature_c": 0.0007303791935555637,
+    "precipitation_mm": 0.000625609653070569,
+    "population_log": 0.0004009978147223592,
+    "population_density": 0.0,
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "is_cycle_share": 0.0,
+    "population_density_known": 0.0,
+    "latlon_known": 0.0
+  },
+  "metrics": {
+    "val_rmse": 1269.753499450562,
+    "val_mae": 821.0237083523443,
+    "test_rmse": 1046.245563159648,
+    "test_mae": 452.89116863108643,
+    "test_inference_latency_ms_per_row": 0.007474999996831151
+  },
+  "library_versions": {
+    "xgboost": "3.3.0",
+    "pandas": "3.0.3",
+    "numpy": "2.5.1"
+  },
+  "honesty_note": "Trained on only 2 real OBSERVED cities (nyc, london). E_city is functionally a 2-valued categorical here -- these val/test metrics measure fit to those 2 cities, NOT validated cross-city generalization. See models/global_transfer/model_comparison.py and docs/global_transfer_model_comparison.json for the leave-one-city-out transfer check ('two-city transfer validation', never 'globally validated'). The 522 TRANSFER-tier cities in global_cities are used only as inference-time covariates by predict.py, never as training labels here."
+}

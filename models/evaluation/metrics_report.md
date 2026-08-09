@@ -218,3 +218,164 @@ sidecar next to its artifact: `models/linear_baseline/linear_model_metadata.json
 `models/xgboost_model/xgb_metadata.json`,
 `models/lstm_model/lstm_metadata.json`. Combined comparison numbers in
 `models/evaluation/compare_results.json`.
+
+## Global Transfer Model (Phase 8/9/10)
+
+**Target:** city-hour total demand (`SUM(total_trips)` per hour), joint
+across the 2 real OBSERVED cities only — NYC (`zone_hourly_demand`) and
+London (`london_station_hourly_demand`), aggregated to a comparable
+city-hour grain. **Features:** the same lag/EWMA/rolling temporal shape as
+the per-city XGBoost models, block-gap aware, plus `E_city` — a scaled
+static city feature vector (`models/global_transfer/build_features.py`:
+log population, population density, lat/lon, cycle-share flag —
+`models/global_transfer/build_features.py`'s module docstring documents
+exactly which raw columns exist per tier and which are NaN-flagged for the
+522 TRANSFER cities, e.g. lat/lon are NULL for all of them).
+
+**Chronological split:** global 70/15/15 `chronological_split()` over the
+concatenated NYC+London city-hour series (`models/data_prep/
+chronological_split.py`), leakage guard `train.ts.max() < val.ts.min() <
+test.ts.min()` asserted in `train_global.py` and tested in
+`tests/test_global_transfer_no_leakage.py`. TRANSFER-tier cities never
+appear as training/eval rows — tested in
+`tests/test_global_transfer_no_transfer_labels.py`.
+
+| Split | Rows (nyc / london) | Date range |
+|---|---|---|
+| train | 3,697 / 865 | 2024-01-08 → 2026-03-20 |
+| val | 792 / 287 | 2026-03-20 → 2026-04-22 |
+| test | 215 / 577 | 2026-04-22 → 2026-06-01 |
+
+**Metrics (joint fit, both cities in every split):** val RMSE=1269.75,
+MAE=821.02; test RMSE=1046.25, MAE=452.89 (city-hour total-trip counts;
+NYC's much larger per-hour scale dominates these totals — not comparable to
+the per-zone/per-station RMSE numbers above). Full grid search, feature
+importances, library versions in `models/global_transfer/xgb_metadata.json`.
+
+**Honesty (do not remove):** this fits only 2 real cities. `E_city` is
+functionally a 2-valued categorical here — nothing above demonstrates
+generalization to a third city. **Phase 10 two-city transfer validation**
+(`docs/global_transfer_model_comparison.json`, `models/global_transfer/
+model_comparison.py`) is the actual non-circular check: train the same
+architecture on ONE city only, evaluate on the other, with an ablation that
+removes `E_city`. Result: with only 1 training city, `E_city` is constant
+across every training row (zero variance), so the ablated and
+non-ablated models are numerically identical in both directions
+(`city_features_helped: false` both ways) — i.e., **city features provide
+no measurable benefit with N=1 training city**, exactly the outcome
+expected from a single-city fit and not a claim that city features are
+useless in general. Neither direction beats Phase 1's population-scaling
+baseline in a directly comparable way (different grain — daily WAPE vs.
+hourly RMSE, see the comparison file's explicit grain-mismatch note) but
+both leave-one-out RMSEs are large relative to the target scale, consistent
+with Phase 1's finding that simple cross-city transfer does not yet beat
+a global-mean baseline. **Never describe this model as "globally
+validated"** — always "two-city transfer validation," per task instruction.
+
+## Congestion Model (Phase 6)
+
+**Target:** `congestion_multiplier = trip_duration_minutes / free_flow_duration_min`
+(`models/congestion/build_features.py`, single tuned XGBoost regressor,
+`models/congestion/train_congestion_xgb.py`).
+
+**`free_flow_duration_min` is an ESTIMATE, not a measurement.** This repo
+has no road-graph, route-distance, or speed-limit data — the only
+graph module (`algorithms/graph/build_zone_graph.py`) builds a trip-*count*
+flow graph from `zone_pair_flows`, not a distance/routing graph, and no
+dbt mart carries a routing target. Free-flow speed is instead approximated
+per 0.5-mile `trip_distance` bucket as the 85th percentile of observed
+`avg_speed_mph` within that bucket (the fastest ~15% of trips at that
+distance, i.e. the freest observed conditions) — `free_flow_duration_min =
+trip_distance / free_flow_speed_mph * 60`. Every output row is tagged
+`free_flow_source: "estimated"`; this is checked by
+`tests/test_congestion_split_and_labeling.py` and never overridden.
+
+**Judgment call flagged:** the original task brief specified "p10/p15 of
+observed speed" for the free-flow proxy — that is backwards (a *low*
+percentile of speed is the slow/congested tail, not free-flow). This
+implementation uses the 85th percentile of speed instead, which is the
+correct direction for the same "freest observed conditions" intent.
+
+**Features:** `trip_distance`, `free_flow_duration_min`, `hour`,
+`day_of_week` (raw ints, no cyclical encoding — matches
+`models/xgboost_model/build_features.py`'s existing convention),
+`is_holiday` (`backend/adapters/holidays_nager.py`, US), `temperature_c`,
+`precipitation_mm`, `demand_index` (`zone_hourly_demand.total_trips`,
+joined at date/hour/zone grain).
+
+**Split:** chronological, via `models/data_prep/chronological_split.py`'s
+`split_demand_blocks()` (same function every other model in this repo
+uses — not reimplemented). Reservoir sample of 300,000 rows from
+`int_trips_enriched` (113M rows total; full-table training not attempted,
+same pattern as `models/fare_prediction/train_fare_xgb.py`).
+
+| Split | Date range | Rows |
+|---|---|---|
+| train | 2024-01-01 00:08:41 → 2026-03-12 19:22:26 | 207,228 |
+| val   | 2026-03-12 19:22:44 → 2026-03-31 23:59:51 | 36,616 |
+| test  | 2026-04-01 00:00:39 → 2026-04-30 23:58:31 | 55,787 |
+
+Leakage guard (`max(train.pickup_at) < min(val.pickup_at) < min(test.pickup_at)`)
+asserted in `train_congestion_xgb.py` and independently verified by
+`tests/test_congestion_split_and_labeling.py`.
+
+**Metrics (actual, measured):**
+
+| Split | RMSE | MAE |
+|---|---|---|
+| validation | 0.457 | 0.337 |
+| **test** | **0.488** | **0.358** |
+
+Hyperparameters (small manual grid, selected by val RMSE):
+`max_depth=4, learning_rate=0.1, n_estimators=300`.
+
+**Reproducibility (rule 5):** seed=42, full hyperparameter grid, feature
+importances, and library versions (`xgboost==3.3.0`, `pandas==3.0.3`,
+`numpy==2.5.1`) recorded in `models/congestion/congestion_metadata.json`
+next to `models/congestion/congestion_model.json`.
+
+## Quantile ETA (Phase 7)
+
+**Target:** `trip_duration_minutes`, three independent XGBoost regressors
+(`models/eta/train_quantile_eta.py`) using XGBoost's native
+`reg:quantileerror` objective (`quantile_alpha` ∈ {0.10, 0.50, 0.90}) — real
+pinball-loss quantile regression, not a hand-rolled approximation. Same
+feature set and chronological split as the congestion model above (reused,
+not duplicated).
+
+**Production ETA composition (`models/eta/compose_eta.py`):**
+`ETA = T_freeflow * C`, explicit and visible — `T_freeflow` from the Phase 6
+free-flow lookup, `C` from the Phase 6 trained congestion-multiplier point
+model. The quantile models above are a separate, direct empirical fit used
+only to measure prediction-interval coverage; they are not what
+`compose_eta.py` calls at inference time, per the spec's instruction not to
+hide the free-flow/congestion decomposition behind an opaque end-to-end
+model.
+
+**Metrics (actual, measured, same 55,787-row test split as the congestion
+model):**
+
+| Quantile | Pinball loss | MAE (minutes) |
+|---|---|---|
+| p10 | 0.799 | 6.47 |
+| p50 | 2.189 | 4.38 |
+| p90 | 1.199 | 8.68 |
+
+**Prediction interval coverage — measured, not assumed:** fraction of the
+55,787 held-out test rows where the actual trip duration fell within
+`[p10_pred, p90_pred]` is **78.9%**, against a nominal 80% target — close,
+slightly under. This is reported plainly rather than rounded up to "well
+calibrated"; a 1.1-point gap on real held-out data is a genuine (if small)
+under-coverage, not proof of perfect calibration.
+
+**Ordering (p10 ≤ p50 ≤ p90):** violated on 26 of 55,787 test rows
+(0.047%) — expected/normal for independently trained quantile models (no
+monotonicity constraint enforced between them), verified to be a small
+fraction rather than a systemic failure by
+`tests/test_quantile_eta_ordering_and_coverage.py`.
+
+**Reproducibility (rule 5):** seed=42, quantile config, per-quantile
+pinball loss/MAE, measured coverage, and library versions
+(`xgboost==3.3.0`, `pandas==3.0.3`, `numpy==2.5.1`) recorded in
+`models/eta/eta_metadata.json` next to `models/eta/eta_p10_model.json`,
+`eta_p50_model.json`, `eta_p90_model.json`.
