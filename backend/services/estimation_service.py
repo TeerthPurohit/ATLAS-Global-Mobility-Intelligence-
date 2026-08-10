@@ -133,7 +133,11 @@ def estimate_hourly_demand(city_id: str, lat: float, lon: float, at: datetime) -
     shape = model_service.hourly_shape_fraction(at.hour, at.weekday(), city_id="nyc") or (1.0 / 24.0)
     hourly_value = round(daily.value * shape, 2)
     reason = f"{daily.reason}; hour-of-day split via NYC's measured hourly demand distribution for this day-of-week (a transferred shape, not city-specific)"
+    # The tier/completeness confidence global_geography_service already
+    # derives for this city -- reused, not a second invented number.
+    tier_confidence = profile.get("confidence") if profile else None
     return PredictionResult(
         value=hourly_value, unit="trips/hour", basis="modeled_estimate",
         source=f"{daily.source} + nyc_hourly_shape", reason=reason,
+        confidence=tier_confidence, method="population_scaling",
     )

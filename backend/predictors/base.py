@@ -29,10 +29,38 @@ class PredictionResult:
     # set only on fields backed by a trained NYC/London model -- so nothing
     # from a 2024/2026-dated warehouse ever claims to be more current than it is.
     data_vintage: str | None = None
+    # Per-component provenance, both optional and last in the field order so
+    # every existing keyword-only construction site keeps working unchanged
+    # (checked: no positional PredictionResult(...) exists in this repo).
+    # `confidence` is 0-1, NOT a percentage; `unavailable` is forced to 0.0
+    # below so no caller can ever attach a misleadingly nonzero number to a
+    # component that has no value. `method` names how the number was produced
+    # ("xgboost_fare_v1", "tariff_profile_linear", "population_scaling", ...)
+    # -- coarser than `source`, stable enough to group/aggregate on.
+    confidence: float | None = None
+    method: str | None = None
 
     def __post_init__(self) -> None:
         if self.basis != "computed" and not self.reason:
             raise ValueError(f"reason is required when basis={self.basis!r} (source={self.source!r})")
+        if self.basis == "unavailable":
+            self.confidence = 0.0
+        elif self.confidence is not None and not 0.0 <= self.confidence <= 1.0:
+            raise ValueError(f"confidence must be in [0,1], got {self.confidence!r} (source={self.source!r})")
+
+
+# The basis-only weights predict_confidence() has always used. Kept here so a
+# per-component `confidence` and the overall figure share one scale.
+BASIS_CONFIDENCE: dict[str, float] = {"computed": 1.0, "modeled_estimate": 0.5, "unavailable": 0.0}
+
+
+def effective_confidence(result: PredictionResult) -> float:
+    """A component's own measured/derived confidence when it has one, the
+    basis default otherwise -- so adding richer per-component numbers can
+    only refine the existing weighting, never silently redefine it."""
+    if result.confidence is not None:
+        return result.confidence
+    return BASIS_CONFIDENCE[result.basis]
 
 
 @dataclass

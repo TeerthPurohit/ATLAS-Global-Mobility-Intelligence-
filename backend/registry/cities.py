@@ -82,12 +82,67 @@ def _area_count(city_id: str) -> int:
     return len(geography_service.list_areas(city_id))
 
 
-def get_capabilities(city_id: str) -> dict | None:
-    if city_id not in _cities:
+JOURNEY_CAPABILITIES: tuple[str, ...] = (
+    "routing", "demand", "fare", "congestion", "availability", "surge", "carbon", "best_departure",
+)
+
+
+def capability_matrix(city_id: str) -> dict[str, bool] | None:
+    """Per-journey-field support for ANY city in either registry (the 2-row
+    `cities` seed or the 524-row `global_cities` table), derived from what's
+    actually wired -- never from the tier label. `TRANSFER` does not imply
+    fare support: a fare needs a trained fare model OR a real tariff profile
+    keyed by this exact city_id, nothing else.
+
+    Returns None for a city_id neither registry knows.
+    """
+    from backend.registry import global_cities as global_cities_registry  # local import: avoids import-order coupling
+    from backend.services import tariff_profiles
+
+    registered = get_city(city_id)
+    global_city = global_cities_registry.get_city(city_id)
+    has_tariff = tariff_profiles.get(city_id) is not None
+    if registered is None and global_city is None and not has_tariff:
         return None
-    city = _cities[city_id]
+
+    # Zone-level predictors (availability/surge/best_departure/congestion's
+    # traffic leg) all bottom out in model_service's per-city zone marts,
+    # which only exist for a registered city with an active demand model.
+    has_zone_model = registered is not None and models_registry.resolve_model(city_id, "demand") is not None
+    has_fare_model = models_registry.resolve_model(city_id, "fare") is not None
+    source = registered or global_city or {}
+    population = source.get("population")
+
+    return {
+        # OSRM (with a haversine fallback) routes between the coordinates the
+        # request itself carries -- no per-city data needed, so this is true
+        # for every resolvable city, same as carbon.
+        "routing": True,
+        # A registered city's demand always comes from its own zone model
+        # (journey_predictors never population-scales one); an unregistered
+        # global city's comes from population scaling, which needs a real
+        # population covariate.
+        "demand": has_zone_model if registered is not None else bool(population and population > 0),
+        "fare": has_fare_model or has_tariff,
+        # predict_congestion fuses a historical-traffic leg (zone-model cities
+        # only) with a weather leg the global Open-Meteo adapter serves from
+        # the request's own coordinates -- one leg is enough for a bucket.
+        "congestion": True,
+        "availability": has_zone_model,
+        "surge": has_zone_model,
+        "carbon": True,  # distance x seeded emission factor, city-independent
+        "best_departure": has_zone_model,
+    }
+
+
+def get_capabilities(city_id: str) -> dict | None:
+    matrix = capability_matrix(city_id)
+    if matrix is None:
+        return None
+    city = _cities.get(city_id, {})
+    registered = city_id in _cities
     has_demand = models_registry.resolve_model(city_id, "demand") is not None
-    has_fare = models_registry.resolve_model(city_id, "fare") is not None
+    has_fare = matrix["fare"]
     capabilities = {
         "mobility_mode": city.get("mobility_mode", "ride_hailing"),
         "area_type": city.get("geography_type", "zone"),
@@ -96,9 +151,10 @@ def get_capabilities(city_id: str) -> dict | None:
         "journey": models_registry.resolve_model(city_id, "journey") is not None,
         "chat": get_chat_tier(city_id) != "context_only",
         "chat_tier": get_chat_tier(city_id),
-        "area_analysis": _area_count(city_id) > 0,
+        "area_analysis": registered and _area_count(city_id) > 0,
         "forecast": has_demand or has_fare,
         "transit_coverage": transit_registry.has_feed(city_id),
+        **matrix,
     }
     logger.info("capability check city_id=%s -> %s", city_id, capabilities)
     return capabilities

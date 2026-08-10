@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "modal-kimi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Modal Kimi K3",
+      "options": {
+        "baseURL": "https://teerth2108--ep-kimi-k3-server.us-west.modal.direct/v1",
+        "apiKey": "{env:MODAL_ENDPOINT_TOKEN}"
+      },
+      "models": {
+        "kimi-k3": {
+          "name": "Kimi K3",
+          "tool_call": true,
+          "limit": {
+            "context": 262144,
+            "output": 16384
+          }
+        }
+      }
+    }
+  },
+  "model": "modal-kimi/kimi-k3"
+}

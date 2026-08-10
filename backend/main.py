@@ -26,7 +26,7 @@ from backend.registry import countries as countries_registry  # noqa: E402
 from backend.registry import global_cities as global_cities_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.routers import chat, cities, countries, geography, journey, platform, predictions, zones  # noqa: E402
+from backend.routers import chat, cities, countries, context, geography, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
 from backend.services import journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
 
@@ -69,6 +69,9 @@ app.include_router(journey.router)
 app.include_router(geography.router)
 app.include_router(countries.router)
 app.include_router(cities.router)
+app.include_router(mobility.router)
+app.include_router(context.router)
+app.include_router(analytics.router)
 
 
 @app.exception_handler(GeographyError)

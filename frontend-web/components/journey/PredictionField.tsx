@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { formatCurrency, type PredictionOut } from "@/lib/api";
 import { CertaintyRing } from "@/components/journey/CertaintyRing";
+import { ProvenanceTooltip } from "@/components/ui/ProvenanceTooltip";
 
 interface PredictionFieldProps {
   label: string;
@@ -30,11 +31,12 @@ export function PredictionField({ label, prediction, className, emphasis, isCurr
   const { text: formattedValue, suffix } = formatValue(value, unit, Boolean(isCurrency));
 
   return (
-    <div className={cn("flex items-start justify-between gap-3 py-2", className)}>
-      <div className="flex flex-col gap-1">
+    <div className={cn("flex items-start justify-between gap-3 py-2", className)} style={{ isolation: "isolate" }}>
+      <div className="flex flex-col gap-1 group">
         <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-ink-muted">
           <CertaintyRing basis={basis} size={14} title={reason ?? basis} />
-          {label}
+          <span>{label}</span>
+          <ProvenanceTooltip prediction={prediction} label={label} />
         </span>
         {basis === "unavailable" ? (
           <span className="font-mono text-sm text-ink-muted" title={reason ?? undefined}>

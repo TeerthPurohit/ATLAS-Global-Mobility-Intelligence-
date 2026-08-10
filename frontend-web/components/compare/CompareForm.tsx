@@ -14,6 +14,7 @@ const schema = z.object({
   dropoff_lat: z.coerce.number().min(-90).max(90),
   dropoff_lon: z.coerce.number().min(-180).max(180),
   departure_time: z.string().min(1, "required"),
+  city_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -24,6 +25,7 @@ const defaultValues: FormValues = {
   dropoff_lat: 40.7061,
   dropoff_lon: -74.0088,
   departure_time: new Date().toISOString().slice(0, 16),
+  city_id: "",
 };
 
 export interface CompareRequest extends FormValues {
@@ -61,6 +63,7 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
     onSubmit({
       ...parsed.data,
       departure_time: new Date(parsed.data.departure_time).toISOString(),
+      city_id: parsed.data.city_id?.trim() || undefined,
       vehicles,
     });
   });
@@ -69,6 +72,13 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
     <Card>
       <CardTitle className="font-display text-base tracking-wide">Compare — new journey</CardTitle>
       <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
+        <div>
+          <label className="mb-1 block text-xs uppercase tracking-wider text-ink-muted">
+            City (only needed outside NYC/London — e.g. "mumbai", "tokyo")
+          </label>
+          <Input type="text" placeholder="auto-detected for NYC/London" {...register("city_id")} />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wider text-ink-muted">Pickup lat</label>

@@ -55,6 +55,13 @@ def pipeline_status() -> dict:
     return platform_service.get_pipeline_status()
 
 
+@router.get("/capabilities/summary")
+def capability_summary() -> dict:
+    """Per-capability supported/unsupported counts across every registered
+    city, counted from the registries themselves -- never a hardcoded total."""
+    return platform_service.get_capability_summary()
+
+
 @router.get("/insights")
 def insights(limit: int = Query(20, ge=1, le=100)) -> list[dict]:
     return platform_service.get_insight_docs(limit=limit)

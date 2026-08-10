@@ -1,0 +1,39 @@
+# Normalize line endings and enforce LF for text files
+# Treat all files as text by default and let Git detect binary files
+* text=auto
+
+# Force LF for common text file types (Windows devs will get CRLF locally if core.autocrlf=true,
+# but repository will store LF and avoid Git warnings about replacement)
+*.py     text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.json   text eol=lf
+*.sql    text eol=lf
+*.csv    text eol=lf
+*.ts     text eol=lf
+*.tsx    text eol=lf
+*.js     text eol=lf
+*.jsx    text eol=lf
+*.html   text eol=lf
+*.css    text eol=lf
+*.ini    text eol=lf
+*.cfg    text eol=lf
+
+# Ensure markdown and docs are LF
+docs/** text eol=lf
+README.md text eol=lf
+
+# Specific frontend paths (source files) - keep LF
+frontend/** text eol=lf
+frontend-web/** text eol=lf
+
+# Binary files (do not attempt to normalize)
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.zip    binary
+*.tar.gz binary
+*.parquet binary
+*.duckdb binary

@@ -178,6 +178,39 @@ def test_city_profile_registered_city_is_observed_tier():
     assert prof["confidence"] == 1.0
 
 
+def test_city_profile_resolves_by_global_registry_city_id():
+    """Regression: get_city_profile("FR_MARSEILLE") -- the real global_cities
+    primary key, what the frontend's city picker actually sends -- used to
+    fall straight through to a live GeoNames search-by-name (which can't
+    find a raw id string like "FR_MARSEILLE") and return None, even though
+    this repo has real WorldMove population data for it. Direct city_id
+    lookup against the 524-city registry must resolve it with no network
+    call at all."""
+    prof = global_geography_service.get_city_profile("FR_MARSEILLE")
+    assert prof is not None
+    assert prof["city"] == "Marseille"
+    assert prof["country_code"] == "FR"
+    assert prof["model_status"] == "TRANSFER"
+    assert prof["population"] and prof["population"] > 0
+    assert prof["population_source"] == "worldmove_estimate"
+
+
+def test_estimate_hourly_demand_works_for_global_registry_city_id():
+    """The population-scaling formula (models/cross_city_estimation/estimate.py)
+    must actually be reachable for a real 524-city registry id, not just a
+    GeoNames-resolvable free-text name -- this is the concrete capability
+    the product needs across all 524 registered cities."""
+    from datetime import datetime
+
+    from backend.services import estimation_service
+
+    result = estimation_service.estimate_hourly_demand(
+        "FR_MARSEILLE", 43.30, 5.37, datetime(2026, 8, 10, 18, 0)
+    )
+    assert result.basis == "modeled_estimate"
+    assert result.value is not None and result.value > 0
+
+
 def test_city_profile_api_exposes_model_status(client):
     resp = client.get("/api/geography/jaipur")
     assert resp.status_code == 200

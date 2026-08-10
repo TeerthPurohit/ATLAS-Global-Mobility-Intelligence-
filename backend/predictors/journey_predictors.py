@@ -7,7 +7,13 @@ too (fixed predictor order, ADR-007 §6).
 """
 from __future__ import annotations
 
-from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult
+from backend.predictors.base import (
+    BASIS_CONFIDENCE,
+    JourneyContext,
+    JourneyFeatures,
+    PredictionResult,
+    effective_confidence,
+)
 from backend.services import estimation_service, model_service
 
 _ZONE_MODEL_CITIES = ("nyc", "london")
@@ -25,6 +31,7 @@ def predict_demand(ctx: JourneyContext, features: JourneyFeatures) -> Prediction
         return PredictionResult(
             value=round(value, 2), unit="trips_per_hour", basis="computed", source=model_name, reason=None,
             data_vintage=model_service.data_vintage(ctx.city_id),
+            confidence=1.0, method="zone_demand_model",
         )
     if ctx.city_id in _ZONE_MODEL_CITIES:
         return PredictionResult(
@@ -65,6 +72,7 @@ def predict_fare_range(base_fare: PredictionResult, test_rmse: float | None = No
     return PredictionResult(
         value=f"{low:.2f}-{high:.2f}", unit=base_fare.unit, basis=base_fare.basis, source=source,
         reason=reason,
+        confidence=effective_confidence(base_fare), method=source,
     )
 
 
@@ -80,7 +88,13 @@ def predict_carbon(features: JourneyFeatures) -> PredictionResult:
             reason="unrecognized vehicle_class",
         )
     kg = round(features.distance_miles.value * features.vehicle_profile.emission_factor, 2)
-    return PredictionResult(value=kg, unit="kg_co2", basis="computed", source="vehicle_profiles_seed", reason=None)
+    # Deterministic arithmetic over a real distance and a seeded emission
+    # factor -- confidence inherits the distance's, since that's the only
+    # uncertain input.
+    return PredictionResult(
+        value=kg, unit="kg_co2", basis="computed", source="vehicle_profiles_seed", reason=None,
+        confidence=effective_confidence(features.distance_miles), method="emission_factor_x_distance",
+    )
 
 
 def predict_congestion(features: JourneyFeatures) -> PredictionResult:
@@ -95,9 +109,15 @@ def predict_congestion(features: JourneyFeatures) -> PredictionResult:
     weather_component = weather.value if weather.basis != "unavailable" and weather.value is not None else 0.0
     score = min(1.0, 0.7 * traffic_component + 0.3 * weather_component)
     bucket = "LOW" if score < 0.25 else "MODERATE" if score < 0.5 else "HIGH" if score < 0.75 else "SEVERE"
+    # The fusion has no ground truth, so its confidence is capped at the
+    # modeled_estimate default and scaled by how many of its two inputs were
+    # actually available -- one-legged fusion is genuinely less trustworthy.
+    inputs_present = sum(p.basis != "unavailable" for p in (traffic, weather))
     return PredictionResult(
         value=bucket, unit=None, basis="modeled_estimate", source="congestion_fusion",
         reason=f"fusion of historical speed and weather severity (score={score:.2f}), no ground truth for the fusion itself",
+        confidence=round(BASIS_CONFIDENCE["modeled_estimate"] * inputs_present / 2, 2),
+        method="traffic_weather_fusion",
     )
 
 
@@ -138,6 +158,11 @@ def predict_availability(ctx: JourneyContext, features: JourneyFeatures) -> Pred
     return PredictionResult(
         value=bucket, unit=None, basis="modeled_estimate", source="availability_proxy",
         reason=f"confidence {confidence_pct:.0f}% -- " + "; ".join(reasons),
+        # Same number the reason string has always quoted, now a real field
+        # instead of prose only -- capped at the modeled_estimate ceiling so a
+        # proxy can never outscore a measured component.
+        confidence=round(min(confidence_pct / 100, BASIS_CONFIDENCE["modeled_estimate"]), 2),
+        method="availability_prior_x_demand_pressure",
     )
 
 
@@ -162,6 +187,7 @@ def predict_surge_risk(ctx: JourneyContext, features: JourneyFeatures) -> Predic
     return PredictionResult(
         value=bucket, unit=None, basis="modeled_estimate", source="surge_proxy",
         reason=f"expected +{pct_low}% to +{pct_high}% based on current demand momentum vs. zone baseline",
+        confidence=BASIS_CONFIDENCE["modeled_estimate"], method="demand_momentum_proxy",
     )
 
 
@@ -189,14 +215,23 @@ def sweep_best_departure_time(
     best_hour, _ = min(candidates, key=lambda c: c[1])
     return PredictionResult(
         value=best_hour, unit="hour_of_day", basis="computed", source="demand_sweep_xgboost_demand_v1", reason=None,
+        # A sweep over a real trained model, but only over the hours the model
+        # actually answered for -- a partial window is a weaker recommendation.
+        confidence=round(len(candidates) / window_hours, 2), method="demand_model_sweep",
     )
 
 
 def predict_confidence(components: dict[str, PredictionResult]) -> PredictionResult:
+    """Unchanged semantics -- a plain mean over per-component weights on the
+    same 0-1 scale it always used. The only change: a component that carries
+    its own `confidence` contributes that instead of its basis default
+    (`effective_confidence`). `unavailable` is pinned to 0.0 by
+    PredictionResult itself, so a missing component can never raise the
+    overall figure."""
     if not components:
         return PredictionResult(value=0.0, unit="percent", basis="computed", source="confidence_engine", reason=None)
-    weights = {"computed": 1.0, "modeled_estimate": 0.5, "unavailable": 0.0}
-    score = sum(weights[c.basis] for c in components.values()) / len(components)
+    score = sum(effective_confidence(c) for c in components.values()) / len(components)
     return PredictionResult(
         value=round(score * 100, 0), unit="percent", basis="computed", source="confidence_engine", reason=None,
+        confidence=round(score, 2), method="mean_component_confidence",
     )

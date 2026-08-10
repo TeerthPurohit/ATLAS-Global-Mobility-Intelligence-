@@ -1,27 +1,173 @@
-import { Card, CardTitle } from "@/components/ui/Card";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { PredictionField } from "@/components/journey/PredictionField";
-import type { JourneyEstimate } from "@/lib/api";
+"use client";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+import { Card } from "@/components/ui/Card";
+import { RouteCard } from "@/components/journey/cards/RouteCard";
+import { FareCard } from "@/components/journey/cards/FareCard";
+import { DemandCard } from "@/components/journey/cards/DemandCard";
+import { CongestionCard } from "@/components/journey/cards/CongestionCard";
+import { AvailabilityCard } from "@/components/journey/cards/AvailabilityCard";
+import { SurgeCard } from "@/components/journey/cards/SurgeCard";
+import { CarbonCard } from "@/components/journey/cards/CarbonCard";
+import { BestDepartureCard } from "@/components/journey/cards/BestDepartureCard";
+import { ContextCard } from "@/components/journey/cards/ContextCard";
+import { AICard } from "@/components/journey/cards/AICard";
+import { CapabilityGate, useCapability } from "@/components/capability/CapabilityGate";
+import { TierNotice } from "@/components/capability/TierBadge";
+import { ProvenanceSummary } from "@/components/ui/ProvenanceTooltip";
+import { type JourneyRequest, type PredictionRequest } from "@/lib/api";
+import { useMemo } from "react";
+
+interface JourneyResultsProps {
+  request: JourneyRequest;
+  cityTier: string;
+}
+
+function JourneyContextSection({ request, cityId }: { request: PredictionRequest; cityId: string }) {
   return (
-    <Card>
-      <CardTitle className="font-display text-base tracking-wide">{title}</CardTitle>
-      <div className="mt-2 divide-y divide-surface-border">{children}</div>
+    <ContextCard
+      cityId={cityId}
+      pickupLat={request.pickup.lat}
+      pickupLon={request.pickup.lon}
+      dropoffLat={request.dropoff.lat}
+      dropoffLon={request.dropoff.lon}
+      departureTime={request.departure_time}
+    />
+  );
+}
+
+function AICardSection({
+  request,
+  cityId,
+  fare,
+  duration,
+  demand,
+  surge
+}: {
+  request: PredictionRequest;
+  cityId: string;
+  fare?: string;
+  duration?: string;
+  demand?: string;
+  surge?: string;
+}) {
+  return (
+    <AICard
+      cityId={cityId}
+      journeyRequest={{
+        pickup_lat: request.pickup.lat,
+        pickup_lon: request.pickup.lon,
+        dropoff_lat: request.dropoff.lat,
+        dropoff_lon: request.dropoff.lon,
+        departure_time: request.departure_time,
+        vehicle_type: request.vehicle_type,
+      }}
+      fare={fare}
+      duration={duration}
+      demand={demand}
+      surge={surge}
+    />
+  );
+}
+
+function JourneyProvenanceSummary({ cityTier }: { cityTier: string }) {
+  // This will show aggregate provenance. In a full implementation, each card
+  // would contribute its predictions to a context. For now, show tier notice.
+  return (
+    <Card className="border-surface-border bg-surface-1">
+      <h4 className="font-display text-sm tracking-wide text-ink-secondary mb-3">
+        Provenance Summary
+      </h4>
+      <TierNotice tier={cityTier} />
+      <div className="mt-3 space-y-2 text-sm">
+        <p className="text-ink-muted">
+          <strong>Basis Legend:</strong> Solid brass = computed from local model/tariff. Dashed verdigris = modeled estimate (WorldMove transfer). Open oxide = unavailable.
+        </p>
+        <p className="text-ink-muted">
+          <strong>City Tier:</strong> {cityTier === "OBSERVED" && "Trained on local trip data"}
+          {cityTier === "TRANSFER" && "WorldMove population-scaled priors"}
+          {cityTier === "NONE" && "No model — OSRM routing + context only"}
+        </p>
+      </div>
+      <ProvenanceSummary predictions={{}} />
     </Card>
   );
 }
 
+export function JourneyResults({ request, cityTier }: JourneyResultsProps) {
+  const predictionRequest = useMemo<PredictionRequest>(() => ({
+    city_id: request.city_id!,
+    pickup: { lat: request.pickup_lat, lon: request.pickup_lon },
+    dropoff: { lat: request.dropoff_lat, lon: request.dropoff_lon },
+    departure_time: request.departure_time,
+    vehicle_type: request.vehicle_type,
+    distance_km: null,
+    duration_min: null,
+  }), [request]);
+
+  const routeRequest = useMemo<PredictionRequest>(() => ({
+    city_id: request.city_id!,
+    pickup: { lat: request.pickup_lat, lon: request.pickup_lon },
+    dropoff: { lat: request.dropoff_lat, lon: request.dropoff_lon },
+    departure_time: request.departure_time,
+    vehicle_type: request.vehicle_type,
+  }), [request]);
+
+  // Check capabilities for conditional rendering
+  const hasFare = useCapability(request.city_id!, "fare");
+  const hasDemand = useCapability(request.city_id!, "demand");
+  const hasCongestion = useCapability(request.city_id!, "congestion");
+  const hasAvailability = useCapability(request.city_id!, "availability");
+  const hasSurge = useCapability(request.city_id!, "surge");
+  const hasCarbon = useCapability(request.city_id!, "carbon");
+  const hasBestDeparture = useCapability(request.city_id!, "best_departure");
+  const hasChat = useCapability(request.city_id!, "chat");
+  const hasRouting = useCapability(request.city_id!, "routing");
+
+  return (
+    <div className="space-y-4">
+      {/* Tier notice at top */}
+      <TierNotice tier={cityTier} />
+
+      {/* Core journey cards - always shown (route is fastest) */}
+      <RouteCard request={routeRequest} />
+
+      {/* Progressive cards - each loads independently */}
+      {hasFare && <FareCard request={predictionRequest} />}
+      {hasDemand && <DemandCard request={predictionRequest} />}
+      {hasCongestion && <CongestionCard request={predictionRequest} />}
+      {hasAvailability && <AvailabilityCard request={predictionRequest} />}
+      {hasSurge && <SurgeCard request={predictionRequest} />}
+      {hasCarbon && <CarbonCard request={predictionRequest} />}
+      {hasBestDeparture && <BestDepartureCard request={predictionRequest} />}
+
+      {/* Context section */}
+      {hasRouting && <JourneyContextSection request={predictionRequest} cityId={request.city_id!} />}
+
+      {/* AI Recommendation - shown last after other data loads */}
+      {hasChat && (
+        <AICardSection
+          request={predictionRequest}
+          cityId={request.city_id!}
+        />
+      )}
+
+      {/* Provenance summary at bottom */}
+      <JourneyProvenanceSummary cityTier={cityTier} />
+    </div>
+  );
+}
+
+// Legacy components for backward compatibility
 export function JourneyResultsSkeleton() {
   return (
     <div className="flex flex-col gap-4">
       {[0, 1, 2].map((i) => (
         <Card key={i}>
-          <Skeleton className="h-4 w-24" />
+          <div className="h-4 w-24 animate-pulse bg-surface-1 rounded" />
           <div className="mt-3 flex flex-col gap-2">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
+            <div className="h-8 w-full animate-pulse bg-surface-1 rounded" />
+            <div className="h-8 w-full animate-pulse bg-surface-1 rounded" />
+            <div className="h-8 w-full animate-pulse bg-surface-1 rounded" />
           </div>
         </Card>
       ))}
@@ -31,48 +177,11 @@ export function JourneyResultsSkeleton() {
 
 export function JourneyResultsError({ message }: { message: string }) {
   return (
-    <Card className="border-danger/30 bg-danger/5">
-      <CardTitle className="text-danger">Estimate failed</CardTitle>
-      <p className="mt-2 text-sm text-ink-secondary">{message}</p>
+    <Card className="border-oxide/30 bg-oxide/5">
+      <div className="p-4 text-center">
+        <p className="font-medium text-oxide">Estimate failed</p>
+        <p className="mt-1 text-sm text-ink-muted">{message}</p>
+      </div>
     </Card>
-  );
-}
-
-export function JourneyResults({ estimate }: { estimate: JourneyEstimate }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">City: {estimate.city_id}</p>
-      <Section title="Journey">
-        <PredictionField label="Fare" prediction={estimate.fare} emphasis isCurrency />
-        <PredictionField label="Fare range" prediction={estimate.fare_range} />
-        <PredictionField label="Duration" prediction={estimate.duration} />
-        <PredictionField label="Distance" prediction={estimate.distance} />
-        <PredictionField label="Confidence" prediction={estimate.confidence} emphasis />
-      </Section>
-
-      <Section title="Mobility">
-        <PredictionField label="Congestion" prediction={estimate.congestion} />
-        <PredictionField label="Demand" prediction={estimate.demand} />
-        <PredictionField label="Ride availability" prediction={estimate.ride_availability} />
-        <PredictionField label="Surge risk" prediction={estimate.surge_risk} />
-        <PredictionField label="Best departure time" prediction={estimate.best_departure_time} />
-      </Section>
-
-      <Section title="Environment">
-        <PredictionField label="Carbon emissions" prediction={estimate.carbon_emissions} />
-      </Section>
-
-      <Section title="AI">
-        <PredictionField label="Recommendation" prediction={estimate.ai_recommendation} />
-      </Section>
-
-      {Object.keys(estimate.fare_breakdown).length > 0 && (
-        <Section title="Fare breakdown">
-          {Object.entries(estimate.fare_breakdown).map(([key, pred]) => (
-            <PredictionField key={key} label={key} prediction={pred} isCurrency />
-          ))}
-        </Section>
-      )}
-    </div>
   );
 }

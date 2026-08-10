@@ -62,3 +62,27 @@ frontend-web/dev.log
 # ── Docker ──────────────────────────────────────────
 .docker/
 site
+
+# ── Python caches / test artifacts ─────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+pip-wheel-metadata/
+
+# ── dotenv variations (local overrides) ──────────────────────────────
+.env.local
+.env.*
+
+# ── Node/npm logs ───────────────────────────────────────────────────
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── IDE / editor extras
+*.iml
+.ropeproject/
+

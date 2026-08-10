@@ -172,6 +172,56 @@ def get_city_profile(city_id: str) -> dict | None:
             "confidence": 1.0,
         }
 
+    # 524-city global registry (WorldMove-backed OBSERVED/TRANSFER/PRIOR_ONLY
+    # tiers) -- direct city_id lookup against the real primary key (e.g.
+    # "FR_MARSEILLE"), no network call. This was previously unreachable: the
+    # only path into the 524-city table was `resolve_city_tier`'s
+    # `find_by_name`, called *after* a live GeoNames search had already
+    # resolved a name -- so passing the registry's own city_id (what the
+    # frontend's city picker actually sends) fell through to GeoNames search
+    # by that raw id string ("FR_MARSEILLE" is not a place name GeoNames can
+    # find), returning None even for a city this repo has real WorldMove
+    # population data for.
+    global_city = global_cities_registry.get_city(city_id)
+    if global_city:
+        model_status, confidence = resolve_city_tier(
+            global_city.get("name"), global_city.get("country_code"),
+            global_city.get("population"), global_city.get("latitude"),
+        )
+        currency = global_city.get("currency") or get_currency_for_country(global_city.get("country_code"))
+        return {
+            "city_id": global_city["city_id"],
+            "city": global_city.get("name"),
+            "country": global_city.get("country_code"),
+            "country_code": global_city.get("country_code"),
+            "coordinates": {
+                "latitude": global_city.get("latitude"),
+                "longitude": global_city.get("longitude"),
+            },
+            "timezone": global_city.get("timezone") or "UTC",
+            "currency": currency,
+            "population": global_city.get("population"),
+            "population_source": global_city.get("population_source"),
+            "model_status": model_status,
+            "confidence": confidence,
+            "administrative_hierarchy": [
+                {"name": global_city.get("name"), "type": "city"},
+                {"name": global_city.get("country_code"), "type": "country"},
+            ],
+            "alternate_names": [global_city["name"]] if global_city.get("name") else [],
+            "geographic_classification": {
+                "feature_class": "P",
+                "feature_code": "PPL",
+                "place_type": "city",
+            },
+            "capabilities": {
+                "geographic": True,
+                "context": True,
+                "observed_mobility": False,
+                "cross_city_model": resolve_modeling_availability(global_city.get("population"), global_city.get("latitude")),
+            },
+        }
+
     # Search via GeoNames by ID if numeric or search by string name
     geoname_id = None
     if city_id.isdigit():

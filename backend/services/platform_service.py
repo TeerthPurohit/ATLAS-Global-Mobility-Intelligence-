@@ -214,3 +214,38 @@ def check_health() -> dict:
         "qdrant": "online" if qdrant_ok else "unavailable",
         "status": "healthy" if duckdb_ok else "degraded",
     }
+
+
+def get_capability_summary() -> dict:
+    """Real coverage report over every registered city in BOTH registries
+    (the `cities` seed + the 524-row `global_cities` table), counted by
+    actually evaluating each city's capability matrix -- no hardcoded totals,
+    no tier assumption (a TRANSFER city is only fare-supported if a real
+    tariff profile exists for its exact city_id)."""
+    from backend.registry import cities as cities_registry  # noqa: PLC0415
+    from backend.registry import global_cities as global_cities_registry  # noqa: PLC0415
+
+    from backend.services import tariff_profiles  # noqa: PLC0415
+
+    city_ids = {c["id"] for c in cities_registry.list_cities()}
+    city_ids |= {c["city_id"] for c in global_cities_registry.list_cities()}
+    # Tariff profiles are keyed by whatever city_id resolved when they were
+    # generated (GeoNames ids for the current 6) -- those are real, fare-
+    # supported cities too, so they belong in the denominator.
+    city_ids |= set(tariff_profiles.city_ids())
+
+    supported = dict.fromkeys(cities_registry.JOURNEY_CAPABILITIES, 0)
+    for city_id in city_ids:
+        matrix = cities_registry.capability_matrix(city_id) or {}
+        for name, ok in matrix.items():
+            if ok:
+                supported[name] += 1
+
+    total = len(city_ids)
+    return {
+        "total_cities": total,
+        "capabilities": {
+            name: {"supported": count, "unsupported": total - count}
+            for name, count in supported.items()
+        },
+    }

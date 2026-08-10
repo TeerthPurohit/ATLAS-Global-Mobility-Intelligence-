@@ -7,6 +7,8 @@ route (`/predict/demand`, `/predict/fare`, `/zones`, `/chat`,
 """
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Query
 
 from backend.errors import DomainError
@@ -23,12 +25,26 @@ from backend.schemas import (
     CityFarePredictRequest,
     CityJourneyEstimate,
     CityJourneyRequest,
+    CityProfileResponse,
+    CityCapabilitiesResponse,
+    CitySearchRequest,
+    CitySearchResponse,
+    CityTariffResponse,
+    CityZonesResponse,
     ErrorCode,
     ErrorResponse,
     ForecastEnvelope,
     PredictionEnvelope,
+    Zone,
 )
-from backend.services import city_journey_service, geography_service, global_geography_service, prediction_service, rag_service
+from backend.services import (
+    city_journey_service,
+    geography_service,
+    global_geography_service,
+    prediction_service,
+    rag_service,
+    tariff_profiles,
+)
 
 router = APIRouter(tags=["Cities"])
 
@@ -73,8 +89,28 @@ def get_city(city_id: str) -> City:
     responses={404: {"model": ErrorResponse, "description": "City not found"}},
 )
 def get_capabilities(city_id: str) -> Capabilities:
-    _require_city(city_id)
-    return Capabilities(**cities_registry.get_capabilities(city_id))
+    # Not _require_city: capabilities resolve for any city in EITHER registry
+    # (the 2-row `cities` seed or the 524-row `global_cities` table), so a
+    # global city reports its real, mostly-false matrix instead of 404ing.
+    capabilities = cities_registry.get_capabilities(city_id)
+    if capabilities is None:
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+    return Capabilities(**capabilities)
+
+
+@router.get(
+    "/api/cities/{city_id}/tariff",
+    summary="Get a city's fare tariff profile",
+    description="The real cached TariffProfile backing this city's fare estimate, or "
+    "{'available': false, 'reason': 'no_tariff_profile'} -- never a fabricated rate. "
+    "Read-only: profiles are written offline by scripts/generate_tariff_profile.py, "
+    "never from a request path (rule 8).",
+)
+def get_tariff(city_id: str) -> dict:
+    profile = tariff_profiles.get(city_id)
+    if profile is None:
+        return {"available": False, "reason": "no_tariff_profile", "city_id": city_id}
+    return {"available": True, **asdict(profile)}
 
 
 @router.get(
@@ -189,4 +225,224 @@ def city_chat(city_id: str, req: ChatRequest) -> ChatResponse:
     return ChatResponse(
         answer=res["answer"], route=res["route"], sql=res.get("sql"), session_id=res["session_id"],
         city_id=city_id, area_id=req.area_id,
+    )
+
+
+# ── New Granular City APIs (Part 2 API Decomposition) ───────────────────────────
+
+
+@router.get(
+    "/api/cities",
+    response_model=CitySearchResponse,
+    summary="List/Search cities with filters",
+    description="Search and filter cities by query, country, tier, and supported status.",
+)
+def search_cities(
+    q: str | None = Query(None, description="Search query (name)"),
+    country: str | None = Query(None, description="Country code filter"),
+    tier: str | None = Query(None, description="Tier filter: OBSERVED or TRANSFER"),
+    supported: bool | None = Query(None, description="Filter by supported status"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+) -> CitySearchResponse:
+    from backend.registry import global_cities as global_cities_registry
+
+    all_cities = global_cities_registry.list_cities()
+
+    # Apply filters
+    if q:
+        q_lower = q.lower()
+        all_cities = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
+
+    if country:
+        all_cities = [c for c in all_cities if c.get("country_code", "").upper() == country.upper()]
+
+    if tier:
+        all_cities = [c for c in all_cities if c.get("model_status", "").upper() == tier.upper()]
+
+    if supported is not None:
+        all_cities = [c for c in all_cities if (cities_registry.get_city(c["city_id"]) is not None) == supported]
+
+    total = len(all_cities)
+    start = (page - 1) * limit
+    end = start + limit
+    paginated = all_cities[start:end]
+
+    # Convert to City model
+    results = []
+    for c in paginated:
+        results.append(City(
+            id=c["city_id"],
+            name=c["name"],
+            country_code=c["country_code"],
+            latitude=c["latitude"],
+            longitude=c["longitude"],
+            timezone=c.get("timezone", "UTC"),
+            currency=c.get("currency", "USD"),
+            status=c.get("model_status", "unknown"),
+            data_source=c.get("population_source", "unknown"),
+            geography_type="zone",
+            mobility_mode="ride_hailing",
+            model_status=c.get("model_status", "unknown"),
+            last_updated="",
+        ))
+
+    return CitySearchResponse(results=results, total=total, page=page, limit=limit)
+
+
+@router.get(
+    "/api/cities/search",
+    response_model=CitySearchResponse,
+    summary="Search cities by name",
+    description="Quick city name search.",
+)
+def search_cities_by_name(
+    q: str = Query(..., min_length=1, description="City name to search for"),
+    limit: int = Query(10, ge=1, le=50),
+) -> CitySearchResponse:
+    from backend.registry import global_cities as global_cities_registry
+
+    all_cities = global_cities_registry.list_cities()
+    q_lower = q.lower()
+    filtered = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
+    filtered = filtered[:limit]
+
+    results = []
+    for c in filtered:
+        results.append(City(
+            id=c["city_id"],
+            name=c["name"],
+            country_code=c["country_code"],
+            latitude=c["latitude"],
+            longitude=c["longitude"],
+            timezone=c.get("timezone", "UTC"),
+            currency=c.get("currency", "USD"),
+            status=c.get("model_status", "unknown"),
+            data_source=c.get("population_source", "unknown"),
+            geography_type="zone",
+            mobility_mode="ride_hailing",
+            model_status=c.get("model_status", "unknown"),
+            last_updated="",
+        ))
+
+    return CitySearchResponse(results=results, total=len(results), page=1, limit=limit)
+
+
+@router.get(
+    "/api/cities/{city_id}/profile",
+    response_model=CityProfileResponse,
+    summary="Get complete city profile",
+    description="Full city profile with identity, capabilities, and data availability.",
+)
+def get_city_profile(city_id: str) -> CityProfileResponse:
+    from backend.registry import global_cities as global_cities_registry
+    from backend.services import tariff_profiles
+
+    profile = global_cities_registry.get_city(city_id)
+    if not profile:
+        # Try cities registry
+        profile = cities_registry.get_city(city_id)
+    if not profile:
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+
+    capabilities = cities_registry.capability_matrix(city_id) or {}
+    tariff = tariff_profiles.get(city_id)
+
+    return CityProfileResponse(
+        id=city_id,
+        name=profile.get("name", city_id),
+        country_code=profile.get("country_code", "XX"),
+        country=profile.get("country_code", "XX"),
+        latitude=profile.get("latitude", 0.0),
+        longitude=profile.get("longitude", 0.0),
+        timezone=profile.get("timezone", "UTC"),
+        currency=profile.get("currency", "USD"),
+        tier=profile.get("model_status", "unknown"),
+        population=profile.get("population"),
+        model_status=profile.get("model_status", "unknown"),
+        data_source=profile.get("population_source", "unknown"),
+        geography_type=profile.get("geography_type", "zone"),
+        mobility_mode=profile.get("mobility_mode", "ride_hailing"),
+        confidence=tariff.confidence if tariff else 0.0,
+        data_availability={
+            "demand": capabilities.get("demand", False),
+            "fare": capabilities.get("fare", False),
+            "routing": capabilities.get("routing", False),
+            "congestion": capabilities.get("congestion", False),
+            "availability": capabilities.get("availability", False),
+            "surge": capabilities.get("surge", False),
+            "carbon": capabilities.get("carbon", False),
+            "best_departure": capabilities.get("best_departure", False),
+        },
+    )
+
+
+@router.get(
+    "/api/cities/{city_id}/capabilities",
+    response_model=CityCapabilitiesResponse,
+    summary="Get city capabilities",
+    description="Real, wired capabilities derived from actual backend support.",
+)
+def get_city_capabilities(city_id: str) -> CityCapabilitiesResponse:
+    capabilities = cities_registry.capability_matrix(city_id)
+    if capabilities is None:
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+    return CityCapabilitiesResponse(city_id=city_id, capabilities=capabilities)
+
+
+@router.get(
+    "/api/cities/{city_id}/tariff",
+    response_model=CityTariffResponse,
+    summary="Get city tariff profile",
+    description="The real cached TariffProfile backing this city's fare estimate.",
+)
+def get_city_tariff(city_id: str) -> CityTariffResponse:
+    from backend.services import tariff_profiles
+    from dataclasses import asdict
+
+    profile = tariff_profiles.get(city_id)
+    if profile is None:
+        return CityTariffResponse(available=False, city_id=city_id, reason="no_tariff_profile")
+
+    data = asdict(profile)
+    data["available"] = True
+    data["city_id"] = city_id
+    return CityTariffResponse(**data)
+
+
+@router.get(
+    "/api/cities/{city_id}/zones",
+    response_model=CityZonesResponse,
+    summary="Get city zones",
+    description="Zone metadata for cities that support zone-based predictions.",
+)
+def get_city_zones(city_id: str) -> CityZonesResponse:
+    # Check if city has zones (NYC only currently)
+    city = cities_registry.get_city(city_id)
+    if city is None:
+        # Check global cities
+        from backend.registry import global_cities as global_cities_registry
+        city = global_cities_registry.get_city(city_id)
+
+    if city is None:
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+
+    # Only NYC has zones in our system
+    if city_id != "nyc":
+        return CityZonesResponse(
+            available=False,
+            city_id=city_id,
+            reason="zones_not_supported",
+            zones=None,
+        )
+
+    # NYC zones
+    from backend.routers import zones as zones_router
+    zone_list = zones_router.list_zones()
+
+    return CityZonesResponse(
+        available=True,
+        city_id=city_id,
+        reason=None,
+        zones=zone_list,
     )

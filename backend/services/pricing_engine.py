@@ -21,9 +21,10 @@ fusion in journey_predictors.py.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult
+from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult, effective_confidence
 from backend.services import model_service, tariff_profiles
 
 # Capped adjustment rates -- product configuration, not measured facts (see
@@ -32,7 +33,13 @@ _TRAFFIC_MAX_PCT = 0.15
 _WEATHER_MAX_PCT = 0.10
 _DEMAND_MAX_PCT = 0.20
 
+logger = logging.getLogger(__name__)
+
 _MILES_TO_KM = 1.609344
+# Applied only to cities whose tariff profile actually defines a
+# peak_multiplier -- the window itself is product configuration, not a
+# measured fact, same bar as the capped adjustment rates above.
+_PEAK_HOURS = frozenset({7, 8, 9, 17, 18, 19})
 
 _CALIBRATION_PATH = Path(__file__).resolve().parents[2] / "docs" / "tariff_calibration.json"
 
@@ -73,9 +80,20 @@ def _base_fare_nyc(ctx: JourneyContext) -> PredictionResult:
         )
     except KeyError as exc:
         return PredictionResult(value=None, unit=None, basis="unavailable", source="xgboost_fare_v1", reason=str(exc))
+    except Exception as exc:  # noqa: BLE001 -- see below
+        # A model artifact that won't score (e.g. an xgboost version whose
+        # categorical container disagrees with the saved model) is a data
+        # problem, not a request problem: degrade to an honest `unavailable`
+        # like every other missing input, instead of 500ing the whole journey.
+        logger.warning("fare model inference failed for city=nyc: %s", exc)
+        return PredictionResult(
+            value=None, unit=None, basis="unavailable", source="xgboost_fare_v1",
+            reason=f"fare model artifact could not be scored: {exc}",
+        )
     return PredictionResult(
         value=round(value, 2), unit="USD", basis="computed", source=model_name, reason=None,
         data_vintage=model_service.data_vintage("nyc"),
+        confidence=1.0, method="trained_fare_model",
     )
 
 
@@ -93,17 +111,48 @@ def _base_fare_tariff(ctx: JourneyContext, features: JourneyFeatures) -> Predict
         )
     km = features.distance_miles.value * _MILES_TO_KM
     minutes = features.duration_min.value if features.duration_min.value is not None else 0.0
-    is_night = ctx.departure_time.hour >= 22 or ctx.departure_time.hour < 5
+    hour = ctx.departure_time.hour
     fare = profile.base_fare + profile.per_km * km + profile.per_min * minutes
-    if is_night:
+    applied = ["base_fare", "per_km", "per_min"]
+
+    # Flat components: added ONLY where this city's profile actually defines
+    # one. A None here means "this city's tariff has no such fee" -- inventing
+    # a default would be exactly the fabrication rule 2 forbids.
+    for name in ("booking_fee", "platform_fee", "tolls"):
+        amount = getattr(profile, name)
+        if amount:
+            fare += amount
+            applied.append(name)
+
+    # Time/context multipliers, same rule: only what the profile defines.
+    if (hour >= 22 or hour < 5) and profile.night_multiplier:
         fare *= profile.night_multiplier
+        applied.append("night_multiplier")
+    if hour in _PEAK_HOURS and profile.peak_multiplier:
+        fare *= profile.peak_multiplier
+        applied.append("peak_multiplier")
+    # City-level vehicle multiplier only; the per-vehicle-class factors live in
+    # the vehicle_profiles seed and are applied once by _vehicle_adjustment().
+    if profile.vehicle_multiplier:
+        fare *= profile.vehicle_multiplier
+        applied.append("vehicle_multiplier")
+    if profile.surge_multiplier:
+        fare *= profile.surge_multiplier
+        applied.append("surge_multiplier")
+
     fare = max(fare, profile.min_fare)
+    version = f" v{profile.version}" if profile.version else ""
+    effective = f", effective from {profile.effective_from}" if profile.effective_from else ""
     return PredictionResult(
         value=round(fare, 2), unit=profile.currency, basis="modeled_estimate", source=f"tariff_profile:{ctx.city_id}",
         reason=(
-            f"LLM-derived fare structure (confidence {profile.confidence:.0%}) anchored on NYC's real measured "
-            f"fares, no local trip data exists for this city. Method calibration: {_CALIBRATION_NOTE}. {profile.notes}"
+            f"{profile.source_type or profile.source} fare structure{version}{effective} "
+            f"(confidence {profile.confidence:.0%}) anchored on NYC's real measured fares, no local trip data "
+            f"exists for this city. Components applied: {', '.join(applied)} (min fare {profile.min_fare} "
+            f"{profile.currency} floor). Method calibration: {_CALIBRATION_NOTE}. {profile.notes}"
         ),
+        confidence=profile.confidence,
+        method="tariff_profile_linear",
     )
 
 
@@ -190,5 +239,12 @@ def compute_fare(ctx: JourneyContext, features: JourneyFeatures) -> dict[str, Pr
     reason = None if total_basis == "computed" else (
         "includes modeled_estimate adjustment term(s)" + (f"; excluded: {', '.join(excluded)}" if excluded else "")
     )
-    terms["total"] = PredictionResult(value=total_value, unit=base_fare.unit, basis=total_basis, source="pricing_engine", reason=reason)
+    # Weakest-link, not an average: a sum is only as trustworthy as its least
+    # trustworthy term, and averaging would let three cheap adjustments dilute
+    # a genuinely uncertain base fare upward.
+    terms["total"] = PredictionResult(
+        value=total_value, unit=base_fare.unit, basis=total_basis, source="pricing_engine", reason=reason,
+        confidence=min(effective_confidence(t) for t in included),
+        method=f"{base_fare.method or 'base_fare'}+adjustments",
+    )
     return terms

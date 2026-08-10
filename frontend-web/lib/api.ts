@@ -15,6 +15,19 @@ export interface PredictionOut {
   reason: string | null;
   data_vintage: string | null;
   value_usd: number | null;
+  confidence?: number | null;
+  method?: string | null;
+  ui_label?: string | null;
+}
+
+export interface MobilityResponse {
+  value: number | null;
+  unit: string | null;
+  status: Basis;
+  method: string;
+  source: string;
+  confidence: number;
+  reason: string | null;
 }
 
 export interface JourneyEstimate {
@@ -208,4 +221,392 @@ export function streamChat(
   ws.onerror = (evt) => handlers.onError?.(evt);
   ws.onclose = () => handlers.onClose?.();
   return () => ws.close();
+}
+
+// ============================================================================
+// Countries & Cities (backend/routers/cities.py, countries registry)
+// ============================================================================
+
+export interface Country {
+  iso_code: string;
+  name: string;
+  supported: boolean;
+  supported_city_count: number;
+}
+
+export interface City {
+  id: string;
+  name: string;
+  country_code: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  currency: string;
+  model_status: "OBSERVED" | "TRANSFER" | "NONE";
+  data_source: string;
+  geography_type: string;
+  mobility_mode: string;
+}
+
+export interface CitySearchParams {
+  q?: string;
+  country?: string;
+  tier?: string;
+  supported?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface CitySearchResponse {
+  results: City[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface Capabilities {
+  demand: boolean;
+  fare: boolean;
+  journey: boolean;
+  chat: boolean;
+  area_analysis: boolean;
+  routing: boolean;
+  congestion: boolean;
+  availability: boolean;
+  surge: boolean;
+  carbon: boolean;
+  best_departure: boolean;
+  chat_tier: "full_rag" | "sql_only" | "context_only";
+  mobility_mode: string;
+  area_type: string;
+  forecast: boolean;
+  transit_coverage: boolean;
+}
+
+export interface CityProfileResponse {
+  id: string;
+  name: string;
+  country_code: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  currency: string;
+  tier: string;
+  population: number | null;
+  model_status: string;
+  data_source: string;
+  geography_type: string;
+  mobility_mode: string;
+  confidence: number;
+  data_availability: Record<string, boolean>;
+}
+
+export interface CityTariffResponse {
+  available: boolean;
+  city_id: string;
+  reason: string | null;
+  currency: string | null;
+  base_fare: number | null;
+  per_km: number | null;
+  per_min: number | null;
+  min_fare: number | null;
+  night_multiplier: number | null;
+  airport_surcharge: number | null;
+  booking_fee: number | null;
+  platform_fee: number | null;
+  tolls: number | null;
+  peak_multiplier: number | null;
+  vehicle_multiplier: number | null;
+  surge_multiplier: number | null;
+  effective_from: string | null;
+  version: string | null;
+  source_type: string | null;
+  confidence: number | null;
+  notes: string | null;
+  generated_at: string | null;
+  model_id: string | null;
+}
+
+export interface CityZone {
+  zone_id: number;
+  zone: string;
+  borough: string;
+  service_zone: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface CityZonesResponse {
+  available: boolean;
+  city_id: string;
+  reason: string | null;
+  zones: CityZone[] | null;
+}
+
+// ============================================================================
+// Mobility API (backend/routers/mobility.py)
+// ============================================================================
+
+export interface Coordinates {
+  lat: number;
+  lon: number;
+}
+
+export interface JourneyContextRequest {
+  city_id: string;
+  pickup: Coordinates;
+  dropoff: Coordinates;
+  departure_time: string;
+  vehicle_type: string;
+}
+
+export interface RouteRequest extends JourneyContextRequest {}
+
+export interface PredictionRequest extends JourneyContextRequest {
+  distance_km?: number | null;
+  duration_min?: number | null;
+}
+
+export interface RouteResponse {
+  distance: MobilityResponse;
+  duration: MobilityResponse;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface FareBreakdown {
+  base: number | null;
+  distance: number | null;
+  duration: number | null;
+  fees: number | null;
+  surge: number | null;
+  total: number | null;
+}
+
+export interface FareResponse {
+  fare: MobilityResponse;
+  breakdown: FareBreakdown;
+  currency: string;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface DemandResponse {
+  demand: MobilityResponse;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface CongestionResponse {
+  congestion: MobilityResponse;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface AvailabilityResponse {
+  availability: MobilityResponse;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface SurgeResponse {
+  surge: MobilityResponse;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface CarbonResponse {
+  carbon: MobilityResponse;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+export interface DepartureTimeResponse {
+  recommended_departure: string | null;
+  reason: string | null;
+  confidence: number;
+  status: Basis;
+  request_id: string | null;
+  timestamp: string | null;
+}
+
+// ============================================================================
+// Context API (backend/routers/context.py)
+// ============================================================================
+
+export interface WeatherResponse {
+  temperature: number | null;
+  humidity: number | null;
+  precipitation: number | null;
+  wind_speed: number | null;
+  weather_condition: string | null;
+  source: string;
+  timestamp: string;
+  city_id: string;
+}
+
+export interface HolidayResponse {
+  is_holiday: boolean;
+  holiday_name: string | null;
+  country: string;
+  date: string;
+  source: string;
+}
+
+export interface TrafficResponse {
+  congestion_level: number | null;
+  source: string;
+  is_live: boolean;
+  timestamp: string;
+  city_id: string;
+  note: string | null;
+}
+
+// ============================================================================
+// Analytics API (backend/routers/analytics.py)
+// ============================================================================
+
+export interface AnalyticsSummaryResponse {
+  total_predictions: number;
+  cities_served: number;
+  date_range: Record<string, string>;
+  top_cities: Record<string, unknown>[];
+}
+
+export interface AnalyticsInsightsResponse {
+  insights: Record<string, unknown>[];
+}
+
+export interface AnalyticsHistoryResponse {
+  history: Record<string, unknown>[];
+  limit: number;
+  offset: number;
+}
+
+export interface AnalyticsTrendsResponse {
+  trends: Record<string, number[]>;
+  period: string;
+}
+
+// ============================================================================
+// API Functions
+// ============================================================================
+
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...init,
+  });
+  if (!resp.ok) {
+    throw new Error(`${path} failed: ${resp.status} ${await resp.text()}`);
+  }
+  return resp.json();
+}
+
+// Countries & Cities
+export async function getCountries(): Promise<Country[]> {
+  return fetchJson<Country[]>("/api/countries");
+}
+
+export async function searchCities(params: CitySearchParams = {}): Promise<CitySearchResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set("q", params.q);
+  if (params.country) searchParams.set("country", params.country);
+  if (params.tier) searchParams.set("tier", params.tier);
+  if (params.supported !== undefined) searchParams.set("supported", String(params.supported));
+  if (params.page) searchParams.set("page", String(params.page));
+  if (params.limit) searchParams.set("limit", String(params.limit));
+  return fetchJson<CitySearchResponse>(`/api/cities/search?${searchParams.toString()}`);
+}
+
+export async function getCityProfile(cityId: string): Promise<CityProfileResponse> {
+  return fetchJson<CityProfileResponse>(`/api/cities/${cityId}/profile`);
+}
+
+export async function getCityCapabilities(cityId: string): Promise<Capabilities> {
+  const resp = await fetchJson<{ city_id: string; capabilities: Capabilities }>(`/api/cities/${cityId}/capabilities`);
+  return resp.capabilities;
+}
+
+export async function getCityTariff(cityId: string): Promise<CityTariffResponse> {
+  return fetchJson<CityTariffResponse>(`/api/cities/${cityId}/tariff`);
+}
+
+export async function getCityZones(cityId: string): Promise<CityZonesResponse> {
+  return fetchJson<CityZonesResponse>(`/api/cities/${cityId}/zones`);
+}
+
+// Mobility
+export async function getRoute(req: RouteRequest): Promise<RouteResponse> {
+  return fetchJson<RouteResponse>("/api/mobility/route", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getFare(req: PredictionRequest): Promise<FareResponse> {
+  return fetchJson<FareResponse>("/api/mobility/fare", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getDemand(req: PredictionRequest): Promise<DemandResponse> {
+  return fetchJson<DemandResponse>("/api/mobility/demand", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getCongestion(req: PredictionRequest): Promise<CongestionResponse> {
+  return fetchJson<CongestionResponse>("/api/mobility/congestion", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getAvailability(req: PredictionRequest): Promise<AvailabilityResponse> {
+  return fetchJson<AvailabilityResponse>("/api/mobility/availability", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getSurge(req: PredictionRequest): Promise<SurgeResponse> {
+  return fetchJson<SurgeResponse>("/api/mobility/surge", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getCarbon(req: PredictionRequest): Promise<CarbonResponse> {
+  return fetchJson<CarbonResponse>("/api/mobility/carbon", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function getBestDeparture(req: PredictionRequest): Promise<DepartureTimeResponse> {
+  return fetchJson<DepartureTimeResponse>("/api/mobility/departure-time", { method: "POST", body: JSON.stringify(req) });
+}
+
+// Context
+export async function getWeather(cityId: string, lat?: number, lon?: number, timestamp?: string): Promise<WeatherResponse> {
+  const params = new URLSearchParams({ city_id: cityId });
+  if (lat !== undefined) params.set("lat", String(lat));
+  if (lon !== undefined) params.set("lon", String(lon));
+  if (timestamp) params.set("timestamp", timestamp);
+  return fetchJson<WeatherResponse>(`/api/context/weather?${params.toString()}`);
+}
+
+export async function getHoliday(cityId: string, lat?: number, lon?: number, date?: string): Promise<HolidayResponse> {
+  const params = new URLSearchParams({ city_id: cityId });
+  if (lat !== undefined) params.set("lat", String(lat));
+  if (lon !== undefined) params.set("lon", String(lon));
+  if (date) params.set("date", date);
+  return fetchJson<HolidayResponse>(`/api/context/holiday?${params.toString()}`);
+}
+
+export async function getTraffic(cityId: string, lat?: number, lon?: number): Promise<TrafficResponse> {
+  const params = new URLSearchParams({ city_id: cityId });
+  if (lat !== undefined) params.set("lat", String(lat));
+  if (lon !== undefined) params.set("lon", String(lon));
+  return fetchJson<TrafficResponse>(`/api/context/traffic?${params.toString()}`);
+}
+
+// Analytics
+export async function getAnalyticsSummary(): Promise<AnalyticsSummaryResponse> {
+  return fetchJson<AnalyticsSummaryResponse>("/api/analytics/summary");
+}
+
+export async function getAnalyticsInsights(): Promise<AnalyticsInsightsResponse> {
+  return fetchJson<AnalyticsInsightsResponse>("/api/analytics/insights");
+}
+
+export async function getAnalyticsHistory(limit = 100, offset = 0): Promise<AnalyticsHistoryResponse> {
+  return fetchJson<AnalyticsHistoryResponse>(`/api/analytics/history?limit=${limit}&offset=${offset}`);
+}
+
+export async function getAnalyticsTrends(period = "30d"): Promise<AnalyticsTrendsResponse> {
+  return fetchJson<AnalyticsTrendsResponse>(`/api/analytics/trends?period=${period}`);
 }

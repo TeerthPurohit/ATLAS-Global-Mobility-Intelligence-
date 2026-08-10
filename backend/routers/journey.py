@@ -27,7 +27,10 @@ router = APIRouter(prefix="/journey", tags=["journey"])
 
 
 def _to_out(pr: PredictionResult) -> PredictionOut:
-    return PredictionOut(value=pr.value, unit=pr.unit, basis=pr.basis, source=pr.source, reason=pr.reason, data_vintage=pr.data_vintage)
+    return PredictionOut(
+        value=pr.value, unit=pr.unit, basis=pr.basis, source=pr.source, reason=pr.reason,
+        data_vintage=pr.data_vintage, confidence=pr.confidence, method=pr.method,
+    )
 
 
 @router.post("/estimate", response_model=JourneyEstimate)

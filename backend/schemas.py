@@ -47,6 +47,12 @@ class PredictionOut(BaseModel):
     ui_label: str | None = None
     data_vintage: str | None = None
     value_usd: float | None = None
+    # Per-component provenance (mirrors PredictionResult): `confidence` is
+    # 0-1 and always 0.0 when basis == "unavailable"; `method` names how the
+    # number was produced ("trained_fare_model", "tariff_profile_linear",
+    # "population_scaling", ...). Both optional -- additive, no client breaks.
+    confidence: float | None = None
+    method: str | None = None
 
     def model_post_init(self, __context: typing.Any) -> None:
         if self.ui_label is None:
@@ -204,6 +210,15 @@ class Capabilities(BaseModel):
     forecast: bool = True
     transit_coverage: bool = False
     chat_tier: Literal["full_rag", "sql_only", "context_only"] = "context_only"
+    # Per-journey-field support (registry.cities.capability_matrix) -- true
+    # only where a real model, tariff profile, or covariate actually backs
+    # the field for THIS city. Defaults keep older callers working.
+    routing: bool = False
+    congestion: bool = False
+    availability: bool = False
+    surge: bool = False
+    carbon: bool = False
+    best_departure: bool = False
 
 
 class Area(BaseModel):
@@ -270,3 +285,286 @@ class CityFarePredictRequest(BaseModel):
     pickup_area_id: int
     dropoff_area_id: int
     hour: int
+
+
+# ── Shared Request/Response Schemas for Granular Mobility APIs ─────────────────
+
+
+class Coordinates(BaseModel):
+    """Reusable coordinate pair for any mobility request."""
+    lat: float
+    lon: float
+
+
+class JourneyContextRequest(BaseModel):
+    """Shared context for all mobility predictions - city, coordinates, time, vehicle."""
+    city_id: str
+    pickup: Coordinates
+    dropoff: Coordinates
+    departure_time: datetime
+    vehicle_type: str = "car"
+
+
+class RouteRequest(JourneyContextRequest):
+    """Request for routing - inherits all context fields."""
+    pass
+
+
+class PredictionRequest(JourneyContextRequest):
+    """Request for fare/demand/congestion/etc predictions - inherits all context fields.
+
+    Optional route information can be provided to avoid recomputing the route.
+    """
+    distance_km: float | None = None
+    duration_min: float | None = None
+
+
+class CityRequest(BaseModel):
+    """Minimal city-scoped request."""
+    city_id: str
+
+
+class MobilityResponse(BaseModel):
+    """Base response for all mobility predictions with provenance."""
+    value: float | None = None
+    unit: str | None = None
+    status: Literal["computed", "modeled_estimate", "unavailable"]
+    method: str
+    source: str
+    confidence: float
+    reason: str | None = None
+
+
+class RouteResponse(BaseModel):
+    """Route response with distance and duration."""
+    distance: MobilityResponse
+    duration: MobilityResponse
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class FareBreakdown(BaseModel):
+    """Fare breakdown - only includes components actually calculated."""
+    base: float | None = None
+    distance: float | None = None
+    duration: float | None = None
+    fees: float | None = None
+    surge: float | None = None
+    total: float | None = None
+
+
+class FareResponse(BaseModel):
+    """Fare response with breakdown."""
+    fare: MobilityResponse
+    breakdown: FareBreakdown
+    currency: str
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class DemandResponse(BaseModel):
+    """Demand response."""
+    demand: MobilityResponse
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class CongestionResponse(BaseModel):
+    """Congestion response."""
+    congestion: MobilityResponse
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class AvailabilityResponse(BaseModel):
+    """Availability response."""
+    availability: MobilityResponse
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class SurgeResponse(BaseModel):
+    """Surge response."""
+    surge: MobilityResponse
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class CarbonResponse(BaseModel):
+    """Carbon response."""
+    carbon: MobilityResponse
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class DepartureTimeResponse(BaseModel):
+    """Best departure time response."""
+    recommended_departure: str | None = None
+    reason: str | None = None
+    confidence: float
+    status: Literal["computed", "modeled_estimate", "unavailable"]
+    request_id: str | None = None
+    timestamp: datetime | None = None
+
+
+class WeatherResponse(BaseModel):
+    """Weather context response."""
+    temperature: float | None = None
+    humidity: float | None = None
+    precipitation: float | None = None
+    wind_speed: float | None = None
+    weather_condition: str | None = None
+    source: str
+    timestamp: datetime
+    city_id: str
+
+
+class HolidayResponse(BaseModel):
+    """Holiday context response."""
+    is_holiday: bool
+    holiday_name: str | None = None
+    country: str
+    date: str
+    source: str
+
+
+class TrafficResponse(BaseModel):
+    """Traffic context response - only what's actually available."""
+    congestion_level: float | None = None
+    source: str
+    is_live: bool = False
+    timestamp: datetime
+    city_id: str
+    note: str | None = None
+
+
+class CitySearchRequest(BaseModel):
+    """City search parameters."""
+    q: str | None = None
+    country: str | None = None
+    tier: str | None = None
+    supported: bool | None = None
+    page: int = 1
+    limit: int = 50
+
+
+class CitySearchResponse(BaseModel):
+    """City search response."""
+    results: list[City]
+    total: int
+    page: int
+    limit: int
+
+
+class CityProfileResponse(BaseModel):
+    """Complete city profile response."""
+    id: str
+    name: str
+    country_code: str
+    country: str
+    latitude: float
+    longitude: float
+    timezone: str
+    currency: str
+    tier: str
+    population: int | None = None
+    model_status: str
+    data_source: str
+    geography_type: str
+    mobility_mode: str
+    confidence: float
+    data_availability: dict[str, bool]
+
+
+class CityCapabilitiesResponse(BaseModel):
+    """City capabilities response."""
+    city_id: str
+    capabilities: dict[str, bool]
+
+
+class CityTariffResponse(BaseModel):
+    """City tariff response."""
+    available: bool
+    city_id: str
+    reason: str | None = None
+    # When available, includes all tariff profile fields
+    currency: str | None = None
+    base_fare: float | None = None
+    per_km: float | None = None
+    per_min: float | None = None
+    min_fare: float | None = None
+    night_multiplier: float | None = None
+    airport_surcharge: float | None = None
+    booking_fee: float | None = None
+    platform_fee: float | None = None
+    tolls: float | None = None
+    peak_multiplier: float | None = None
+    vehicle_multiplier: float | None = None
+    surge_multiplier: float | None = None
+    effective_from: str | None = None
+    version: str | None = None
+    source_type: str | None = None
+    confidence: float | None = None
+    notes: str | None = None
+    generated_at: str | None = None
+    model_id: str | None = None
+
+
+class CityZonesResponse(BaseModel):
+    """City zones response."""
+    available: bool
+    city_id: str
+    reason: str | None = None
+    zones: list[Zone] | None = None
+
+
+class SystemHealthResponse(BaseModel):
+    """System health response."""
+    status: str
+    warehouse: str
+    models: str
+    timestamp: datetime
+
+
+class SystemCapabilitiesResponse(BaseModel):
+    """System-wide capabilities response."""
+    total_cities: int
+    capabilities: dict[str, dict[str, int]]
+
+
+class SystemModelsResponse(BaseModel):
+    """System models response."""
+    models: list[dict]
+
+
+class SystemPipelineStatusResponse(BaseModel):
+    """System pipeline status response."""
+    status: str
+    last_run: str | None = None
+    details: dict | None = None
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    """Analytics summary response."""
+    total_predictions: int
+    cities_served: int
+    date_range: dict[str, str]
+    top_cities: list[dict]
+
+
+class AnalyticsInsightsResponse(BaseModel):
+    """Analytics insights response."""
+    insights: list[dict]
+
+
+class AnalyticsHistoryResponse(BaseModel):
+    """Analytics history response."""
+    history: list[dict]
+    limit: int
+    offset: int
+
+
+class AnalyticsTrendsResponse(BaseModel):
+    """Analytics trends response."""
+    trends: dict[str, list[float]]
+    period: str
