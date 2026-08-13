@@ -5,6 +5,7 @@ before the app accepts traffic; routers call the `predict_*` functions only.
 
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -24,6 +25,14 @@ from london_demand.build_features import FEATURE_COLUMNS as LONDON_FEATURE_COLUM
 from london_demand.build_features import build_features as london_build_features  # noqa: E402
 
 FARE_MODEL_PATH = REPO_ROOT / "models" / "fare_prediction" / "fare_xgb_model.json"
+
+_FARE_CATEGORY_ORDER = ("pickup_location_id", "dropoff_location_id", "pickup_hour", "pickup_day_of_week")
+_FARE_CATEGORY_DTYPES = {
+    "pickup_location_id": "int32",
+    "dropoff_location_id": "int32",
+    "pickup_hour": "int64",
+    "pickup_day_of_week": "int64",
+}
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
 EWMA_FALLBACK_NAME = "ewma_fallback_v1"
@@ -99,32 +108,37 @@ def load() -> None:
     _hourly_shape.clear()
     _data_vintage.clear()
     for city_id, cfg in _CITY_ARTIFACTS.items():
-        model = xgb.XGBRegressor()
-        model._estimator_type = "regressor"
-        model.load_model(str(cfg["demand_model_path"]))
-        _demand_models[city_id] = model
-
-        con = duckdb.connect(str(cfg["warehouse_path"]), read_only=True)
         try:
-            _load_zone_demand_artifacts(con, city_id, cfg)
-        finally:
-            con.close()
+            demand_path = cfg["demand_model_path"]
+            warehouse_path = cfg["warehouse_path"]
+            if demand_path.exists():
+                model = xgb.XGBRegressor()
+                model._estimator_type = "regressor"
+                model.load_model(str(demand_path))
+                _demand_models[city_id] = model
+
+            if warehouse_path.exists():
+                con = duckdb.connect(str(warehouse_path), read_only=True)
+                try:
+                    _load_zone_demand_artifacts(con, city_id, cfg)
+                finally:
+                    con.close()
+        except Exception as err:
+            print(f"[startup] Warning: could not load model artifacts for {city_id}: {err}", flush=True)
 
     print("[startup] Loading fare XGBoost model...", flush=True)
     _fare_model = xgb.XGBRegressor(enable_categorical=True)
     _fare_model._estimator_type = "regressor"
     _fare_model.load_model(str(FARE_MODEL_PATH))
 
-    print(f"[startup] Connecting to DuckDB warehouse at {WAREHOUSE_PATH}...", flush=True)
-    con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
-    try:
-        print("[startup] Loading fare categories...", flush=True)
-        _load_fare_categories(con)
-    finally:
-        con.close()
+    print("[startup] Loading fare categories...", flush=True)
+    _load_fare_categories()
 
     print("[startup] Loading zone centroids...", flush=True)
     _load_zone_centroids()
+
+    print("[startup] Loading WorldMove city hourly shapes...", flush=True)
+    _load_worldmove_hourly_shapes()
     print("[startup] All artifacts loaded successfully!", flush=True)
 
 
@@ -132,12 +146,8 @@ _PROFILE_FEATURE_COLS = ("lag_1h", "lag_24h", "lag_168h", "ewma", "rolling_7d_av
 
 
 def _load_zone_demand_artifacts(con: duckdb.DuckDBPyConnection, city_id: str, cfg: dict) -> None:
-    """One `build_features()` pass feeds three artifacts: the last-known-row
-    momentum snapshot (unchanged -- still what availability/surge/pricing's
-    "current pressure" proxies read, since a precompute-only deployment with
-    no live feed has no real notion of "now" past the warehouse's max date),
-    the per-(zone, hour, day_of_week) seasonal profile predict_demand()
-    actually predicts from, and a real month-of-year volume multiplier."""
+    """One `build_features()` pass feeds three artifacts: momentum snapshot,
+    seasonal profiles, and volume multipliers."""
     df = cfg["build_features"](con)
     area_column = cfg["area_column"]
 
@@ -183,11 +193,62 @@ def _load_zone_demand_artifacts(con: duckdb.DuckDBPyConnection, city_id: str, cf
     }
 
 
-def _load_fare_categories(con: duckdb.DuckDBPyConnection) -> None:
+def _load_fare_categories() -> None:
+    """Build the categorical feature encodings the fare model expects.
+
+    Must match training EXACTLY: XGBoost's enable_categorical path rejects a
+    categorical index dtype mismatch AND any category value that wasn't in the
+    training set. The faithful source is the model file itself -- it stores the
+    training category values per feature under
+    `learner.gradient_booster.model.cats.enc` -- so no slow distinct-value
+    scan over the 113M-row warehouse is needed.
+
+    Dtypes mirror what `fetchdf()` returned at train time per warehouse column
+    type: zone ids are INTEGER (numpy int32), hour/day_of_week are BIGINT
+    (numpy int64). Feeding the exact stored values with the matching dtype is
+    what makes the trained model accept a row.
+    """
     _fare_categories.clear()
-    for col in ("pickup_location_id", "dropoff_location_id", "pickup_hour", "pickup_day_of_week"):
-        series = con.execute(f"select distinct {col} from int_trips_enriched order by 1").df()[col]
-        _fare_categories[col] = series
+    model_doc = json.loads(Path(FARE_MODEL_PATH).read_text(encoding="utf-8"))
+    enc = model_doc["learner"]["gradient_booster"]["model"]["cats"]["enc"]
+    for col, entry in zip(_FARE_CATEGORY_ORDER, enc):
+        _fare_categories[col] = pd.Series(entry["values"], dtype=_FARE_CATEGORY_DTYPES[col])
+
+
+def _load_worldmove_hourly_shapes() -> None:
+    """Real per-city hour-of-day shape for every WorldMove-covered city
+    (SPEC-016's `worldmove_city_hourly_shape` mart), so
+    hourly_shape_fraction() has an actual answer for the ~521 cities that
+    aren't nyc/london instead of estimation_service.py falling back to NYC's
+    shape for all of them (the direct cause of every non-NYC/London city's
+    demand estimate looking NYC-shaped). Does not overwrite nyc/london,
+    which already got a real (multi-month) shape from
+    _load_zone_demand_artifacts above -- WorldMove only fills in cities that
+    have no entry yet.
+    """
+    if not WAREHOUSE_PATH.exists():
+        return
+    con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
+    try:
+        exists = con.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'worldmove_city_hourly_shape'"
+        ).fetchone()[0]
+        if not exists:
+            return
+        df = con.execute(
+            "SELECT city_id, hour, day_of_week, pct_of_daily_trips FROM worldmove_city_hourly_shape"
+        ).fetchdf()
+    finally:
+        con.close()
+
+    for city_id, group in df.groupby("city_id"):
+        if city_id in _hourly_shape:
+            continue  # nyc/london keep their real multi-month shape
+        _hourly_shape[city_id] = {
+            (int(row.hour), int(row.day_of_week)): float(row.pct_of_daily_trips)
+            for row in group.itertuples()
+            if row.pct_of_daily_trips == row.pct_of_daily_trips  # skip NaN (zero-trip hour)
+        }
 
 
 def _load_zone_centroids() -> None:
@@ -300,7 +361,10 @@ def predict_fare(pickup_zone: int, dropoff_zone: int, hour: int, day_of_week: in
             }
         ]
     )
-    for col in ("pickup_location_id", "dropoff_location_id", "pickup_hour", "pickup_day_of_week"):
-        row[col] = pd.Categorical(row[col], categories=_fare_categories[col])
+    for col in _FARE_CATEGORY_ORDER:
+        # Cast to the category dtype first so the Categorical index dtype
+        # (int32 for zones, int64 for hour/dow) matches training, then apply
+        # the model's exact stored training categories.
+        row[col] = pd.Categorical(row[col].astype(_FARE_CATEGORY_DTYPES[col]), categories=_fare_categories[col])
     pred = float(_fare_model.predict(row)[0])
     return max(pred, 0.0), FARE_MODEL_NAME

@@ -56,6 +56,7 @@ def load() -> None:
     _artifacts["pagerank_hubs"] = _read_json(PAGERANK_HUBS_PATH)
     _artifacts["dbt_run_results"] = _read_json(DBT_TARGET / "run_results.json")
     _artifacts["dbt_manifest"] = _read_json(DBT_TARGET / "manifest.json")
+    _artifacts["insight_docs"] = _load_insight_docs()
 
 
 def get_demand_model_metrics() -> dict:
@@ -174,15 +175,23 @@ def get_warehouse_tables() -> list[dict]:
     return tables
 
 
-def get_insight_docs(limit: int = 20) -> list[dict]:
-    """Real per-zone insight paragraphs from rag/insight_generation (FR-1) --
-    not computed here, just read and sorted busiest-first for the frontend."""
-    sys.path.insert(0, str(REPO_ROOT / "rag" / "insight_generation"))
+def _load_insight_docs() -> list[dict]:
+    """Import the generator once and read the doc file once (at startup), so a
+    request never pays for an import + file read (see load())."""
+    rag_dir = REPO_ROOT / "rag" / "insight_generation"
+    if str(rag_dir) not in sys.path:
+        sys.path.insert(0, str(rag_dir))
     from generate_insight_docs import load_insight_docs  # noqa: PLC0415
 
     docs = load_insight_docs()
     docs.sort(key=lambda d: d.get("total_trips") or 0, reverse=True)
-    return docs[:limit]
+    return docs
+
+
+def get_insight_docs(limit: int = 20) -> list[dict]:
+    """Real per-zone insight paragraphs from rag/insight_generation (FR-1),
+    served from the startup-time cache, busiest-first."""
+    return (_artifacts.get("insight_docs") or [])[:limit]
 
 
 def check_health() -> dict:

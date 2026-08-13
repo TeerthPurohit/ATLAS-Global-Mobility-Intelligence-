@@ -10,6 +10,15 @@ from backend.services import rag_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+_CHAT_ROUTE_VALUES = frozenset({"numeric", "explanatory"})
+
+
+def _normalize_route(route: str | None) -> str:
+    """Frontend ChatRoute contract is numeric | explanatory. The
+    context-only tier's internal "context_grounded" label (and any legacy
+    row) is the explanatory family -- normalized here at the API boundary."""
+    return route if route in _CHAT_ROUTE_VALUES else "explanatory"
+
 
 @router.post(
     "",
@@ -21,13 +30,14 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 def post_chat(req: ChatRequest) -> ChatResponse:
     # city_id now actually routes (SPEC-013 FR-11) -- old clients that never
     # send it default to "nyc"/full_rag, identical behavior to before.
-    res = rag_service.answer_question(question=req.question, session_id=req.session_id, city_id=req.city_id or "nyc")
+    routed_city_id = req.city_id or "nyc"
+    res = rag_service.answer_question(question=req.question, session_id=req.session_id, city_id=routed_city_id)
     return ChatResponse(
         answer=res["answer"],
-        route=res["route"],
+        route=_normalize_route(res["route"]),
         sql=res.get("sql"),
         session_id=res["session_id"],
-        city_id=req.city_id,
+        city_id=routed_city_id,
         area_id=req.area_id,
     )
 
@@ -41,7 +51,7 @@ def get_chat_history(session_id: str) -> list[ChatMessage]:
         ChatMessage(
             role=msg["role"],
             content=msg["content"],
-            route=msg.get("route"),
+            route=_normalize_route(msg.get("route")),
             sql=msg.get("sql"),
             timestamp=str(msg["timestamp"]),
         )
@@ -62,7 +72,17 @@ async def websocket_chat_stream(websocket: WebSocket):
             return
 
         session_id = data.get("session_id")
-        for chunk_item in rag_service.stream_answer(question=question, session_id=session_id):
+        # city_id/area_id route the stream exactly like POST /chat (FR-11);
+        # city_id defaults to "nyc" for callers that predate it.
+        city_id = data.get("city_id") or "nyc"
+        area_id = data.get("area_id")
+        for chunk_item in rag_service.stream_answer(question=question, session_id=session_id, city_id=city_id):
+            if chunk_item.get("type") == "done":
+                payload = dict(chunk_item.get("payload") or {})
+                payload["city_id"] = city_id
+                payload["area_id"] = area_id
+                payload["route"] = _normalize_route(payload.get("route"))
+                chunk_item = {**chunk_item, "payload": payload}
             await websocket.send_json(chunk_item)
 
         await websocket.close()

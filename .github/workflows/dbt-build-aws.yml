@@ -1,0 +1,120 @@
+name: dbt build (AWS, on-demand)
+
+# On-demand only, by design (ADR-009) -- this is a data-engineering rebuild
+# of the DuckDB warehouse from raw parquet, not a deploy trigger and not a
+# schedule. Run it manually from the Actions tab when raw data changes or
+# the dbt models change enough to need a full rebuild. See
+# docs/architecture/Infrastructure.md and infra/cdk/ for the compute this
+# launches and tears down.
+#
+# Requires these repo-level GitHub Actions variables/secrets, set once after
+# `cdk deploy` (see infra/cdk/stack.py's CfnOutputs):
+#   vars.AWS_REGION
+#   vars.AWS_DBT_BUILD_BUCKET        (CfnOutput: BucketName)
+#   vars.AWS_DBT_BUILD_ROLE_ARN      (CfnOutput: GitHubActionsRoleArn)
+#   vars.AWS_DBT_BUILD_INSTANCE_PROFILE_ARN  (CfnOutput: InstanceProfileArn)
+#   vars.AWS_DBT_BUILD_SECURITY_GROUP_ID     (CfnOutput: SecurityGroupId)
+#   vars.AWS_DBT_BUILD_SUBNET_ID      (any one ID from CfnOutput: SubnetIds)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # required for OIDC -- no long-lived AWS keys, see ADR-009
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  BUILD_TAG_VALUE: nyc-tlc-dbt-build # must match infra/cdk/stack.py's BUILD_TAG_VALUE
+  # Same instance family/size decided (and explained) in infra/cdk/stack.py --
+  # keep both in sync if you change one.
+  INSTANCE_TYPE: r6i.xlarge
+  POLL_TIMEOUT_MINUTES: 90
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DBT_BUILD_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render user-data script
+        run: |
+          sed \
+            -e "s|__S3_BUCKET__|${{ vars.AWS_DBT_BUILD_BUCKET }}|g" \
+            -e "s|__GITHUB_REPO__|${{ github.repository }}|g" \
+            scripts/aws_dbt_build_userdata.sh > /tmp/userdata.sh
+
+      - name: Look up latest Amazon Linux 2023 AMI
+        id: ami
+        run: |
+          AMI_ID=$(aws ssm get-parameter \
+            --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+            --query 'Parameter.Value' --output text)
+          echo "ami_id=$AMI_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Launch build instance
+        id: launch
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id "${{ steps.ami.outputs.ami_id }}" \
+            --instance-type "${{ env.INSTANCE_TYPE }}" \
+            --instance-initiated-shutdown-behavior terminate \
+            --iam-instance-profile Arn="${{ vars.AWS_DBT_BUILD_INSTANCE_PROFILE_ARN }}" \
+            --security-group-ids "${{ vars.AWS_DBT_BUILD_SECURITY_GROUP_ID }}" \
+            --subnet-id "${{ vars.AWS_DBT_BUILD_SUBNET_ID }}" \
+            --associate-public-ip-address \
+            --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}' \
+            --tag-specifications "ResourceType=instance,Tags=[{Key=Project,Value=${{ env.BUILD_TAG_VALUE }}},{Key=Name,Value=nyc-tlc-dbt-build-${{ github.run_id }}}]" \
+            --user-data file:///tmp/userdata.sh \
+            --query 'Instances[0].InstanceId' --output text)
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+          echo "Launched $INSTANCE_ID"
+
+      - name: Poll S3 for completion marker
+        id: poll
+        run: |
+          BUCKET="${{ vars.AWS_DBT_BUILD_BUCKET }}"
+          DEADLINE=$(( $(date +%s) + ${{ env.POLL_TIMEOUT_MINUTES }} * 60 ))
+          # Clear out markers from any previous run so we don't read stale state.
+          aws s3 rm "s3://${BUCKET}/warehouse/_SUCCESS" --only-show-errors || true
+          aws s3 rm "s3://${BUCKET}/warehouse/_FAILURE" --only-show-errors || true
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            if aws s3api head-object --bucket "$BUCKET" --key warehouse/_SUCCESS >/dev/null 2>&1; then
+              echo "result=success" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if aws s3api head-object --bucket "$BUCKET" --key warehouse/_FAILURE >/dev/null 2>&1; then
+              echo "result=failure" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "result=timeout" >> "$GITHUB_OUTPUT"
+
+      - name: Clean up instance if it's still running (failure or timeout safety net)
+        # The instance self-terminates on both success and script failure
+        # (see scripts/aws_dbt_build_userdata.sh's EXIT trap) -- this step
+        # only matters if the build *hung* without ever reaching that trap.
+        if: always()
+        run: |
+          STATE=$(aws ec2 describe-instances \
+            --instance-ids "${{ steps.launch.outputs.instance_id }}" \
+            --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null || echo "not-found")
+          if [ "$STATE" != "terminated" ] && [ "$STATE" != "shutting-down" ] && [ "$STATE" != "not-found" ]; then
+            echo "Instance still $STATE -- terminating"
+            aws ec2 terminate-instances --instance-ids "${{ steps.launch.outputs.instance_id }}"
+          fi
+
+      - name: Report result
+        run: |
+          case "${{ steps.poll.outputs.result }}" in
+            success) echo "dbt build succeeded, warehouse artifacts uploaded to s3://${{ vars.AWS_DBT_BUILD_BUCKET }}/warehouse/" ;;
+            failure) echo "::error::dbt build failed on the EC2 instance -- see s3://${{ vars.AWS_DBT_BUILD_BUCKET }}/warehouse/_FAILURE and the instance's console output"; exit 1 ;;
+            *) echo "::error::Timed out after ${{ env.POLL_TIMEOUT_MINUTES }} minutes waiting for completion marker"; exit 1 ;;
+          esac

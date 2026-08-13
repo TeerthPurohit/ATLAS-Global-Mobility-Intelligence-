@@ -32,3 +32,18 @@ SELECT
     s.latitude,
     s.longitude
 FROM {{ ref('stg_london_stations') }} s
+
+UNION ALL
+
+-- WorldMove grid cells for every non-NYC/London city (SPEC-016). area_id is
+-- pre-offset by stg_worldmove_grid to avoid colliding with NYC zone ids
+-- (1-265) or London station ids (max observed 300253).
+SELECT
+    g.area_id,
+    g.city_id,
+    g.city_key || '#' || g.cell_index AS name,
+    'grid_cell'                       AS area_type,
+    NULL                               AS parent_area_id,
+    g.latitude,
+    g.longitude
+FROM {{ ref('stg_worldmove_grid') }} g

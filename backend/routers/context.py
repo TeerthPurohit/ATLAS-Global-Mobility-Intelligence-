@@ -1,13 +1,14 @@
 """Context APIs - Weather, Holiday, Traffic (Part 3 of API Decomposition).
 
 Environmental/context information separated from mobility predictions.
+An unresolvable city_id is a client error (400), never a bare 500.
 """
 from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 # Add repo root for imports
 import sys
@@ -22,6 +23,19 @@ from backend.services import global_geography_service, journey_service  # noqa: 
 router = APIRouter(prefix="/api/context", tags=["Context"])
 
 
+def _resolve_coords(city_id: str) -> tuple[float, float]:
+    """Resolve a city to (lat, lon). Raises 400 -- not a bare 500 -- when the
+    city is unknown or has no coordinates."""
+    profile = global_geography_service.get_city_profile(city_id)
+    if not profile:
+        raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
+    lat = profile.get("latitude")
+    lon = profile.get("longitude")
+    if lat is None or lon is None:
+        raise HTTPException(status_code=400, detail=f"City profile missing coordinates for {city_id}")
+    return float(lat), float(lon)
+
+
 @router.get("/weather", response_model=WeatherResponse)
 def weather(
     city_id: str = Query(..., description="City identifier"),
@@ -31,33 +45,37 @@ def weather(
 ) -> WeatherResponse:
     """Get weather for a city at a specific time.
 
-    Accepts either city_id or lat/lon coordinates.
+    Accepts either city_id or lat/lon coordinates. Reports the adapter's real
+    0-1 weather severity score under `severity`; `temperature` is always None
+    because no adapter here returns one (see WeatherResponse docstring).
     """
-    # Resolve coordinates from city_id if needed
     if lat is None or lon is None:
-        profile = global_geography_service.get_city_profile(city_id)
-        if not profile:
-            raise ValueError(f"Cannot resolve coordinates for city_id={city_id}")
-        lat = profile.get("latitude")
-        lon = profile.get("longitude")
-        if lat is None or lon is None:
-            raise ValueError(f"City profile missing coordinates for {city_id}")
+        lat, lon = _resolve_coords(city_id)
 
-    # Parse timestamp
     if timestamp:
-        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        try:
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"invalid timestamp={timestamp!r}: expected ISO 8601")
     else:
-        dt = datetime.utcnow()
+        dt = datetime.now()
 
-    # Fetch weather
     weather_result = weather_openmeteo.fetch(lat, lon, dt)
 
+    severity = weather_result.value if weather_result.basis == "computed" else None
+    note = None
+    if severity is not None:
+        note = "0-1 weather severity (precipitation-driven, extreme-temp bump) -- not live temperature"
+    elif weather_result.reason:
+        note = weather_result.reason
+
     return WeatherResponse(
-        temperature=weather_result.value if weather_result.value is not None else None,
+        temperature=None,
         humidity=None,  # Open-Meteo adapter doesn't return humidity currently
         precipitation=None,
         wind_speed=None,
-        weather_condition=None,
+        weather_condition=note,
+        severity=severity,
         source=weather_result.source,
         timestamp=dt,
         city_id=city_id,
@@ -72,35 +90,35 @@ def holiday(
     date: str | None = Query(None, description="ISO date (YYYY-MM-DD), defaults to today"),
 ) -> HolidayResponse:
     """Check if a date is a holiday in the city's country."""
-    # Resolve coordinates from city_id if needed
+    profile = None
     if lat is None or lon is None:
         profile = global_geography_service.get_city_profile(city_id)
         if not profile:
-            raise ValueError(f"Cannot resolve coordinates for city_id={city_id}")
+            raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
         lat = profile.get("latitude")
         lon = profile.get("longitude")
         if lat is None or lon is None:
-            raise ValueError(f"City profile missing coordinates for {city_id}")
+            raise HTTPException(status_code=400, detail=f"City profile missing coordinates for {city_id}")
 
-    # Parse date
     if date:
-        dt = datetime.fromisoformat(date)
+        try:
+            dt = datetime.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"invalid date={date!r}: expected YYYY-MM-DD")
     else:
-        dt = datetime.utcnow()
+        dt = datetime.now()
 
-    # Fetch holiday info
     holiday_result = holidays_nager.fetch(lat, lon, dt)
 
     is_holiday = holiday_result.value == 1.0 if holiday_result.value is not None else False
-    holiday_name = None
-    if is_holiday and holiday_result.reason:
-        # Extract holiday name from reason if available
-        holiday_name = holiday_result.reason
+    holiday_name = holiday_result.reason if is_holiday and holiday_result.reason else None
+
+    country = (profile or global_geography_service.get_city_profile(city_id) or {}).get("country_code", "XX")
 
     return HolidayResponse(
         is_holiday=is_holiday,
         holiday_name=holiday_name,
-        country=global_geography_service.get_city_profile(city_id).get("country_code", "XX") if global_geography_service.get_city_profile(city_id) else "XX",
+        country=country,
         date=dt.date().isoformat(),
         source=holiday_result.source,
     )
@@ -117,19 +135,10 @@ def traffic(
     Returns historical traffic score where available (NYC zone pairs).
     Does NOT claim real-time traffic - only historical estimates.
     """
-    # Resolve coordinates from city_id if needed
     if lat is None or lon is None:
-        profile = global_geography_service.get_city_profile(city_id)
-        if not profile:
-            raise ValueError(f"Cannot resolve coordinates for city_id={city_id}")
-        lat = profile.get("latitude")
-        lon = profile.get("longitude")
-        if lat is None or lon is None:
-            raise ValueError(f"City profile missing coordinates for {city_id}")
+        lat, lon = _resolve_coords(city_id)
 
-    # For now, build a context to get the historical traffic score
-    # This requires a mock dropoff to compute a zone pair
-    dt = datetime.utcnow()
+    dt = datetime.now()
     ctx = journey_service.build_context(lat, lon, lat + 0.01, lon + 0.01, dt, "car", city_id)
     features = journey_service.build_features(ctx)
 

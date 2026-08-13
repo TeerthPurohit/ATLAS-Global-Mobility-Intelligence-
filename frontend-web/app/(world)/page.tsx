@@ -4,11 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { SearchBar } from "@/components/world/SearchBar";
 import { WorldMap } from "@/components/world/WorldMap";
 import { Card } from "@/components/ui/Card";
-import { Compass, Globe, MapPin, Layers, TrendingUp } from "lucide-react";
+import { Globe, MapPin, TrendingUp, Layers } from "lucide-react";
 import { getCountries, searchCities } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
+import { useGsapEntrance } from "@/hooks/useGsapEntrance";
+import { NumberTicker } from "@/components/magic/NumberTicker";
 
 export default function WorldPage() {
+  const containerRef = useGsapEntrance(".gsap-reveal", { stagger: 0.1, yOffset: 20 });
+
   const { data: countries } = useQuery({
     queryKey: queryKeys.countries(),
     queryFn: getCountries,
@@ -31,68 +35,111 @@ export default function WorldPage() {
   ) || { OBSERVED: 0, TRANSFER: 0, NONE: 0 };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Hero Header */}
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <span className="flex items-center gap-2 text-xs uppercase tracking-widest text-brass font-mono font-semibold">
-              <Compass className="h-4 w-4 text-brass" />
-              Global Mobility Intelligence Platform
-            </span>
-            <h1 className="mt-2 font-display text-3xl font-bold leading-tight text-ink-primary sm:text-4xl">
-              Global City Mobility Coverage
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm sm:text-base text-ink-secondary">
-              Browse supported global cities by country. Each city displays its mobility intelligence tier: trained on local telemetry, modeled from WorldMove priors, or routing-only.
-            </p>
+    <div ref={containerRef} className="flex flex-col gap-12">
+      {/* Editorial Header */}
+      <section className="gsap-reveal flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <span className="font-label-sm text-brass tracking-wider">
+            Global Coverage
+          </span>
+          <h1 className="font-display-lg text-ink-primary">
+            Global City Mobility Intelligence
+          </h1>
+          <p className="font-body-md max-w-2xl text-ink-secondary">
+            Explore supported cities worldwide. Each location displays its intelligence tier: trained on local telemetry, modeled from global patterns, or routing-only.
+          </p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="w-full max-w-md">
+          <SearchBar placeholder="Search cities..." />
+        </div>
+      </section>
+
+      {/* Hero Map Container */}
+      <section className="gsap-reveal">
+        <div className="relative h-[600px] overflow-hidden border border-surface-border bg-surface-1">
+          <WorldMap />
+          {/* Subtle overlay gradient */}
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-surface-0/20 via-transparent to-transparent" />
+        </div>
+      </section>
+
+      {/* Divider */}
+      <div className="gsap-reveal separator-line" />
+
+      {/* Key Metrics Grid */}
+      <section className="gsap-reveal">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {/* Total Countries */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4 text-brass" />
+              <span className="font-label-sm text-ink-muted">Active Countries</span>
+            </div>
+            <div className="font-data-lg text-brass">
+              {totalCountries > 0 ? <NumberTicker value={totalCountries} duration={1.2} /> : "—"}
+            </div>
           </div>
-          <div className="w-full sm:w-96">
-            <SearchBar placeholder="Search cities (e.g., London, Tokyo, Mumbai)..." />
+
+          {/* Total Cities */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-verdigris" />
+              <span className="font-label-sm text-ink-muted">Supported Cities</span>
+            </div>
+            <div className="font-data-lg text-verdigris">
+              {totalCities > 0 ? <NumberTicker value={totalCities} duration={1.4} /> : "—"}
+            </div>
+          </div>
+
+          {/* OBSERVED Tier */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-brass" />
+              <span className="font-label-sm text-ink-muted">Observed Tier</span>
+            </div>
+            <div className="font-data-lg text-brass">
+              {tierCounts.OBSERVED > 0 ? <NumberTicker value={tierCounts.OBSERVED} duration={1} /> : "0"}
+            </div>
+          </div>
+
+          {/* TRANSFER Tier */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-verdigris" />
+              <span className="font-label-sm text-ink-muted">Transfer Tier</span>
+            </div>
+            <div className="font-data-lg text-verdigris">
+              {tierCounts.TRANSFER > 0 ? <NumberTicker value={tierCounts.TRANSFER} duration={1.1} /> : "0"}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* World Map Container */}
-      <section>
-        <Card className="h-[550px] overflow-hidden p-0 border border-surface-border">
-          <WorldMap />
-        </Card>
-      </section>
-
-      {/* Dynamic Metrics Bar */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="flex flex-col items-center justify-center gap-1.5 p-5 text-center border border-surface-border bg-surface-1/40">
-          <Globe className="h-5 w-5 text-brass mb-1" />
-          <div className="font-mono text-3xl font-bold text-brass" id="stat-countries">
-            {totalCountries || "—"}
+      {/* Information Section */}
+      <section className="gsap-reveal">
+        <div className="separator-line mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="flex flex-col gap-3">
+            <h3 className="font-section-md text-ink-primary">Observed Tier</h3>
+            <p className="font-body-sm text-ink-secondary">
+              Cities with trained models based on local telemetry data. These locations have the highest prediction accuracy.
+            </p>
           </div>
-          <div className="text-xs font-medium text-ink-muted">Active Countries</div>
-        </Card>
-
-        <Card className="flex flex-col items-center justify-center gap-1.5 p-5 text-center border border-surface-border bg-surface-1/40">
-          <MapPin className="h-5 w-5 text-verdigris mb-1" />
-          <div className="font-mono text-3xl font-bold text-verdigris" id="stat-cities">
-            {totalCities || "—"}
+          <div className="flex flex-col gap-3">
+            <h3 className="font-section-md text-ink-primary">Transfer Tier</h3>
+            <p className="font-body-sm text-ink-secondary">
+              Cities modeled using transfer learning from similar urban environments. Provides reliable baseline predictions.
+            </p>
           </div>
-          <div className="text-xs font-medium text-ink-muted">Supported Cities</div>
-        </Card>
-
-        <Card className="flex flex-col items-center justify-center gap-1.5 p-5 text-center border border-surface-border bg-surface-1/40">
-          <TrendingUp className="h-5 w-5 text-brass mb-1" />
-          <div className="font-mono text-3xl font-bold text-brass" id="stat-observed">
-            {tierCounts.OBSERVED}
+          <div className="flex flex-col gap-3">
+            <h3 className="font-section-md text-ink-primary">Routing Only</h3>
+            <p className="font-body-sm text-ink-secondary">
+              Cities with routing capabilities. Predictions based on geographic and network analysis.
+            </p>
           </div>
-          <div className="text-xs font-medium text-ink-muted">OBSERVED Tier Cities</div>
-        </Card>
-
-        <Card className="flex flex-col items-center justify-center gap-1.5 p-5 text-center border border-surface-border bg-surface-1/40">
-          <Layers className="h-5 w-5 text-verdigris mb-1" />
-          <div className="font-mono text-3xl font-bold text-verdigris" id="stat-transfer">
-            {tierCounts.TRANSFER}
-          </div>
-          <div className="text-xs font-medium text-ink-muted">TRANSFER Tier Cities</div>
-        </Card>
+        </div>
       </section>
     </div>
   );

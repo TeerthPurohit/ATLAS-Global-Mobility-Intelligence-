@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Search, X, MapPin, Globe } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -15,15 +15,23 @@ interface SearchBarProps {
 
 export function SearchBar({ placeholder = "Search cities, countries...", onResultClick }: SearchBarProps) {
   const [query, setQuery] = useState("");
+  // debouncedQuery is what actually triggers the API call — updated 300ms after typing stops
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Debounce: only update debouncedQuery 300ms after the user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const { data, isLoading } = useQuery({
-    queryKey: queryKeys.cities({ q: query || undefined }),
-    queryFn: () => searchCities({ q: query, limit: 10 }),
-    enabled: query.length >= 2,
+    queryKey: queryKeys.cities({ q: debouncedQuery || undefined }),
+    queryFn: () => searchCities({ q: debouncedQuery, limit: 10 }),
+    enabled: debouncedQuery.length >= 2,
   });
 
   useEffect(() => {
@@ -58,6 +66,7 @@ export function SearchBar({ placeholder = "Search cities, countries...", onResul
       router.push(`/city/${city.id}`);
     }
     setQuery("");
+    setDebouncedQuery("");
     setIsOpen(false);
     setFocusedIndex(-1);
   }, [onResultClick, router]);
@@ -71,6 +80,7 @@ export function SearchBar({ placeholder = "Search cities, countries...", onResul
 
   const clearQuery = () => {
     setQuery("");
+    setDebouncedQuery("");
     setIsOpen(false);
     setFocusedIndex(-1);
     inputRef.current?.focus();
@@ -163,5 +173,3 @@ export function SearchBar({ placeholder = "Search cities, countries...", onResul
     </div>
   );
 }
-
-import { useRef } from "react";

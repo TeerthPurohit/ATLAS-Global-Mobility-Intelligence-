@@ -12,9 +12,10 @@ interface TierBadgeProps {
   tier: string;
   size?: "sm" | "md" | "lg";
   showLabel?: boolean;
+  title?: string;
 }
 
-export function TierBadge({ tier, size = "md", showLabel = true }: TierBadgeProps) {
+export function TierBadge({ tier, size = "md", showLabel = true, title }: TierBadgeProps) {
   const colors = TIER_COLORS[tier] || TIER_COLORS.NONE;
   const sizeClasses = {
     sm: "px-2 py-0.5 text-[10px] gap-1",
@@ -39,7 +40,7 @@ export function TierBadge({ tier, size = "md", showLabel = true }: TierBadgeProp
         "border",
         colors.text
       )}
-      title={showLabel ? labelMap[tier] : undefined}
+      title={title || (showLabel ? labelMap[tier] : undefined)}
     >
       <svg
         width={size === "sm" ? 6 : size === "md" ? 8 : 10}

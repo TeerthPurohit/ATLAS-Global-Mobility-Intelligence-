@@ -20,7 +20,7 @@ from rag import journey_narrative  # noqa: E402
 from fastapi import APIRouter, Query
 
 from backend.predictors.base import PredictionResult
-from backend.schemas import JourneyEstimate, JourneyRequest, PredictionOut
+from backend.schemas import JourneyEstimate, JourneyHistoryEntry, JourneyRequest, PredictionOut
 from backend.services import journey_service, prediction_log
 
 router = APIRouter(prefix="/journey", tags=["journey"])
@@ -81,9 +81,9 @@ def estimate(req: JourneyRequest) -> JourneyEstimate:
     return result
 
 
-@router.get("/history")
-def history(limit: int = Query(50, ge=1, le=200)) -> list[dict]:
-    return prediction_log.get_recent_predictions(limit=limit)
+@router.get("/history", response_model=list[JourneyHistoryEntry])
+def history(limit: int = Query(50, ge=1, le=200)) -> list[JourneyHistoryEntry]:
+    return [JourneyHistoryEntry(**row) for row in prediction_log.get_recent_predictions(limit=limit)]
 
 
 @router.get("/features")

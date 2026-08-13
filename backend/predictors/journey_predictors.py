@@ -118,6 +118,7 @@ def predict_congestion(features: JourneyFeatures) -> PredictionResult:
         reason=f"fusion of historical speed and weather severity (score={score:.2f}), no ground truth for the fusion itself",
         confidence=round(BASIS_CONFIDENCE["modeled_estimate"] * inputs_present / 2, 2),
         method="traffic_weather_fusion",
+        score=round(score, 2),
     )
 
 
@@ -163,6 +164,7 @@ def predict_availability(ctx: JourneyContext, features: JourneyFeatures) -> Pred
         # proxy can never outscore a measured component.
         confidence=round(min(confidence_pct / 100, BASIS_CONFIDENCE["modeled_estimate"]), 2),
         method="availability_prior_x_demand_pressure",
+        score=round(availability_score, 2),
     )
 
 
@@ -188,6 +190,7 @@ def predict_surge_risk(ctx: JourneyContext, features: JourneyFeatures) -> Predic
         value=bucket, unit=None, basis="modeled_estimate", source="surge_proxy",
         reason=f"expected +{pct_low}% to +{pct_high}% based on current demand momentum vs. zone baseline",
         confidence=BASIS_CONFIDENCE["modeled_estimate"], method="demand_momentum_proxy",
+        score=round(risk, 2),
     )
 
 

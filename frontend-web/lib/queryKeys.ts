@@ -11,18 +11,18 @@ export const queryKeys = {
   cityZones: (cityId: string) => ["city", "zones", cityId] as const,
 
   // Journey
-  journeyEstimate: (req: Record<string, unknown>) => ["journey", "estimate", req] as const,
+  journeyEstimate: (req: unknown) => ["journey", "estimate", req] as const,
   journeyHistory: (limit: number) => ["journey", "history", limit] as const,
 
   // Mobility (granular)
-  route: (req: Record<string, unknown>) => ["mobility", "route", req] as const,
-  fare: (req: Record<string, unknown>) => ["mobility", "fare", req] as const,
-  demand: (req: Record<string, unknown>) => ["mobility", "demand", req] as const,
-  congestion: (req: Record<string, unknown>) => ["mobility", "congestion", req] as const,
-  availability: (req: Record<string, unknown>) => ["mobility", "availability", req] as const,
-  surge: (req: Record<string, unknown>) => ["mobility", "surge", req] as const,
-  carbon: (req: Record<string, unknown>) => ["mobility", "carbon", req] as const,
-  bestDeparture: (req: Record<string, unknown>) => ["mobility", "bestDeparture", req] as const,
+  route: (req: unknown) => ["mobility", "route", req] as const,
+  fare: (req: unknown) => ["mobility", "fare", req] as const,
+  demand: (req: unknown) => ["mobility", "demand", req] as const,
+  congestion: (req: unknown) => ["mobility", "congestion", req] as const,
+  availability: (req: unknown) => ["mobility", "availability", req] as const,
+  surge: (req: unknown) => ["mobility", "surge", req] as const,
+  carbon: (req: unknown) => ["mobility", "carbon", req] as const,
+  bestDeparture: (req: unknown) => ["mobility", "bestDeparture", req] as const,
 
   // Context
   weather: (cityId: string, params?: Record<string, unknown>) => ["context", "weather", cityId, params] as const,

@@ -44,7 +44,7 @@ export function TabsList({ children, className }: TabsListProps) {
   return (
     <div
       className={cn(
-        "inline-flex items-center justify-center gap-1 rounded-lg bg-surface-1 p-1",
+        "flex items-center gap-6 border-b border-surface-border",
         className
       )}
       role="tablist"
@@ -77,11 +77,10 @@ export function TabsTrigger({ value, children, className, disabled }: TabsTrigge
       disabled={disabled}
       onClick={() => !disabled && onValueChange(value)}
       className={cn(
-        "relative inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brass/50 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0 disabled:opacity-50 disabled:cursor-not-allowed",
+        "relative inline-flex items-center justify-center gap-2 px-1 py-3 font-section-md text-sm transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed",
         isActive
-          ? "bg-surface-0 text-ink-primary shadow-sm"
-          : "text-ink-muted hover:text-ink-secondary",
-        className
+          ? "text-brass border-b-2 border-brass"
+          : "text-ink-secondary hover:text-ink-primary border-b-2 border-transparent"
       )}
     >
       {children}
@@ -109,7 +108,7 @@ export function TabsContent({ value, children, className }: TabsContentProps) {
       role="tabpanel"
       id={`tabs-content-${value}`}
       aria-labelledby={`tabs-trigger-${value}`}
-      className={cn("mt-4 animate-in fade-in-0 zoom-in-95 duration-200", className)}
+      className={cn("mt-6 animate-in fade-in-0 zoom-in-95 duration-200", className)}
     >
       {children}
     </div>

@@ -23,16 +23,19 @@ services:
       - ./dbt_project:/app/dbt_project
     depends_on:
       - qdrant
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
-  frontend:
+  frontend-web:
     build:
-      context: frontend
+      context: ./frontend-web
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* is inlined at build time, and this URL is resolved by the
+        # user's browser -- not from inside the container -- so it must be the
+        # host-published address, never http://backend:8000.
+        - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
     ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      - "3000:3000"
     depends_on:
       - backend
 

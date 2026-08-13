@@ -4,7 +4,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { PredictionField } from "@/components/journey/PredictionField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { getCarbon, type PredictionRequest, type CarbonResponse } from "@/lib/api";
+import { getCarbon, mobilityToPrediction, type PredictionRequest, type CarbonResponse, type PredictionOut } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { Leaf } from "lucide-react";
@@ -29,6 +29,17 @@ function CarbonCardSkeleton() {
 }
 
 function CarbonCardContent({ data }: { data: CarbonResponse }) {
+  const pred = mobilityToPrediction(data.carbon);
+  const confPred: PredictionOut = {
+    value: Math.round((data.carbon.confidence || 0) * 100),
+    unit: "%",
+    basis: data.carbon.status || "unavailable",
+    source: data.carbon.source || "carbon",
+    reason: null,
+    data_vintage: null,
+    value_usd: null,
+  };
+
   return (
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
@@ -36,8 +47,8 @@ function CarbonCardContent({ data }: { data: CarbonResponse }) {
         Carbon Emissions
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="CO₂ Emissions" prediction={data.carbon} />
-        <PredictionField label="Confidence" prediction={{ value: Math.round((data.carbon.confidence || 0) * 100), unit: "%", basis: data.carbon.basis, source: data.carbon.source, reason: null, data_vintage: null, value_usd: null }} />
+        <PredictionField label="CO₂ Emissions" prediction={pred} />
+        <PredictionField label="Confidence" prediction={confPred} />
       </div>
       {data.request_id && (
         <div className="mt-3 pt-3 border-t border-surface-border text-xs text-ink-muted font-mono">

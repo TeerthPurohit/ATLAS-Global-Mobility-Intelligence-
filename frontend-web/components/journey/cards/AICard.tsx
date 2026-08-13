@@ -54,7 +54,7 @@ function AICardContent({ data, isStreaming }: { data: ChatResponse | null; isStr
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brass opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-brass" />
           </span>
-          {data.route === "sql" ? "SQL grounded" : "Retrieval grounded"}
+          {data.route === "numeric" ? "SQL grounded" : "Retrieval grounded"}
         </span>
       </CardTitle>
       <div className="mt-3 relative z-10">
@@ -95,7 +95,7 @@ export function AICard({
     queryFn: async () => {
       setIsStreaming(true);
       try {
-        const resp = await sendChatMessage({ question: prompt });
+        const resp = await sendChatMessage({ question: prompt, city_id: cityId });
         setRecommendation(resp);
         return resp;
       } finally {

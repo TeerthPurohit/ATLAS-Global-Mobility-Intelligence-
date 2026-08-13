@@ -4,7 +4,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { PredictionField } from "@/components/journey/PredictionField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { getCongestion, type PredictionRequest, type CongestionResponse } from "@/lib/api";
+import { getCongestion, mobilityToPrediction, type PredictionRequest, type CongestionResponse, type PredictionOut } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { Car } from "lucide-react";
@@ -29,6 +29,17 @@ function CongestionCardSkeleton() {
 }
 
 function CongestionCardContent({ data }: { data: CongestionResponse }) {
+  const pred = mobilityToPrediction(data.congestion);
+  const confPred: PredictionOut = {
+    value: Math.round((data.congestion.confidence || 0) * 100),
+    unit: "%",
+    basis: data.congestion.status || "unavailable",
+    source: data.congestion.source || "congestion",
+    reason: null,
+    data_vintage: null,
+    value_usd: null,
+  };
+
   return (
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
@@ -36,8 +47,8 @@ function CongestionCardContent({ data }: { data: CongestionResponse }) {
         Congestion
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Congestion Level" prediction={data.congestion} />
-        <PredictionField label="Confidence" prediction={{ value: Math.round((data.congestion.confidence || 0) * 100), unit: "%", basis: data.congestion.basis, source: data.congestion.source, reason: null, data_vintage: null, value_usd: null }} />
+        <PredictionField label="Congestion Level" prediction={pred} />
+        <PredictionField label="Confidence" prediction={confPred} />
       </div>
       {data.request_id && (
         <div className="mt-3 pt-3 border-t border-surface-border text-xs text-ink-muted font-mono">

@@ -1,9 +1,5 @@
 import type { Config } from "tailwindcss";
 
-// Design tokens: navigational-instrument palette (chart-table dark surfaces,
-// brass = "computed"/certain, verdigris = "modeled_estimate", oxide =
-// "unavailable" -- see basis system in lib/api.ts). `accent` is kept as an
-// alias for `brass` since Button/Input/Select/NavBar already reference it.
 const config: Config = {
   darkMode: "class",
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
@@ -44,6 +40,26 @@ const config: Config = {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "Georgia", "serif"],
         mono: ["var(--font-mono)", "SFMono-Regular", "monospace"],
+      },
+      keyframes: {
+        "border-beam": {
+          "100%": {
+            "offset-distance": "100%",
+          },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        spotlight: {
+          "0%": { opacity: "0", transform: "translate(-50%, -50%) scale(0.8)" },
+          "100%": { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+        },
+      },
+      animation: {
+        "border-beam": "border-beam var(--duration) infinite linear",
+        shimmer: "shimmer 2.5s infinite linear",
+        spotlight: "spotlight 0.5s ease-out forwards",
       },
     },
   },

@@ -16,12 +16,21 @@ export default function CountryPage() {
   const params = useParams();
   const countryCode = params.code as string;
 
-  const { data: countries } = useQuery({
+  const { data: countries, isLoading: countriesLoading } = useQuery({
     queryKey: queryKeys.countries(),
     queryFn: getCountries,
   });
 
   const country = countries?.find((c) => c.iso_code.toLowerCase() === countryCode.toLowerCase());
+
+  if (countriesLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="h-16 w-16 rounded-xl bg-surface-1 animate-pulse" />
+        <div className="h-6 w-48 bg-surface-1 animate-pulse rounded" />
+      </div>
+    );
+  }
 
   const { data: tierData } = useQuery({
     queryKey: queryKeys.cities({ country: countryCode }),

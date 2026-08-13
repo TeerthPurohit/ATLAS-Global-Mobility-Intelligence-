@@ -1,0 +1,36 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "c0d9f24649426c60a1bc01108070535a40353ae6cd8ceccb812969319b936e5d": {
+      "displayName": "NycTlcDbtBuildStack/Custom::AWSCDKOpenIdConnectProviderCustomResourceProvider Code",
+      "source": {
+        "path": "asset.c0d9f24649426c60a1bc01108070535a40353ae6cd8ceccb812969319b936e5d",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "398031303410-ap-south-1-18a7aa09": {
+          "bucketName": "cdk-hnb659fds-assets-398031303410-ap-south-1",
+          "objectKey": "c0d9f24649426c60a1bc01108070535a40353ae6cd8ceccb812969319b936e5d.zip",
+          "region": "ap-south-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::398031303410:role/cdk-hnb659fds-file-publishing-role-398031303410-ap-south-1"
+        }
+      }
+    },
+    "f7e68f2d8d4623415b50672b42c1be6805bc0ecd07d16f6c212c9c02c5f52de6": {
+      "displayName": "NycTlcDbtBuildStack Template",
+      "source": {
+        "path": "NycTlcDbtBuildStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "398031303410-ap-south-1-f2b5fdf7": {
+          "bucketName": "cdk-hnb659fds-assets-398031303410-ap-south-1",
+          "objectKey": "f7e68f2d8d4623415b50672b42c1be6805bc0ecd07d16f6c212c9c02c5f52de6.json",
+          "region": "ap-south-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::398031303410:role/cdk-hnb659fds-file-publishing-role-398031303410-ap-south-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

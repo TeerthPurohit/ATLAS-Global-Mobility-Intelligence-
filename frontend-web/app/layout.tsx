@@ -1,37 +1,38 @@
 import type { Metadata } from "next";
-import { Inter, IBM_Plex_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { AppProvider } from "@/context/AppContext";
 import { NavBar } from "@/components/layout/NavBar";
 import { CommandPalette } from "@/components/layout/CommandPalette";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-display", display: "swap" });
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-mono",
-  display: "swap",
-});
+import { SmoothScrollProvider } from "@/components/layout/SmoothScrollProvider";
 
 export const metadata: Metadata = {
-  title: "Global Mobility Intelligence",
-  description: "Fare, ETA, demand, and risk intelligence engine with capability-aware basis transparency.",
+  title: "WorldMove | Mobility Intelligence",
+  description: "Global urban mobility intelligence platform. Understand demand, fares, and patterns across NYC, London, and 500+ WorldMove-covered cities.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-theme="dark">
-      <body
-        className={`min-h-screen font-sans bg-surface-0 text-ink-primary ${inter.variable} ${outfit.variable} ${plexMono.variable}`}
-      >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="min-h-screen font-body-md bg-surface-0 text-ink-primary">
         <Providers>
-          <AppProvider>
-            <NavBar />
-            <CommandPalette />
-            <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8">{children}</main>
-          </AppProvider>
+          <SmoothScrollProvider>
+            <AppProvider>
+              <NavBar />
+              <CommandPalette />
+              <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
+                {children}
+              </main>
+            </AppProvider>
+          </SmoothScrollProvider>
         </Providers>
       </body>
     </html>

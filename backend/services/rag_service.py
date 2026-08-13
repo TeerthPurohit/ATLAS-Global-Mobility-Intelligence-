@@ -88,21 +88,62 @@ def _answer_context_only(question: str, city_id: str) -> dict[str, Any]:
     }
 
 
+_PUBLIC_ROUTES = frozenset({"numeric", "explanatory"})
+
+
+def _public_route(route: str) -> str:
+    """Map every internal route label onto the public ChatRoute contract
+    (numeric | explanatory). "context_grounded" -- the context-only tier's
+    LLM-narrated answer over real geography/weather data -- is the
+    explanatory family."""
+    return route if route in _PUBLIC_ROUTES else "explanatory"
+
+
 def answer_question(question: str, session_id: str | None = None, city_id: str = "nyc") -> dict[str, Any]:
     tier = cities_registry.get_chat_tier(city_id)
     if tier == "context_only":
         res = _answer_context_only(question, city_id)
         res["session_id"] = session_id or res["session_id"]
-        return res
-    return rag_pipeline.answer(
-        question=question, session_id=session_id,
-        db_path=_CITY_DB_PATH.get(city_id, rag_pipeline.DEFAULT_DB_PATH),
-        schema=_CITY_SCHEMA.get(city_id, NYC_SCHEMA),
-        allow_explanatory=(tier == "full_rag"),
-    )
+    else:
+        res = rag_pipeline.answer(
+            question=question, session_id=session_id,
+            db_path=_CITY_DB_PATH.get(city_id, rag_pipeline.DEFAULT_DB_PATH),
+            schema=_CITY_SCHEMA.get(city_id, NYC_SCHEMA),
+            allow_explanatory=(tier == "full_rag"),
+        )
+    res["route"] = _public_route(res["route"])
+    return res
 
 
-def stream_answer(question: str, session_id: str | None = None) -> Generator[dict[str, Any], None, None]:
+def stream_answer(question: str, session_id: str | None = None, city_id: str = "nyc") -> Generator[dict[str, Any], None, None]:
+    """Streaming twin of answer_question -- same city_id routing, so WS
+    /chat/stream and POST /chat behave identically per city tier. Backward
+    compatible: a caller that omits city_id keeps the original NYC default.
+
+    A "done" frame's payload carries the answer-family fields; the router
+    (chat.py) is responsible for echoing city_id/area_id onto it.
+    """
+    tier = cities_registry.get_chat_tier(city_id)
+    if tier == "context_only":
+        res = _answer_context_only(question, city_id)
+        res["session_id"] = session_id or res["session_id"]
+        res["route"] = _public_route(res["route"])
+        yield {"type": "chunk", "text": res["answer"]}
+        yield {"type": "done", "payload": res}
+        return
+    if tier == "sql_only":
+        # London has no insight-doc corpus, so answer_stream's explanatory
+        # branch would never emit a "done" frame -- stream the same
+        # SQL-grounded answer POST /chat returns instead.
+        res = rag_pipeline.answer(
+            question=question, session_id=session_id,
+            db_path=_CITY_DB_PATH[city_id], schema=_CITY_SCHEMA[city_id],
+            allow_explanatory=False,
+        )
+        res["route"] = _public_route(res["route"])
+        yield {"type": "chunk", "text": res["answer"]}
+        yield {"type": "done", "payload": res}
+        return
     yield from rag_pipeline.answer_stream(question=question, session_id=session_id)
 
 

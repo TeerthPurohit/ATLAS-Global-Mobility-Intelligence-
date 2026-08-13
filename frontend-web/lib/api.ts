@@ -18,6 +18,7 @@ export interface PredictionOut {
   confidence?: number | null;
   method?: string | null;
   ui_label?: string | null;
+  model_version?: string | null;
 }
 
 export interface MobilityResponse {
@@ -28,6 +29,20 @@ export interface MobilityResponse {
   source: string;
   confidence: number;
   reason: string | null;
+}
+
+export function mobilityToPrediction(mob: MobilityResponse): PredictionOut {
+  return {
+    value: mob.value,
+    unit: mob.unit,
+    basis: mob.status || "unavailable",
+    source: mob.source || "mobility/engine",
+    reason: mob.reason || null,
+    data_vintage: null,
+    value_usd: null,
+    confidence: mob.confidence ?? null,
+    method: mob.method ?? null,
+  };
 }
 
 export interface JourneyEstimate {
@@ -100,6 +115,7 @@ export interface JourneyHistoryEntry {
   fare_basis: Basis | null;
   confidence_value: number | null;
   response_json: string;
+  city_id?: string;
 }
 
 export async function getJourneyHistory(limit = 50): Promise<JourneyHistoryEntry[]> {
@@ -112,11 +128,13 @@ export async function getJourneyHistory(limit = 50): Promise<JourneyHistoryEntry
 
 // --- Chat / AI Analyst (backend/routers/chat.py) ---
 
-export type ChatRoute = "sql" | "retrieval";
+export type ChatRoute = "numeric" | "explanatory";
 
 export interface ChatRequest {
   question: string;
   session_id?: string;
+  city_id?: string;
+  area_id?: number;
 }
 
 export interface ChatResponse {
@@ -124,6 +142,8 @@ export interface ChatResponse {
   route: ChatRoute;
   sql?: string | null;
   session_id: string;
+  city_id?: string | null;
+  area_id?: number | null;
 }
 
 export interface ChatMessage {
@@ -441,6 +461,7 @@ export interface WeatherResponse {
   precipitation: number | null;
   wind_speed: number | null;
   weather_condition: string | null;
+  severity: number | null;
   source: string;
   timestamp: string;
   city_id: string;
@@ -470,7 +491,7 @@ export interface TrafficResponse {
 export interface AnalyticsSummaryResponse {
   total_predictions: number;
   cities_served: number;
-  date_range: Record<string, string>;
+  date_range: { start: string | null; end: string | null };
   top_cities: Record<string, unknown>[];
 }
 
@@ -506,7 +527,8 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 // Countries & Cities
 export async function getCountries(): Promise<Country[]> {
-  return fetchJson<Country[]>("/api/countries");
+  const resp = await fetchJson<Country[] | { countries: Country[] }>("/api/countries");
+  return Array.isArray(resp) ? resp : resp.countries || [];
 }
 
 export async function searchCities(params: CitySearchParams = {}): Promise<CitySearchResponse> {
@@ -517,7 +539,43 @@ export async function searchCities(params: CitySearchParams = {}): Promise<CityS
   if (params.supported !== undefined) searchParams.set("supported", String(params.supported));
   if (params.page) searchParams.set("page", String(params.page));
   if (params.limit) searchParams.set("limit", String(params.limit));
-  return fetchJson<CitySearchResponse>(`/api/cities/search?${searchParams.toString()}`);
+  return fetchJson<CitySearchResponse>(`/api/cities?${searchParams.toString()}`);
+}
+
+// NYC/London's real zone/station bbox coverage -- mirrors backend/services/
+// geography_service.py's _NYC_BBOX/_LONDON_BBOX exactly, so a pickup inside
+// either city resolves the same way client-side (avoiding a network round
+// trip for the two cities that don't need one) as it would server-side.
+const NYC_BBOX = { minLat: 40.49, minLon: -74.26, maxLat: 40.92, maxLon: -73.68 };
+const LONDON_BBOX = { minLat: 51.28, minLon: -0.51, maxLat: 51.70, maxLon: 0.33 };
+
+function detectRegisteredCity(lat: number, lon: number): "nyc" | "london" | null {
+  if (lat >= NYC_BBOX.minLat && lat <= NYC_BBOX.maxLat && lon >= NYC_BBOX.minLon && lon <= NYC_BBOX.maxLon) return "nyc";
+  if (lat >= LONDON_BBOX.minLat && lat <= LONDON_BBOX.maxLat && lon >= LONDON_BBOX.minLon && lon <= LONDON_BBOX.maxLon) return "london";
+  return null;
+}
+
+/**
+ * Resolves a picked address to the real backend city_id that every
+ * /api/mobility/* call needs -- NYC/London by bbox (no request needed),
+ * anything else via /api/geography/search/global, which is backed by the
+ * real global_cities registry (WorldMove-covered cities included), not a
+ * client-side guess. Returns null if nothing resolves (e.g. open ocean, or
+ * Nominatim gave no city name to search on) -- callers should treat that as
+ * "unavailable", not silently fall back to nyc.
+ */
+export async function resolveCityId(lat: number, lon: number, city?: string, countryCode?: string): Promise<string | null> {
+  const registered = detectRegisteredCity(lat, lon);
+  if (registered) return registered;
+  if (!city) return null;
+  const params = new URLSearchParams({ q: city, limit: "1" });
+  if (countryCode) params.set("country", countryCode.toUpperCase());
+  try {
+    const resp = await fetchJson<{ results: { id: string }[] }>(`/api/geography/search/global?${params.toString()}`);
+    return resp.results[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getCityProfile(cityId: string): Promise<CityProfileResponse> {
@@ -525,8 +583,7 @@ export async function getCityProfile(cityId: string): Promise<CityProfileRespons
 }
 
 export async function getCityCapabilities(cityId: string): Promise<Capabilities> {
-  const resp = await fetchJson<{ city_id: string; capabilities: Capabilities }>(`/api/cities/${cityId}/capabilities`);
-  return resp.capabilities;
+  return fetchJson<Capabilities>(`/api/cities/${cityId}/capabilities`);
 }
 
 export async function getCityTariff(cityId: string): Promise<CityTariffResponse> {

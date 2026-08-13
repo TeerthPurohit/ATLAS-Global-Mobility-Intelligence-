@@ -24,7 +24,7 @@ WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
 router = APIRouter(prefix="/zones", tags=["zones"])
 
-_zones: dict[int, Zone] = {}
+_zones: dict[int, Zone] | None = None
 
 
 def _load_zones() -> dict[int, Zone]:
@@ -53,12 +53,24 @@ def _load_zones() -> dict[int, Zone]:
     return zones
 
 
-_zones.update(_load_zones())
+def _get_zones() -> dict[int, Zone]:
+    """Lazily build the zone table on first request. Loaded once and cached
+    thereafter; a missing/unreadable warehouse degrades to an empty list
+    rather than failing the whole app at import time (matching every other
+    registry's defensive-load convention)."""
+    global _zones
+    if _zones is None:
+        try:
+            _zones = _load_zones()
+        except (duckdb.Error, OSError) as exc:  # noqa: BLE001 -- missing warehouse must not kill startup
+            print(f"[zones] could not load zone metadata: {exc}", flush=True)
+            _zones = {}
+    return _zones
 
 
 @router.get("", response_model=list[Zone], summary="List all NYC TLC zones", description="~265 zones, loaded once at startup.")
 def list_zones() -> list[Zone]:
-    return list(_zones.values())
+    return list(_get_zones().values())
 
 
 @router.get(
@@ -66,7 +78,7 @@ def list_zones() -> list[Zone]:
     responses={400: {"description": "unknown zone_id"}},
 )
 def get_zone(zone_id: int) -> Zone:
-    zone = _zones.get(zone_id)
+    zone = _get_zones().get(zone_id)
     if zone is None:
         raise HTTPException(status_code=400, detail=f"unknown zone_id={zone_id}")
     return zone

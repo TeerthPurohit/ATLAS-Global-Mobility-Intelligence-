@@ -11,64 +11,6 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Globe, MapPin } from "lucide-react";
 
-const MAP_STYLE = {
-  version: 8 as const,
-  sources: {
-    osm: {
-      type: "vector" as const,
-      url: "https://vectortiles.openmaptiles.org/osm.json",
-      attribution: "&copy; OpenMapTiles &copy; OpenStreetMap contributors",
-    },
-  },
-  layers: [
-    {
-      id: "background",
-      type: "background" as const,
-      paint: { "background-color": "var(--surface-0)" },
-    },
-    {
-      id: "water",
-      type: "fill" as const,
-      source: "osm",
-      "source-layer": "water",
-      paint: { "fill-color": "#121b2e", "fill-opacity": 0.9 },
-    },
-    {
-      id: "land",
-      type: "fill" as const,
-      source: "osm",
-      "source-layer": "landuse",
-      paint: { "fill-color": "var(--surface-1)", "fill-opacity": 0.5 },
-    },
-    {
-      id: "country-boundary",
-      type: "line" as const,
-      source: "osm",
-      "source-layer": "boundary",
-      filter: ["==", "boundary", "administrative"],
-      paint: { "line-color": "var(--surface-border)", "line-width": 1, "line-opacity": 0.6 },
-    },
-    {
-      id: "country-label",
-      type: "symbol" as const,
-      source: "osm",
-      "source-layer": "place",
-      filter: ["in", "class", "country"],
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Inter Medium"],
-        "text-size": 13,
-        "text-anchor": "center",
-      },
-      paint: {
-        "text-color": "var(--ink-secondary)",
-        "text-halo-color": "var(--surface-0)",
-        "text-halo-width": 2,
-      },
-    },
-  ],
-};
-
 const TIER_COLORS: Record<string, { bg: string; border: string; text: string; ring: string }> = {
   OBSERVED: { bg: "bg-brass/10", border: "border-brass/30", text: "text-brass", ring: "var(--brass)" },
   TRANSFER: { bg: "bg-verdigris/10", border: "border-verdigris/30", text: "text-verdigris", ring: "var(--verdigris)" },
@@ -166,7 +108,7 @@ export function WorldMap() {
     <div className="relative h-full w-full">
       <Map
         initialViewState={{ longitude: 0, latitude: 22, zoom: 1.3 }}
-        mapStyle={MAP_STYLE}
+        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
         style={{ width: "100%", height: "100%" }}
       />
 

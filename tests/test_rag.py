@@ -3,8 +3,9 @@
 are both branch-heavy parsing logic where a silent regression would be
 exactly the failure mode this project exists to avoid.
 """
+import os
 import sys
-import tempfile
+import uuid
 from pathlib import Path
 
 import pytest
@@ -82,24 +83,30 @@ def test_heuristic_classify_ambiguous_defaults_numeric():
     assert _heuristic_classify("Tell me about Zone 161") == NUMERIC
 
 
-# ---- session_store SQLite conversation persistence ----
+# ---- session_store Postgres conversation persistence ----
+# Needs a real DATABASE_URL (RDS or any Postgres) -- skipped otherwise since
+# there's no local Postgres fixture in this repo (ADR-009).
 
+@pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="DATABASE_URL not set")
 def test_session_store_crud():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test_session_history.db"
-        session_id = "test-session-123"
+    table_name = f"test_messages_{uuid.uuid4().hex[:8]}"
+    session_id = "test-session-123"
+    try:
+        assert not session_store.session_exists(session_id, table_name=table_name)
 
-        assert not session_store.session_exists(session_id, db_path=db_path)
+        session_store.save_message(session_id, "user", "Hello", table_name=table_name)
+        session_store.save_message(session_id, "assistant", "Hi there", route="numeric", sql="SELECT 1", table_name=table_name)
 
-        session_store.save_message(session_id, "user", "Hello", db_path=db_path)
-        session_store.save_message(session_id, "assistant", "Hi there", route="numeric", sql="SELECT 1", db_path=db_path)
+        assert session_store.session_exists(session_id, table_name=table_name)
 
-        assert session_store.session_exists(session_id, db_path=db_path)
-
-        history = session_store.get_session_history(session_id, db_path=db_path)
+        history = session_store.get_session_history(session_id, table_name=table_name)
         assert len(history) == 2
         assert history[0]["role"] == "user"
         assert history[0]["content"] == "Hello"
         assert history[1]["role"] == "assistant"
         assert history[1]["route"] == "numeric"
         assert history[1]["sql"] == "SELECT 1"
+    finally:
+        with session_store.get_connection() as conn:
+            conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+            conn.commit()

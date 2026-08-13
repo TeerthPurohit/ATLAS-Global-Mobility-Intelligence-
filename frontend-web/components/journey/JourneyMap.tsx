@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
-import Map, { Marker, Layer, Source, GeolocateControl } from "react-map-gl/maplibre";
+import Map, { Marker, Layer, Source } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { useWebGLPreservation, useReducedMotion } from "@/hooks/useWebGLPreservation";
+import { useReverseGeocode } from "@/hooks/useReverseGeocode";
 
 interface JourneyMapProps {
   pickup: { lat: number; lon: number };
@@ -91,9 +92,9 @@ const MAP_STYLE = {
   sprite: "https://tiles.openfreemap.org/styles/liberty/sprite",
 };
 
-const ROUTE_LINE_LAYER = {
+const ROUTE_LINE_LAYER: maplibregl.AddLayerObject = {
   id: "route-line",
-  type: "line" as const,
+  type: "line",
   source: "route-source",
   layout: { "line-join": "round", "line-cap": "round" },
   paint: {
@@ -154,7 +155,7 @@ export function JourneyMap({
       minLat = Math.min(minLat, lat);
       maxLat = Math.max(maxLat, lat);
     }
-    return [[minLon, minLat], [maxLon, maxLat]] as [number, number][];
+    return [[minLon, minLat], [maxLon, maxLat]] as maplibregl.LngLatBoundsLike;
   }, [routeGeometry]);
 
   // Detect mobile
@@ -188,7 +189,7 @@ export function JourneyMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE,
+      style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
       center: [center.longitude, center.latitude],
       zoom: 11,
       attributionControl: false,
@@ -197,13 +198,13 @@ export function JourneyMap({
     });
 
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
-    map.addControl(new GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false }), "top-right");
+    map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: false }), "top-right");
 
     map.on("load", () => {
       setMapLoaded(true);
       if (routeGeometry) {
         map.addSource(ROUTE_SOURCE_ID, { type: "geojson", data: routeGeometry });
-        map.addLayer(ROUTE_LINE_LAYER);
+        map.addLayer(ROUTE_LINE_LAYER as maplibregl.AddLayerObject);
         setRouteAdded(true);
       }
     });
@@ -259,18 +260,27 @@ export function JourneyMap({
     setIsFullScreen((prev) => !prev);
   }, []);
 
-  // Custom marker elements
+  // Named markers using Nominatim reverse geocoding
+  const pickupName = useReverseGeocode(pickup.lat, pickup.lon);
+  const dropoffName = useReverseGeocode(dropoff.lat, dropoff.lon);
+
   const PickupMarker = () => (
-    <div className="flex flex-col items-center" role="img" aria-label="Pickup location">
+    <div className="flex flex-col items-center" role="img" aria-label={`Pickup: ${pickupName}`}>
       <div className="w-3 h-3 rounded-full bg-brass border-2 border-surface-0 shadow-lg animate-pulse" />
-      <div className="mt-1 text-[10px] font-medium text-ink-primary bg-surface-0 px-1.5 py-0.5 rounded">Pickup</div>
+      <div className="mt-1 max-w-[140px] text-center text-[10px] font-medium text-ink-primary bg-surface-0/95 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-md leading-tight">
+        <span className="block text-brass text-[9px] font-semibold uppercase tracking-wide">Pickup</span>
+        <span className="block truncate">{pickupName}</span>
+      </div>
     </div>
   );
 
   const DropoffMarker = () => (
-    <div className="flex flex-col items-center" role="img" aria-label="Dropoff location">
+    <div className="flex flex-col items-center" role="img" aria-label={`Dropoff: ${dropoffName}`}>
       <div className="w-3 h-3 rounded-full bg-verdigris border-2 border-surface-0 shadow-lg" />
-      <div className="mt-1 text-[10px] font-medium text-ink-primary bg-surface-0 px-1.5 py-0.5 rounded">Dropoff</div>
+      <div className="mt-1 max-w-[140px] text-center text-[10px] font-medium text-ink-primary bg-surface-0/95 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-md leading-tight">
+        <span className="block text-verdigris text-[9px] font-semibold uppercase tracking-wide">Dropoff</span>
+        <span className="block truncate">{dropoffName}</span>
+      </div>
     </div>
   );
 
@@ -295,7 +305,7 @@ export function JourneyMap({
             <Map
               key={mapKeyValue}
               initialViewState={{ ...center, zoom: 11 }}
-              mapStyle={MAP_STYLE}
+              mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
               style={{ width: "100%", height: "100%" }}
               onLoad={() => setMapLoaded(true)}
             >
@@ -361,7 +371,7 @@ export function JourneyMap({
         <Map
           key={mapKeyValue}
           initialViewState={{ ...center, zoom: 11 }}
-          mapStyle={MAP_STYLE}
+          mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
           style={{ width: "100%", height: "100%" }}
           onLoad={() => setMapLoaded(true)}
         >

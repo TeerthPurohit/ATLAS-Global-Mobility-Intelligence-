@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Bot, Sparkles, Database } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { getChatHistory, streamChat, type ChatMessage, type ChatRoute } from "@/lib/api";
+import { motion, AnimatePresence } from "framer-motion";
+import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
 
-// Local message shape -- superset of ChatMessage so we can track in-flight
-// streaming assistant turns before the "done" frame lands.
 interface Turn {
   role: "user" | "assistant";
   content: string;
@@ -27,9 +27,6 @@ const EXAMPLE_PROMPTS = [
 
 const SESSION_KEY = "analyst_session_id";
 
-// Numbers/SQL results read as instrument readouts (font-mono), matching
-// PredictionField's treatment of numeric data -- a rough heuristic, not a
-// parser: any answer containing a digit gets the mono treatment.
 function looksNumeric(text: string): boolean {
   return /\d/.test(text);
 }
@@ -42,7 +39,6 @@ export default function AnalystPage() {
   const closeRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Restore session + history on mount, if we have one.
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null;
     if (!saved) return;
@@ -59,7 +55,6 @@ export default function AnalystPage() {
         )
       )
       .catch(() => {
-        // Stale/expired session id -- start fresh silently.
         localStorage.removeItem(SESSION_KEY);
         setSessionId(undefined);
       });
@@ -126,60 +121,100 @@ export default function AnalystPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-3xl flex-col">
-      <div className="flex-1 overflow-y-auto pr-1">
-        {turns.length === 0 ? (
-          <EmptyState onPick={ask} />
-        ) : (
-          <div className="flex flex-col gap-4 py-4">
-            {turns.map((turn, i) => (
-              <TurnBubble key={i} turn={turn} />
-            ))}
-            <div ref={bottomRef} />
-          </div>
-        )}
-      </div>
-
-      {wsError && (
-        <div className="mb-2 rounded-xl border border-dashed border-oxide/40 bg-oxide/5 px-3 py-2 text-xs text-oxide">
-          {wsError}
-        </div>
+    <div className="flex flex-col gap-12 h-full">
+      {/* Header - only show when no conversation */}
+      {turns.length === 0 && (
+        <section className="flex flex-col gap-3">
+          <span className="font-label-sm text-brass tracking-wider">
+            Conversational Intelligence
+          </span>
+          <h1 className="font-display-lg text-ink-primary">
+            Ask the City
+          </h1>
+          <p className="font-body-md max-w-2xl text-ink-secondary">
+            Ask questions about fares, demand, patterns, and mobility trends. Numeric questions are answered with SQL queries; explanatory questions use retrieval-augmented generation.
+          </p>
+        </section>
       )}
 
-      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-surface-border pt-4">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about fares, demand, or ride patterns..."
-          className="flex-1"
-        />
-        <Button type="submit" disabled={!input.trim()}>
-          <Send className="h-4 w-4" />
-        </Button>
-      </form>
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col gap-6 min-h-0">
+        {/* Messages Container */}
+        <div className="flex-1 overflow-y-auto pr-2">
+          {turns.length === 0 ? (
+            <EmptyState onPick={ask} />
+          ) : (
+            <div className="flex flex-col gap-6 py-6">
+              <AnimatePresence initial={false}>
+                {turns.map((turn, i) => (
+                  <TurnBubble key={i} turn={turn} />
+                ))}
+              </AnimatePresence>
+              <div ref={bottomRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Error Message */}
+        {wsError && (
+          <div className="rounded-sm border border-oxide/40 bg-oxide/5 px-4 py-3 font-body-sm text-oxide">
+            <p className="font-section-md mb-1">Connection Error</p>
+            <p>{wsError}</p>
+          </div>
+        )}
+
+        {/* Input Form */}
+        <form onSubmit={handleSubmit} className="flex gap-3 border-t border-surface-border pt-6">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask about fares, demand, or patterns..."
+            className="flex-1 bg-surface-1 border-surface-border focus:border-brass/50 transition-colors font-body-md"
+          />
+          <Button type="submit" disabled={!input.trim()} className="px-6">
+            <Send className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
 
 function EmptyState({ onPick }: { onPick: (q: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 text-center">
-      <div>
-        <h1 className="font-display text-2xl text-ink-primary">AI Analyst</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Ask a question -- numeric questions route to SQL against the trip warehouse, explanatory
-          questions route to retrieval over generated insight docs.
-        </p>
-      </div>
-      <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">
-        {EXAMPLE_PROMPTS.map((q) => (
-          <button
+    <div className="flex h-full flex-col items-center justify-center gap-8 text-center py-12">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="flex flex-col items-center gap-4"
+      >
+        <div className="p-3 bg-brass/10 rounded-sm">
+          <Sparkles className="h-8 w-8 text-brass" />
+        </div>
+        <div>
+          <h1 className="font-display-md text-ink-primary">Ask the City</h1>
+          <p className="mt-2 max-w-md font-body-md text-ink-secondary">
+            Ask questions about mobility patterns, fares, and demand. The system intelligently routes your query to either SQL analysis or retrieval-augmented generation.
+          </p>
+        </div>
+      </motion.div>
+
+      <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+        {EXAMPLE_PROMPTS.map((q, idx) => (
+          <motion.button
             key={q}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: idx * 0.06 }}
             onClick={() => onPick(q)}
-            className="rounded-xl border border-surface-border bg-surface-0 px-3 py-2 text-left text-sm text-ink-secondary transition-colors hover:border-brass/40 hover:text-ink-primary"
+            className="group relative border border-surface-border bg-surface-1 p-4 text-left font-body-sm text-ink-secondary transition-all hover:border-brass/40 hover:bg-surface-1/80 hover:text-ink-primary rounded-sm"
           >
-            {q}
-          </button>
+            <span className="flex items-center gap-3">
+              <Bot className="h-4 w-4 text-brass shrink-0 transition-transform group-hover:scale-110" />
+              <span>{q}</span>
+            </span>
+          </motion.button>
         ))}
       </div>
     </div>
@@ -191,38 +226,60 @@ function TurnBubble({ turn }: { turn: Turn }) {
   const numeric = !isUser && looksNumeric(turn.content);
 
   return (
-    <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[85%] rounded-2xl px-4 py-2.5", isUser ? "bg-accent text-accent-fg" : "bg-surface-2 text-ink-primary")}>
-        {!isUser && turn.route && (
-          <Badge basis={turn.route === "sql" ? "computed" : "modeled_estimate"} className="mb-1.5">
-            {turn.route === "sql" ? "SQL grounded" : "retrieval"}
-          </Badge>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className={cn("flex", isUser ? "justify-end" : "justify-start")}
+    >
+      <div className={cn("max-w-[75%] rounded-sm px-6 py-4 border", isUser ? "bg-brass text-brass-fg font-body-md border-brass" : "bg-surface-1 border-surface-border text-ink-primary")}>
+        {!isUser && (
+          <div className="flex items-center gap-2 mb-3">
+            {turn.route ? (
+              <Badge basis={turn.route === "numeric" ? "computed" : "modeled_estimate"}>
+                {turn.route === "numeric" ? "SQL Query" : "Retrieval"}
+              </Badge>
+            ) : turn.pending ? (
+              <span className="flex items-center gap-2 font-label-sm text-brass">
+                <PulsingStatusDot status="live" size={5} />
+                <span>Analyzing...</span>
+              </span>
+            ) : null}
+          </div>
         )}
-        <p className={cn("whitespace-pre-wrap text-sm", numeric && "font-mono")}>
+        <p className={cn("whitespace-pre-wrap font-body-md leading-relaxed", numeric && "font-mono")}>
           {turn.content}
-          {turn.pending && <span className="ml-0.5 animate-pulse">▍</span>}
+          {turn.pending && <span className="ml-1 inline-block animate-pulse text-brass font-bold">▍</span>}
         </p>
         {!isUser && turn.sql && <SqlBlock sql={turn.sql} />}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 function SqlBlock({ sql }: { sql: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mt-2">
+    <div className="mt-4 pt-4 border-t border-surface-border/60">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-xs uppercase tracking-wider text-brass hover:opacity-80"
+        className="flex items-center gap-2 font-label-sm text-brass hover:opacity-80 transition-opacity"
       >
-        {open ? "Hide" : "Show"} generated SQL
+        <Database className="h-4 w-4" />
+        {open ? "Hide" : "Show"} SQL Query
       </button>
-      {open && (
-        <pre className="mt-1.5 overflow-x-auto rounded-lg border border-surface-border bg-surface-0 p-3 font-mono text-xs text-ink-secondary">
-          {sql}
-        </pre>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.pre
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-3 overflow-x-auto rounded-sm border border-surface-border bg-surface-0 p-4 font-mono text-xs text-ink-secondary"
+          >
+            {sql}
+          </motion.pre>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -73,7 +73,7 @@ function CityCard({ city, onClick }: CityCardProps) {
 
       <div className="mt-4 pt-3 border-t border-surface-border/60 flex items-center justify-between text-xs text-ink-muted">
         <span className="font-mono text-[11px]">
-          Confidence: {city.model_status === "OBSERVED" ? "100%" : city.model_status === "TRANSFER" ? "75%" : "Basic"}
+          {city.model_status === "OBSERVED" ? "Model: local trip data" : city.model_status === "TRANSFER" ? "Model: WorldMove transfer" : "Routing + context only"}
         </span>
         <ArrowRight className="h-4 w-4 text-ink-muted transition-transform group-hover:translate-x-1 group-hover:text-brass" />
       </div>

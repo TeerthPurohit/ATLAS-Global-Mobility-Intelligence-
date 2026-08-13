@@ -130,14 +130,25 @@ def estimate_hourly_demand(city_id: str, lat: float, lon: float, at: datetime) -
     daily = estimate_city_demand(city_id, population, lat=lat, lon=lon, at=at)
     if daily.value is None:
         return daily
-    shape = model_service.hourly_shape_fraction(at.hour, at.weekday(), city_id="nyc") or (1.0 / 24.0)
+    # This city's own shape first (real for every WorldMove-covered city,
+    # SPEC-016's worldmove_city_hourly_shape) -- NYC's is only a fallback for
+    # a city with no WorldMove coverage at all, and that fallback is now the
+    # exception, not what every non-NYC/London city silently got.
+    own_shape = model_service.hourly_shape_fraction(at.hour, at.weekday(), city_id=city_id)
+    if own_shape is not None:
+        shape = own_shape
+        shape_source = f"{city_id}'s own measured hourly demand distribution (WorldMove-derived)"
+    else:
+        shape = model_service.hourly_shape_fraction(at.hour, at.weekday(), city_id="nyc") or (1.0 / 24.0)
+        shape_source = "NYC's measured hourly demand distribution (no WorldMove coverage for this city)"
     hourly_value = round(daily.value * shape, 2)
-    reason = f"{daily.reason}; hour-of-day split via NYC's measured hourly demand distribution for this day-of-week (a transferred shape, not city-specific)"
+    reason = f"{daily.reason}; hour-of-day split via {shape_source} for this day-of-week (a transferred shape, not city-specific)"
     # The tier/completeness confidence global_geography_service already
     # derives for this city -- reused, not a second invented number.
     tier_confidence = profile.get("confidence") if profile else None
+    shape_tag = "worldmove_hourly_shape" if own_shape is not None else "nyc_hourly_shape"
     return PredictionResult(
         value=hourly_value, unit="trips/hour", basis="modeled_estimate",
-        source=f"{daily.source} + nyc_hourly_shape", reason=reason,
+        source=f"{daily.source} + {shape_tag}", reason=reason,
         confidence=tier_confidence, method="population_scaling",
     )

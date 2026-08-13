@@ -1,10 +1,17 @@
 """Analytics APIs (Part 13 of API Decomposition).
 
 Frontend dashboard analytics operating on prediction logs/warehouse data.
+
+All aggregations read the real columns of the SQLite prediction log
+(`prediction_log.get_recent_predictions`): `requested_at` (aware UTC ISO
+string) for time bucketing and `response_json` (a JSON string of the full
+JourneyEstimate) for fare/distance/city extraction. Every timestamp is kept
+timezone-aware so bucketing never compares naive against aware datetimes.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Query
@@ -12,8 +19,6 @@ from fastapi import APIRouter, Query
 # Add repo root for imports
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-import duckdb
 
 from backend.schemas import (  # noqa: E402
     AnalyticsHistoryResponse,
@@ -23,43 +28,73 @@ from backend.schemas import (  # noqa: E402
 )
 from backend.services import platform_service, prediction_log  # noqa: E402
 
-WAREHOUSE_PATH = Path(__file__).resolve().parents[2] / "data" / "warehouse" / "nyc_rides.duckdb"
-
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
+
+_HISTORY_SCAN_LIMIT = 10000
+
+
+def _parse_requested_at(raw: str | None) -> datetime | None:
+    """Parse a log `requested_at` ISO string into an aware UTC datetime.
+    The log always writes `datetime.now(timezone.utc).isoformat()`, but old
+    rows / naive variants are tolerated: a naive timestamp is assumed UTC."""
+    if not raw:
+        return None
+    try:
+        ts = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts
+
+
+def _response_payload(row: dict) -> dict:
+    """Unwrap the stored `response_json` column into a dict, tolerating a
+    legacy row that stored the response object directly under `response`."""
+    raw = row.get("response_json")
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str):
+        return {}
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
 
 
 @router.get("/summary", response_model=AnalyticsSummaryResponse)
 def summary() -> AnalyticsSummaryResponse:
-    """Analytics summary from prediction logs and warehouse."""
-    # Get prediction log stats
-    history = prediction_log.get_recent_predictions(limit=10000)
+    """Analytics summary from real prediction log rows."""
+    history = prediction_log.get_recent_predictions(limit=_HISTORY_SCAN_LIMIT)
     total_predictions = len(history)
 
-    # Get unique cities served
-    cities_served = set()
+    cities: dict[str, int] = {}
+    parsed_dates = []
     for h in history:
-        # Logs may not have city_id, fall back to 1 for NYC
-        cities_served.add("nyc")
+        city_id = h.get("city_id")
+        if not city_id:
+            city_id = _response_payload(h).get("city_id")
+        if city_id:
+            cities[city_id] = cities.get(city_id, 0) + 1
+        ts = _parse_requested_at(h.get("requested_at"))
+        if ts is not None:
+            parsed_dates.append(ts)
 
-    # Date range from logs
-    if history:
-        dates = [h.get("timestamp") for h in history if h.get("timestamp")]
-        if dates:
-            date_range = {
-                "start": min(dates),
-                "end": max(dates),
-            }
-        else:
-            date_range = {"start": None, "end": None}
-    else:
-        date_range = {"start": None, "end": None}
+    date_range = {"start": None, "end": None}
+    if parsed_dates:
+        date_range = {
+            "start": min(parsed_dates).isoformat(),
+            "end": max(parsed_dates).isoformat(),
+        }
 
-    # Top cities (for now just NYC)
-    top_cities = [{"city_id": "nyc", "predictions": total_predictions}]
+    top_cities = [
+        {"city_id": city_id, "predictions": count}
+        for city_id, count in sorted(cities.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    ]
 
     return AnalyticsSummaryResponse(
         total_predictions=total_predictions,
-        cities_served=len(cities_served),
+        cities_served=len(cities),
         date_range=date_range,
         top_cities=top_cities,
     )
@@ -87,60 +122,45 @@ def history(
 def trends(
     period: str = Query("24h", description="Period: 24h, 7d, 30d"),
 ) -> AnalyticsTrendsResponse:
-    """Get trend data for dashboard charts."""
-    history = prediction_log.get_recent_predictions(limit=5000)
+    """Real trend series bucketed from log timestamps and response payloads.
+    `now` and every log timestamp are aware UTC -- no naive/aware mix."""
+    history = prediction_log.get_recent_predictions(limit=_HISTORY_SCAN_LIMIT)
 
-    # Group by hour for the last 24h
-    now = datetime.utcnow()
-    if period == "24h":
-        cutoff = now - timedelta(hours=24)
-        granularity = "hour"
-    elif period == "7d":
+    now = datetime.now(timezone.utc)
+    if period == "7d":
         cutoff = now - timedelta(days=7)
         granularity = "day"
     elif period == "30d":
         cutoff = now - timedelta(days=30)
         granularity = "day"
-    else:
+    else:  # 24h default
         cutoff = now - timedelta(hours=24)
         granularity = "hour"
 
-    # Aggregate predictions by time bucket
-    buckets = {}
+    buckets: dict[str, dict] = {}
     for h in history:
-        ts_str = h.get("timestamp")
-        if not ts_str:
-            continue
-        try:
-            ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
-        except Exception:
-            continue
-        if ts < cutoff:
+        ts = _parse_requested_at(h.get("requested_at"))
+        if ts is None or ts < cutoff:
             continue
 
-        if granularity == "hour":
-            key = ts.replace(minute=0, second=0, microsecond=0).isoformat()
-        else:
-            key = ts.date().isoformat()
+        key = ts.replace(minute=0, second=0, microsecond=0).isoformat() if granularity == "hour" else ts.date().isoformat()
+        bucket = buckets.setdefault(key, {"count": 0, "fares": [], "distances": []})
+        bucket["count"] += 1
 
-        if key not in buckets:
-            buckets[key] = {"count": 0, "fares": [], "distances": []}
-        buckets[key]["count"] += 1
-        resp = h.get("response", {})
-        if isinstance(resp, dict):
-            fare = resp.get("fare", {}).get("value")
-            if fare is not None:
-                buckets[key]["fares"].append(fare)
-            dist = resp.get("distance", {}).get("value")
-            if dist is not None:
-                buckets[key]["distances"].append(dist)
+        payload = _response_payload(h)
+        fare = payload.get("fare", {}).get("value") if isinstance(payload.get("fare"), dict) else None
+        distance = payload.get("distance", {}).get("value") if isinstance(payload.get("distance"), dict) else None
+        if fare is not None:
+            bucket["fares"].append(float(fare))
+        if distance is not None:
+            bucket["distances"].append(float(distance))
 
-    # Build trend series
     sorted_keys = sorted(buckets.keys())
-    trends = {
-        "predictions": [buckets[k]["count"] for k in sorted_keys],
-        "avg_fare": [sum(buckets[k]["fares"]) / len(buckets[k]["fares"]) if buckets[k]["fares"] else 0 for k in sorted_keys],
-        "avg_distance": [sum(buckets[k]["distances"]) / len(buckets[k]["distances"]) if buckets[k]["distances"] else 0 for k in sorted_keys],
-    }
-
-    return AnalyticsTrendsResponse(trends=trends, period=period)
+    return AnalyticsTrendsResponse(
+        trends={
+            "predictions": [buckets[k]["count"] for k in sorted_keys],
+            "avg_fare": [sum(buckets[k]["fares"]) / len(buckets[k]["fares"]) if buckets[k]["fares"] else 0.0 for k in sorted_keys],
+            "avg_distance": [sum(buckets[k]["distances"]) / len(buckets[k]["distances"]) if buckets[k]["distances"] else 0.0 for k in sorted_keys],
+        },
+        period=period,
+    )

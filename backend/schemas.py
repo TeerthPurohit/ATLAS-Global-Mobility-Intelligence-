@@ -78,6 +78,26 @@ class JourneyRequest(BaseModel):
     city_id: str | None = None
 
 
+class JourneyHistoryEntry(BaseModel):
+    """One row of the prediction log, as the frontend JourneyHistoryEntry
+    contract expects it: the log's real columns, `response_json` still the
+    serialized JourneyEstimate string it was stored as."""
+
+    id: int
+    requested_at: str
+    pickup_lat: float
+    pickup_lon: float
+    dropoff_lat: float
+    dropoff_lon: float
+    departure_time: str
+    vehicle_type: str
+    fare_value: str | None = None
+    fare_basis: str | None = None
+    confidence_value: float | None = None
+    response_json: str
+    city_id: str | None = None
+
+
 class CityJourneyRequest(BaseModel):
     """City-scoped journey estimate request -- deliberately smaller than
     JourneyRequest (no vehicle_type): this endpoint works for any resolvable
@@ -132,7 +152,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
-    route: str
+    route: Literal["numeric", "explanatory"]
     sql: str | None = None
     session_id: str
     city_id: str | None = None
@@ -142,7 +162,7 @@ class ChatResponse(BaseModel):
 class ChatMessage(BaseModel):
     role: str
     content: str
-    route: str | None = None
+    route: Literal["numeric", "explanatory"] | None = None
     sql: str | None = None
     timestamp: str
 
@@ -187,10 +207,10 @@ class City(BaseModel):
     id: str
     name: str
     country_code: str
-    latitude: float
-    longitude: float
-    timezone: str
-    currency: str
+    latitude: float | None = 0.0
+    longitude: float | None = 0.0
+    timezone: str | None = "UTC"
+    currency: str | None = "USD"
     status: str
     data_source: str
     geography_type: str
@@ -408,12 +428,20 @@ class DepartureTimeResponse(BaseModel):
 
 
 class WeatherResponse(BaseModel):
-    """Weather context response."""
+    """Weather context response.
+
+    `severity` is the real 0-1 weather severity score the adapter computes
+    (precipitation-driven, with an extreme-temperature bump) -- the only
+    weather number this backend actually produces. `temperature` stays None
+    (the adapter never returns one); callers must not read it as live
+    temperature.
+    """
     temperature: float | None = None
     humidity: float | None = None
     precipitation: float | None = None
     wind_speed: float | None = None
     weather_condition: str | None = None
+    severity: float | None = None
     source: str
     timestamp: datetime
     city_id: str
@@ -548,7 +576,7 @@ class AnalyticsSummaryResponse(BaseModel):
     """Analytics summary response."""
     total_predictions: int
     cities_served: int
-    date_range: dict[str, str]
+    date_range: dict[str, str | None]
     top_cities: list[dict]
 
 

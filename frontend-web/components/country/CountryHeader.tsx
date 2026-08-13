@@ -1,6 +1,6 @@
 "use client";
 
-import { Flag, MapPin, TrendingUp, Layers, Users, Globe } from "lucide-react";
+import { MapPin, TrendingUp, Layers, Users, Globe } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { TierBadge } from "@/components/capability/TierBadge";
 import { cn } from "@/lib/utils";

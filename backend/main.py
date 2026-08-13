@@ -29,18 +29,41 @@ from backend.registry import transit as transit_registry  # noqa: E402
 from backend.routers import chat, cities, countries, context, geography, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
 from backend.services import journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
+logger = logging.getLogger("backend.startup")
+
+
+# One missing artifact used to take down the whole API: these ran unguarded, so a
+# failure in any one of them aborted the lifespan and nothing served. Each is now
+# isolated -- a loader that fails disables its own features (the registries and
+# services already report "unavailable" when their state is empty) instead of the app.
+_STARTUP_LOADERS = (
+    ("model_service", model_service.load),
+    ("tariff_profiles", tariff_profiles.load),
+    ("platform_service", platform_service.load),
+    ("journey_service", journey_service.load),
+    ("countries_registry", countries_registry.load),
+    ("models_registry", models_registry.load),
+    ("transit_registry", transit_registry.load),
+    ("cities_registry", cities_registry.load),
+    ("global_cities_registry", global_cities_registry.load),
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    model_service.load()  # runs once, before the app accepts traffic (rule 8)
-    tariff_profiles.load()  # read-only; profiles themselves are generated offline (scripts/generate_tariff_profile.py)
-    platform_service.load()
-    journey_service.load()
-    countries_registry.load()
-    models_registry.load()  # must load before cities_registry (model_status resolution reads it)
-    transit_registry.load()
-    cities_registry.load()
-    global_cities_registry.load()
+    failed = []
+    for name, load in _STARTUP_LOADERS:
+        logger.info("Loading %s...", name)
+        try:
+            load()
+        except Exception:
+            failed.append(name)
+            logger.exception("%s failed to load - its features will report unavailable", name)
+    if failed:
+        logger.warning("Started with %d/%d loaders failed: %s",
+                       len(failed), len(_STARTUP_LOADERS), ", ".join(failed))
+    else:
+        logger.info("All services loaded!")
     yield
 
 
@@ -49,12 +72,13 @@ app = FastAPI(title="NYC Ride Intelligence API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
         "http://localhost:3000",
+        "http://localhost:3004",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
         "http://frontend:5173",
         "http://localhost",
-        "*",
     ],
     allow_credentials=True,
     allow_methods=["*"],

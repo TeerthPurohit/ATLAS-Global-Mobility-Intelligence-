@@ -7,8 +7,6 @@ route (`/predict/demand`, `/predict/fare`, `/zones`, `/chat`,
 """
 from __future__ import annotations
 
-from dataclasses import asdict
-
 from fastapi import APIRouter, Query
 
 from backend.errors import DomainError
@@ -26,7 +24,6 @@ from backend.schemas import (
     CityJourneyEstimate,
     CityJourneyRequest,
     CityProfileResponse,
-    CityCapabilitiesResponse,
     CitySearchRequest,
     CitySearchResponse,
     CityTariffResponse,
@@ -49,7 +46,23 @@ from backend.services import (
 router = APIRouter(tags=["Cities"])
 
 
+# IDs that are JavaScript artefacts or clearly invalid — reject immediately
+# so they never pollute registry logs or hit the DB.
+_INVALID_CITY_IDS = frozenset({"undefined", "null", "none", "", "0", "false"})
+
+
+def _validate_city_id(city_id: str) -> None:
+    """Raise 400 if city_id is obviously malformed (JS artefact, empty, too long)."""
+    if city_id.lower() in _INVALID_CITY_IDS or len(city_id) > 80:
+        raise DomainError(
+            ErrorCode.CITY_NOT_FOUND,
+            f"invalid city_id={city_id!r}: must be a valid city identifier",
+            400,
+        )
+
+
 def _require_city(city_id: str) -> dict:
+    _validate_city_id(city_id)
     city = cities_registry.get_city(city_id)
     if city is None:
         raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
@@ -71,6 +84,104 @@ def list_country_cities(code: str) -> list[City]:
 
 
 @router.get(
+    "/api/cities",
+    response_model=CitySearchResponse,
+    summary="List/Search cities with filters",
+    description="Search and filter cities by query, country, tier, and supported status.",
+)
+def search_cities(
+    q: str | None = Query(None, description="Search query (name)"),
+    country: str | None = Query(None, description="Country code filter"),
+    tier: str | None = Query(None, description="Tier filter: OBSERVED or TRANSFER"),
+    supported: bool | None = Query(None, description="Filter by supported status"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=2000),
+) -> CitySearchResponse:
+    from backend.registry import global_cities as global_cities_registry
+
+    all_cities = global_cities_registry.list_cities()
+
+    # Apply filters
+    if q:
+        q_lower = q.lower()
+        all_cities = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
+
+    if country:
+        all_cities = [c for c in all_cities if c.get("country_code", "").upper() == country.upper()]
+
+    if tier:
+        all_cities = [c for c in all_cities if c.get("model_status", "").upper() == tier.upper()]
+
+    if supported is not None:
+        all_cities = [c for c in all_cities if (cities_registry.get_city(c["city_id"]) is not None) == supported]
+
+    total = len(all_cities)
+    start = (page - 1) * limit
+    end = start + limit
+    paginated = all_cities[start:end]
+
+    # Convert to City model
+    results = []
+    for c in paginated:
+        results.append(City(
+            id=c.get("city_id", ""),
+            name=c.get("name", ""),
+            country_code=c.get("country_code", ""),
+            latitude=c.get("latitude") if c.get("latitude") is not None else 0.0,
+            longitude=c.get("longitude") if c.get("longitude") is not None else 0.0,
+            timezone=c.get("timezone") or "UTC",
+            currency=c.get("currency") or "USD",
+            status=c.get("model_status", "unknown"),
+            data_source=c.get("population_source", "unknown"),
+            geography_type="zone",
+            mobility_mode="ride_hailing",
+            model_status=c.get("model_status", "unknown"),
+            last_updated="",
+        ))
+
+    return CitySearchResponse(results=results, total=total, page=page, limit=limit)
+
+
+@router.get(
+    "/api/cities/search",
+    response_model=CitySearchResponse,
+    summary="Search cities by name",
+    description="Quick city name search.",
+)
+def search_cities_by_name(
+    q: str | None = Query(None, description="City name to search for"),
+    limit: int = Query(10, ge=1, le=2000),
+) -> CitySearchResponse:
+    from backend.registry import global_cities as global_cities_registry
+
+    all_cities = global_cities_registry.list_cities()
+    if q:
+        q_lower = q.lower()
+        all_cities = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
+    filtered = all_cities[:limit]
+
+    results = []
+    for c in filtered:
+        results.append(City(
+            id=c.get("city_id", ""),
+            name=c.get("name", ""),
+            country_code=c.get("country_code", ""),
+            latitude=c.get("latitude") if c.get("latitude") is not None else 0.0,
+            longitude=c.get("longitude") if c.get("longitude") is not None else 0.0,
+            timezone=c.get("timezone") or "UTC",
+            currency=c.get("currency") or "USD",
+            status=c.get("model_status", "unknown"),
+            data_source=c.get("population_source", "unknown"),
+            geography_type="zone",
+            mobility_mode="ride_hailing",
+            model_status=c.get("model_status", "unknown"),
+            last_updated="",
+        ))
+
+    return CitySearchResponse(results=results, total=len(results), page=1, limit=limit)
+
+
+@router.get(
     "/api/cities/{city_id}",
     response_model=City,
     summary="Get a city",
@@ -89,6 +200,7 @@ def get_city(city_id: str) -> City:
     responses={404: {"model": ErrorResponse, "description": "City not found"}},
 )
 def get_capabilities(city_id: str) -> Capabilities:
+    _validate_city_id(city_id)
     # Not _require_city: capabilities resolve for any city in EITHER registry
     # (the 2-row `cities` seed or the 524-row `global_cities` table), so a
     # global city reports its real, mostly-false matrix instead of 404ing.
@@ -96,21 +208,6 @@ def get_capabilities(city_id: str) -> Capabilities:
     if capabilities is None:
         raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
     return Capabilities(**capabilities)
-
-
-@router.get(
-    "/api/cities/{city_id}/tariff",
-    summary="Get a city's fare tariff profile",
-    description="The real cached TariffProfile backing this city's fare estimate, or "
-    "{'available': false, 'reason': 'no_tariff_profile'} -- never a fabricated rate. "
-    "Read-only: profiles are written offline by scripts/generate_tariff_profile.py, "
-    "never from a request path (rule 8).",
-)
-def get_tariff(city_id: str) -> dict:
-    profile = tariff_profiles.get(city_id)
-    if profile is None:
-        return {"available": False, "reason": "no_tariff_profile", "city_id": city_id}
-    return {"available": True, **asdict(profile)}
 
 
 @router.get(
@@ -231,102 +328,6 @@ def city_chat(city_id: str, req: ChatRequest) -> ChatResponse:
 # ── New Granular City APIs (Part 2 API Decomposition) ───────────────────────────
 
 
-@router.get(
-    "/api/cities",
-    response_model=CitySearchResponse,
-    summary="List/Search cities with filters",
-    description="Search and filter cities by query, country, tier, and supported status.",
-)
-def search_cities(
-    q: str | None = Query(None, description="Search query (name)"),
-    country: str | None = Query(None, description="Country code filter"),
-    tier: str | None = Query(None, description="Tier filter: OBSERVED or TRANSFER"),
-    supported: bool | None = Query(None, description="Filter by supported status"),
-    page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
-) -> CitySearchResponse:
-    from backend.registry import global_cities as global_cities_registry
-
-    all_cities = global_cities_registry.list_cities()
-
-    # Apply filters
-    if q:
-        q_lower = q.lower()
-        all_cities = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
-
-    if country:
-        all_cities = [c for c in all_cities if c.get("country_code", "").upper() == country.upper()]
-
-    if tier:
-        all_cities = [c for c in all_cities if c.get("model_status", "").upper() == tier.upper()]
-
-    if supported is not None:
-        all_cities = [c for c in all_cities if (cities_registry.get_city(c["city_id"]) is not None) == supported]
-
-    total = len(all_cities)
-    start = (page - 1) * limit
-    end = start + limit
-    paginated = all_cities[start:end]
-
-    # Convert to City model
-    results = []
-    for c in paginated:
-        results.append(City(
-            id=c["city_id"],
-            name=c["name"],
-            country_code=c["country_code"],
-            latitude=c["latitude"],
-            longitude=c["longitude"],
-            timezone=c.get("timezone", "UTC"),
-            currency=c.get("currency", "USD"),
-            status=c.get("model_status", "unknown"),
-            data_source=c.get("population_source", "unknown"),
-            geography_type="zone",
-            mobility_mode="ride_hailing",
-            model_status=c.get("model_status", "unknown"),
-            last_updated="",
-        ))
-
-    return CitySearchResponse(results=results, total=total, page=page, limit=limit)
-
-
-@router.get(
-    "/api/cities/search",
-    response_model=CitySearchResponse,
-    summary="Search cities by name",
-    description="Quick city name search.",
-)
-def search_cities_by_name(
-    q: str = Query(..., min_length=1, description="City name to search for"),
-    limit: int = Query(10, ge=1, le=50),
-) -> CitySearchResponse:
-    from backend.registry import global_cities as global_cities_registry
-
-    all_cities = global_cities_registry.list_cities()
-    q_lower = q.lower()
-    filtered = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
-    filtered = filtered[:limit]
-
-    results = []
-    for c in filtered:
-        results.append(City(
-            id=c["city_id"],
-            name=c["name"],
-            country_code=c["country_code"],
-            latitude=c["latitude"],
-            longitude=c["longitude"],
-            timezone=c.get("timezone", "UTC"),
-            currency=c.get("currency", "USD"),
-            status=c.get("model_status", "unknown"),
-            data_source=c.get("population_source", "unknown"),
-            geography_type="zone",
-            mobility_mode="ride_hailing",
-            model_status=c.get("model_status", "unknown"),
-            last_updated="",
-        ))
-
-    return CitySearchResponse(results=results, total=len(results), page=1, limit=limit)
-
 
 @router.get(
     "/api/cities/{city_id}/profile",
@@ -337,6 +338,8 @@ def search_cities_by_name(
 def get_city_profile(city_id: str) -> CityProfileResponse:
     from backend.registry import global_cities as global_cities_registry
     from backend.services import tariff_profiles
+
+    _validate_city_id(city_id)
 
     profile = global_cities_registry.get_city(city_id)
     if not profile:
@@ -350,19 +353,19 @@ def get_city_profile(city_id: str) -> CityProfileResponse:
 
     return CityProfileResponse(
         id=city_id,
-        name=profile.get("name", city_id),
-        country_code=profile.get("country_code", "XX"),
-        country=profile.get("country_code", "XX"),
-        latitude=profile.get("latitude", 0.0),
-        longitude=profile.get("longitude", 0.0),
-        timezone=profile.get("timezone", "UTC"),
-        currency=profile.get("currency", "USD"),
-        tier=profile.get("model_status", "unknown"),
-        population=profile.get("population"),
-        model_status=profile.get("model_status", "unknown"),
-        data_source=profile.get("population_source", "unknown"),
-        geography_type=profile.get("geography_type", "zone"),
-        mobility_mode=profile.get("mobility_mode", "ride_hailing"),
+        name=profile.get("name") or city_id,
+        country_code=profile.get("country_code") or "XX",
+        country=profile.get("country_code") or "XX",
+        latitude=profile.get("latitude") or 0.0,
+        longitude=profile.get("longitude") or 0.0,
+        timezone=profile.get("timezone") or "UTC",
+        currency=profile.get("currency") or "USD",
+        tier=profile.get("model_status") or "unknown",
+        population=int(round(profile["population"])) if profile.get("population") is not None else None,
+        model_status=profile.get("model_status") or "unknown",
+        data_source=profile.get("population_source") or "unknown",
+        geography_type=profile.get("geography_type") or "zone",
+        mobility_mode=profile.get("mobility_mode") or "ride_hailing",
         confidence=tariff.confidence if tariff else 0.0,
         data_availability={
             "demand": capabilities.get("demand", False),
@@ -375,19 +378,6 @@ def get_city_profile(city_id: str) -> CityProfileResponse:
             "best_departure": capabilities.get("best_departure", False),
         },
     )
-
-
-@router.get(
-    "/api/cities/{city_id}/capabilities",
-    response_model=CityCapabilitiesResponse,
-    summary="Get city capabilities",
-    description="Real, wired capabilities derived from actual backend support.",
-)
-def get_city_capabilities(city_id: str) -> CityCapabilitiesResponse:
-    capabilities = cities_registry.capability_matrix(city_id)
-    if capabilities is None:
-        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
-    return CityCapabilitiesResponse(city_id=city_id, capabilities=capabilities)
 
 
 @router.get(

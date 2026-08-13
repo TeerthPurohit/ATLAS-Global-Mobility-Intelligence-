@@ -1,0 +1,5 @@
+# CDK app dependencies only -- not part of the repo's main requirements.txt
+# (this code never runs on the app's request path, only on `cdk deploy` from
+# a developer machine with real AWS credentials, per ADR-009).
+aws-cdk-lib>=2.150,<3.0
+constructs>=10.0,<11.0

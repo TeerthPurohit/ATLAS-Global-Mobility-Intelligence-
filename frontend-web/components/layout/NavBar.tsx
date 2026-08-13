@@ -2,68 +2,50 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, Globe } from "lucide-react";
+import { Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
 
 const navLinks = [
-  { href: "/", label: "World", icon: Globe },
+  { href: "/", label: "Explore" },
   { href: "/journey", label: "Journey" },
   { href: "/compare", label: "Compare" },
   { href: "/insights", label: "Insights" },
-  { href: "/analyst", label: "AI Analyst" },
+  { href: "/analyst", label: "Ask" },
   { href: "/analytics", label: "Analytics" },
-  { href: "/history", label: "History" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export function NavBar() {
   const pathname = usePathname();
 
-  // Generate dynamic breadcrumb items from pathname
-  const pathSegments = pathname.split("/").filter(Boolean);
-
   return (
-    <header className="sticky top-0 z-40 border-b border-surface-border bg-surface-0/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-display text-sm font-semibold tracking-wide text-ink-primary transition-opacity hover:opacity-90"
-          >
-            <Compass className="h-5 w-5 text-brass" />
-            <span className="hidden sm:inline">Global Mobility Intelligence</span>
-            <span className="sm:hidden">GMI</span>
-          </Link>
+    <header className="sticky top-0 z-40 border-b border-surface-border bg-surface-0/95 backdrop-blur-sm transition-shadow duration-300">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
+        {/* Logo & Brand */}
+        <Link
+          href="/"
+          className="flex items-center gap-3 group"
+        >
+          <div className="relative flex items-center justify-center">
+            <Compass className="h-5 w-5 text-brass transition-transform duration-500 group-hover:rotate-45" />
+          </div>
+          <div className="flex flex-col gap-0">
+            <span className="hidden sm:block font-section-md text-ink-primary leading-tight">
+              WORLDMOVE
+            </span>
+            <span className="hidden sm:block font-label-sm text-ink-muted">
+              Mobility Intelligence
+            </span>
+            <span className="sm:hidden font-section-md text-ink-primary">
+              WORLDMOVE
+            </span>
+          </div>
+          <PulsingStatusDot status="live" size={6} className="ml-2" />
+        </Link>
 
-          {/* Breadcrumb Bar */}
-          {pathSegments.length > 0 && (
-            <div className="hidden md:flex items-center gap-1.5 border-l border-surface-border pl-3 text-xs text-ink-muted">
-              <Link href="/" className="hover:text-brass transition-colors">
-                world
-              </Link>
-              {pathSegments.map((segment, index) => {
-                const href = `/${pathSegments.slice(0, index + 1).join("/")}`;
-                const isLast = index === pathSegments.length - 1;
-                return (
-                  <span key={href} className="flex items-center gap-1.5">
-                    <span>/</span>
-                    {isLast ? (
-                      <span className="font-semibold text-brass truncate max-w-[120px]">
-                        {segment}
-                      </span>
-                    ) : (
-                      <Link href={href} className="hover:text-brass transition-colors truncate max-w-[100px]">
-                        {segment}
-                      </Link>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <nav className="flex items-center gap-1.5 sm:gap-4 text-xs sm:text-sm">
+        {/* Navigation Links */}
+        <nav className="flex items-center gap-1 sm:gap-3">
           {navLinks.map((link) => {
             const isActive =
               link.href === "/"
@@ -75,13 +57,20 @@ export function NavBar() {
                 key={link.label}
                 href={link.href}
                 className={cn(
-                  "px-2.5 py-1.5 rounded-lg transition-colors font-medium",
+                  "relative px-3 py-2 transition-colors font-section-md text-sm",
                   isActive
-                    ? "bg-surface-1 text-brass font-semibold"
-                    : "text-ink-secondary hover:text-ink-primary hover:bg-surface-1/50"
+                    ? "text-brass"
+                    : "text-ink-secondary hover:text-ink-primary"
                 )}
               >
-                {link.label}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeNavUnderline"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brass"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{link.label}</span>
               </Link>
             );
           })}

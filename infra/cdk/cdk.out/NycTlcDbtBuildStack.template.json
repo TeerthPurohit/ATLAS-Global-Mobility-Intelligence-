@@ -1,0 +1,578 @@
+{
+ "Resources": {
+  "DbtBuildBucket927A791B": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "Id": "raw-to-infrequent-access",
+       "Prefix": "raw/",
+       "Status": "Enabled",
+       "Transitions": [
+        {
+         "StorageClass": "STANDARD_IA",
+         "TransitionInDays": 30
+        }
+       ]
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/DbtBuildBucket/Resource"
+   }
+  },
+  "BuildInstanceRole6013CDCC": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Least-privilege role for the on-demand dbt-build EC2 instance (ADR-009)"
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/BuildInstanceRole/Resource"
+   }
+  },
+  "BuildInstanceRoleDefaultPolicyD39F50A8": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "DbtBuildBucket927A791B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "DbtBuildBucket927A791B",
+             "Arn"
+            ]
+           },
+           "/raw/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "DbtBuildBucket927A791B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "DbtBuildBucket927A791B",
+             "Arn"
+            ]
+           },
+           "/warehouse/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "BuildInstanceRoleDefaultPolicyD39F50A8",
+    "Roles": [
+     {
+      "Ref": "BuildInstanceRole6013CDCC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/BuildInstanceRole/DefaultPolicy/Resource"
+   }
+  },
+  "BuildInstanceProfile": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "BuildInstanceRole6013CDCC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/BuildInstanceProfile"
+   }
+  },
+  "BuildSecurityGroup2CF242B6": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Outbound-only SG for the on-demand dbt-build instance -- no inbound rules, no SSH key pair",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": "vpc-0ac144c26e294dfd9"
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/BuildSecurityGroup/Resource"
+   }
+  },
+  "GitHubOidcA2A496A3": {
+   "Type": "Custom::AWSCDKOpenIdConnectProvider",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomAWSCDKOpenIdConnectProviderCustomResourceProviderHandlerF2C543E0",
+      "Arn"
+     ]
+    },
+    "ClientIDList": [
+     "sts.amazonaws.com"
+    ],
+    "Url": "https://token.actions.githubusercontent.com",
+    "RejectUnauthorized": false,
+    "CodeHash": "c0d9f24649426c60a1bc01108070535a40353ae6cd8ceccb812969319b936e5d"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/GitHubOidc/Resource/Default"
+   }
+  },
+  "CustomAWSCDKOpenIdConnectProviderCustomResourceProviderRole517FED65": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Resource": "*",
+         "Action": [
+          "iam:CreateOpenIDConnectProvider",
+          "iam:DeleteOpenIDConnectProvider",
+          "iam:UpdateOpenIDConnectProviderThumbprint",
+          "iam:AddClientIDToOpenIDConnectProvider",
+          "iam:RemoveClientIDFromOpenIDConnectProvider"
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/Custom::AWSCDKOpenIdConnectProviderCustomResourceProvider/Role"
+   }
+  },
+  "CustomAWSCDKOpenIdConnectProviderCustomResourceProviderHandlerF2C543E0": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-398031303410-ap-south-1",
+     "S3Key": "c0d9f24649426c60a1bc01108070535a40353ae6cd8ceccb812969319b936e5d.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomAWSCDKOpenIdConnectProviderCustomResourceProviderRole517FED65",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs24.x"
+   },
+   "DependsOn": [
+    "CustomAWSCDKOpenIdConnectProviderCustomResourceProviderRole517FED65"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/Custom::AWSCDKOpenIdConnectProviderCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.c0d9f24649426c60a1bc01108070535a40353ae6cd8ceccb812969319b936e5d",
+    "aws:asset:property": "Code"
+   }
+  },
+  "GitHubActionsBuildRole1AEF935D": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRoleWithWebIdentity",
+       "Condition": {
+        "StringEquals": {
+         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+         "token.actions.githubusercontent.com:sub": "repo:TeerthPurohit/Uber-nyc-TLC-Dataset:ref:refs/heads/main"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Federated": {
+         "Ref": "GitHubOidcA2A496A3"
+        }
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Assumed by .github/workflows/dbt-build-aws.yml via OIDC -- no static AWS keys (ADR-009)",
+    "MaxSessionDuration": 7200
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/GitHubActionsBuildRole/Resource"
+   }
+  },
+  "GitHubActionsBuildRoleDefaultPolicy6A939E46": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ec2:RunInstances",
+       "Condition": {
+        "StringEquals": {
+         "aws:RequestTag/Project": "nyc-tlc-dbt-build"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ec2:ap-south-1:398031303410:instance/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ec2:ap-south-1:398031303410:volume/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ec2:ap-south-1:398031303410:network-interface/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ec2:ap-south-1:398031303410:security-group/",
+           {
+            "Fn::GetAtt": [
+             "BuildSecurityGroup2CF242B6",
+             "GroupId"
+            ]
+           }
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ec2:ap-south-1:398031303410:subnet/*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":ec2:ap-south-1:398031303410:image/*"
+          ]
+         ]
+        }
+       ],
+       "Sid": "LaunchBuildInstance"
+      },
+      {
+       "Action": "ec2:CreateTags",
+       "Condition": {
+        "StringEquals": {
+         "ec2:CreateAction": "RunInstances"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ec2:ap-south-1:398031303410:instance/*"
+         ]
+        ]
+       },
+       "Sid": "TagBuildInstance"
+      },
+      {
+       "Action": "ec2:TerminateInstances",
+       "Condition": {
+        "StringEquals": {
+         "ec2:ResourceTag/Project": "nyc-tlc-dbt-build"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ec2:ap-south-1:398031303410:instance/*"
+         ]
+        ]
+       },
+       "Sid": "TerminateOwnBuildInstance"
+      },
+      {
+       "Action": "ec2:DescribeInstances",
+       "Effect": "Allow",
+       "Resource": "*",
+       "Sid": "PollBuildInstanceStatus"
+      },
+      {
+       "Action": "iam:PassRole",
+       "Condition": {
+        "StringEquals": {
+         "iam:PassedToService": "ec2.amazonaws.com"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "BuildInstanceRole6013CDCC",
+         "Arn"
+        ]
+       },
+       "Sid": "PassBuildInstanceRole"
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "DbtBuildBucket927A791B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "DbtBuildBucket927A791B",
+             "Arn"
+            ]
+           },
+           "/warehouse/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GitHubActionsBuildRoleDefaultPolicy6A939E46",
+    "Roles": [
+     {
+      "Ref": "GitHubActionsBuildRole1AEF935D"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/GitHubActionsBuildRole/DefaultPolicy/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3WNwWrDMBBEvyX3tdo6JT03PpScYuwPCKq8Tre2V0a7ajBC/17cUEIOOc3MG4YpTbl7Nc8be5HCdUMx0qdJrVo3gL3IKcnWpH10AypUPV9dBrKTSY0fcYV/WvuR3LLGmzuwqGWHdfA9jQjHGfnQVZ4ZndbB/1CHIQO60qQWXQyky0fwcV7HdyBnaFB8DA6hiqJ+usWeH1T/D3srCO8iqK3aM/F53RyjzlEz1It+eX7ampfSvG2+hagIkZUmNM1VfwEO5DbcIgEAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "NycTlcDbtBuildStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "BucketName": {
+   "Value": {
+    "Ref": "DbtBuildBucket927A791B"
+   }
+  },
+  "GitHubActionsRoleArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "GitHubActionsBuildRole1AEF935D",
+     "Arn"
+    ]
+   }
+  },
+  "InstanceProfileArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "BuildInstanceProfile",
+     "Arn"
+    ]
+   }
+  },
+  "SecurityGroupId": {
+   "Value": {
+    "Fn::GetAtt": [
+     "BuildSecurityGroup2CF242B6",
+     "GroupId"
+    ]
+   }
+  },
+  "SubnetIds": {
+   "Value": "subnet-08ce95cf3c6078490,subnet-079776d969fd4d181,subnet-0bf26102daf79f8c7"
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

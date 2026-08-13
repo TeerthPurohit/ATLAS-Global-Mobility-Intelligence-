@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult, effective_confidence
@@ -153,6 +154,42 @@ def _base_fare_tariff(ctx: JourneyContext, features: JourneyFeatures) -> Predict
         ),
         confidence=profile.confidence,
         method="tariff_profile_linear",
+    )
+
+
+def estimate_tariff_base_fare(city_id: str, distance_miles: float, hour: int) -> PredictionResult:
+    """Base-fare-only tariff estimate for callers that have a distance and an
+    hour but not a full JourneyContext (weather/holiday/vehicle adapters) --
+    prediction_service.predict_fare()'s area_id-pair contract, unlike
+    journey_service's full route estimate. Reuses _base_fare_tariff's linear
+    formula so the two paths never drift into two different fare numbers for
+    the same city; skips the adjustment terms that genuinely need route
+    context (traffic/weather/demand), so this is deliberately a coarser
+    number than /api/mobility/fare's -- reflected in `method` below so
+    nothing conflates the two.
+    """
+    ctx = JourneyContext(
+        pickup_lat=0.0, pickup_lon=0.0, dropoff_lat=0.0, dropoff_lon=0.0,
+        departure_time=datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0),
+        vehicle_type="car", pickup_zone_id=None, dropoff_zone_id=None, vehicle_profile=None,
+        weather=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
+        holiday=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
+        city_id=city_id,
+    )
+    features = JourneyFeatures(
+        distance_miles=PredictionResult(value=distance_miles, unit="miles", basis="computed", source="haversine"),
+        duration_min=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
+        weather_score=ctx.weather, holiday_score=ctx.holiday,
+        historical_traffic_score=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
+        vehicle_profile=None,
+    )
+    result = _base_fare_tariff(ctx, features)
+    if result.value is None:
+        return result
+    return PredictionResult(
+        value=result.value, unit=result.unit, basis=result.basis, source=result.source,
+        reason=f"{result.reason} (base fare only -- no route/weather/demand context available on this endpoint)",
+        confidence=result.confidence, method="tariff_profile_linear_base_only",
     )
 
 

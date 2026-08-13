@@ -42,7 +42,26 @@ router = APIRouter(prefix="/api/mobility", tags=["Mobility"])
 
 
 def _make_mobility_response(pr: PredictionResult) -> MobilityResponse:
-    """Convert internal PredictionResult to public MobilityResponse."""
+    """Convert internal PredictionResult to public MobilityResponse.
+
+    Categorical predictors (congestion/availability/surge) keep their bucket
+    string as `PredictionResult.value` for the /journey/estimate surface
+    (ADR-007 + rag narrative), but this granular surface's response model
+    requires a numeric `value`. The predictor's real 0-1 `score` is emitted
+    here and the bucket label is folded into `reason` so the category stays
+    visible to the user -- one source of truth, two shapes.
+    """
+    if pr.score is not None:
+        reason = f"category {pr.value}; {pr.reason}" if pr.reason else f"category {pr.value}"
+        return MobilityResponse(
+            value=pr.score,
+            unit="score_0_to_1",
+            status=pr.basis,  # basis -> status mapping
+            method=pr.method or "unknown",
+            source=pr.source,
+            confidence=pr.confidence if pr.confidence is not None else (0.0 if pr.basis == "unavailable" else 0.5),
+            reason=reason,
+        )
     return MobilityResponse(
         value=pr.value,
         unit=pr.unit,
@@ -97,7 +116,14 @@ def fare(req: PredictionRequest) -> FareResponse:
 
     # Use provided route or compute
     if req.distance_km is not None and req.duration_min is not None:
-        # Create features with provided distance/duration
+        # Client-supplied route: distance/duration come from the request; the
+        # historical traffic leg has nothing to score against (a zone pair
+        # would need a fresh route resolution), so it is honestly
+        # `unavailable` rather than a phantom attribute lookup.
+        traffic_unavailable = PredictionResult(
+            value=None, unit=None, basis="unavailable", source="historical_traffic_score",
+            reason="route provided by client -- no zone-pair traffic score resolved",
+        )
         from backend.predictors.base import JourneyFeatures
         features = JourneyFeatures(
             distance_miles=PredictionResult(
@@ -108,7 +134,7 @@ def fare(req: PredictionRequest) -> FareResponse:
             ),
             weather_score=ctx.weather,
             holiday_score=ctx.holiday,
-            historical_traffic_score=ctx.features.historical_traffic_score if hasattr(ctx, 'features') else None,
+            historical_traffic_score=traffic_unavailable,
             vehicle_profile=ctx.vehicle_profile,
         )
     else:
@@ -117,7 +143,13 @@ def fare(req: PredictionRequest) -> FareResponse:
     fare_terms = pricing_engine.compute_fare(ctx, features)
     total = fare_terms["total"]
 
-    # Build breakdown from actual computed terms
+    # FareBreakdown maps the pricing engine's named terms onto the response
+    # fields -- labels are the public names, values are the real terms:
+    #   base    <- base_fare           (trained model / tariff profile)
+    #   distance<- vehicle_adjustment  (vehicle-class multiplier on base)
+    #   duration<- traffic_adjustment  (historical-traffic surcharge)
+    #   fees    <- weather_adjustment  (weather-severity surcharge)
+    #   surge   <- demand_adjustment   (demand-momentum surcharge)
     breakdown = FareBreakdown(
         base=fare_terms.get("base_fare").value if fare_terms.get("base_fare") and fare_terms["base_fare"].value is not None else None,
         distance=fare_terms.get("vehicle_adjustment").value if fare_terms.get("vehicle_adjustment") and fare_terms["vehicle_adjustment"].value is not None else None,

@@ -39,8 +39,16 @@ class PredictionResult:
     # -- coarser than `source`, stable enough to group/aggregate on.
     confidence: float | None = None
     method: str | None = None
+    # Real 0-1 numeric score behind a categorical `value` bucket (LOW/MEDIUM/
+    # HIGH/...). The /api/mobility/* surface needs a number per its response
+    # model while /journey/estimate + rag/ keep the categorical `value` as-is
+    # (ADR-007), so the predictor computes the score ONCE here and each
+    # consumer shapes it. None means "no numeric score exists".
+    score: float | None = None
 
     def __post_init__(self) -> None:
+        if self.score is not None and not 0.0 <= self.score <= 1.0:
+            raise ValueError(f"score must be in [0,1], got {self.score!r} (source={self.source!r})")
         if self.basis != "computed" and not self.reason:
             raise ValueError(f"reason is required when basis={self.basis!r} (source={self.source!r})")
         if self.basis == "unavailable":

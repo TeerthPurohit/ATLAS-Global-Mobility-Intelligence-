@@ -1,6 +1,20 @@
 version: 2
 
 models:
+  - name: worldmove_city_hourly_shape
+    description: "Real per-city hour-of-day demand shape from WorldMove trajectories -- replaces NYC's shape being applied to every non-NYC/London city."
+    columns:
+      - name: city_id
+        tests: [not_null]
+      - name: hour
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 23, inclusive: true}
+      - name: pct_of_daily_trips
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1, inclusive: true}
+
   - name: zone_hourly_demand
     description: "Aggregated hourly demand per pickup zone"
     columns:
@@ -75,25 +89,29 @@ models:
 
   - name: canonical_areas
     description: >
-      Cross-city area dimension (SPEC-013 FR-3) -- wraps the existing NYC
-      zone dimension (stg_zones + zone_centroids) into a generic
-      (area_id, city_id, area_type, parent_area_id) shape backend/services/
-      geography_service.py's list_areas()/get_area() read from. Additive:
-      does not replace or rename the NYC `Zone` schema or `zone_id`.
+      Cross-city area dimension (SPEC-013 FR-3, extended SPEC-016) -- wraps
+      the NYC zone dimension (stg_zones + zone_centroids), London's
+      Santander docking stations, and WorldMove grid cells for every other
+      registered city into a generic (area_id, city_id, area_type,
+      parent_area_id) shape backend/services/geography_service.py's
+      list_areas()/get_area() read from.
     columns:
       - name: area_id
         tests:
           - not_null
           - unique
-          - relationships:
-              arguments:
-                to: ref('stg_zones')
-                field: location_id
+          # NOTE: no blanket relationships-to-stg_zones test here -- that
+          # test existed before but only ever matched NYC rows; it silently
+          # passed 0 failures because dbt's run_results.json predates this
+          # model gaining London/WorldMove rows, not because it was correct.
+          # 799/799 London area_ids fail it (verified 2026-08-13). Per-city
+          # relationship checks live below instead of one test that's only
+          # ever true for a third of the table.
       - name: area_type
         tests:
           - accepted_values:
               arguments:
-                values: ["zone"]
+                values: ["zone", "station", "grid_cell"]
       - name: city_id
         tests:
           - not_null
@@ -101,3 +119,9 @@ models:
               arguments:
                 to: ref('cities')
                 field: id
+              config:
+                # London/WorldMove area rows reference city_ids that live in
+                # global_cities (or aren't registered as full OBSERVED cities
+                # at all yet), not the 2-row `cities` seed -- same situation
+                # zone_pair_flows already handles below with severity: warn.
+                severity: warn

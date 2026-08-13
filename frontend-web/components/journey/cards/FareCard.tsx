@@ -4,7 +4,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { PredictionField } from "@/components/journey/PredictionField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { getFare, type PredictionRequest, type FareResponse } from "@/lib/api";
+import { getFare, mobilityToPrediction, type PredictionRequest, type FareResponse } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { DollarSign } from "lucide-react";
@@ -30,6 +30,8 @@ function FareCardSkeleton() {
 }
 
 function FareCardContent({ data }: { data: FareResponse }) {
+  const farePred = mobilityToPrediction(data.fare);
+
   return (
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
@@ -37,24 +39,24 @@ function FareCardContent({ data }: { data: FareResponse }) {
         Fare Estimate
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Total Fare" prediction={data.fare} isCurrency emphasis />
+        <PredictionField label="Total Fare" prediction={farePred} isCurrency emphasis />
         {data.breakdown && (
           <div className="space-y-2 pt-2 border-t border-surface-border">
             <p className="text-xs uppercase tracking-wider text-ink-muted">Breakdown</p>
             {data.breakdown.base !== null && (
-              <PredictionField label="Base Fare" prediction={{ value: data.breakdown.base, unit: data.currency, basis: data.fare.basis, source: data.fare.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+              <PredictionField label="Base Fare" prediction={{ value: data.breakdown.base, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
             {data.breakdown.distance !== null && (
-              <PredictionField label="Distance" prediction={{ value: data.breakdown.distance, unit: data.currency, basis: data.fare.basis, source: data.fare.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+              <PredictionField label="Distance" prediction={{ value: data.breakdown.distance, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
             {data.breakdown.duration !== null && (
-              <PredictionField label="Duration" prediction={{ value: data.breakdown.duration, unit: data.currency, basis: data.fare.basis, source: data.fare.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+              <PredictionField label="Duration" prediction={{ value: data.breakdown.duration, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
             {data.breakdown.fees !== null && (
-              <PredictionField label="Fees" prediction={{ value: data.breakdown.fees, unit: data.currency, basis: data.fare.basis, source: data.fare.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+              <PredictionField label="Fees" prediction={{ value: data.breakdown.fees, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
             {data.breakdown.surge !== null && (
-              <PredictionField label="Surge" prediction={{ value: data.breakdown.surge, unit: data.currency, basis: data.fare.basis, source: data.fare.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+              <PredictionField label="Surge" prediction={{ value: data.breakdown.surge, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
           </div>
         )}

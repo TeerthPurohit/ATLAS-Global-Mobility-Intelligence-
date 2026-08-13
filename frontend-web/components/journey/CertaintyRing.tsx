@@ -19,7 +19,8 @@ export function CertaintyRing({ basis, size = 20, className, title }: CertaintyR
   if (basis === "unavailable") {
     const gap = size * 0.28;
     return (
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className} title={title}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className}>
+        {title && <title>{title}</title>}
         {[0, 1, 2, 3].map((corner) => {
           const flipX = corner % 2 === 1 ? -1 : 1;
           const flipY = corner >= 2 ? -1 : 1;
@@ -42,7 +43,8 @@ export function CertaintyRing({ basis, size = 20, className, title }: CertaintyR
   }
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={cn(className)} title={title}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={cn(className)}>
+      {title && <title>{title}</title>}
       <circle
         cx={c}
         cy={c}

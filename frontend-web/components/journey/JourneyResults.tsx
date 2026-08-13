@@ -11,7 +11,7 @@ import { CarbonCard } from "@/components/journey/cards/CarbonCard";
 import { BestDepartureCard } from "@/components/journey/cards/BestDepartureCard";
 import { ContextCard } from "@/components/journey/cards/ContextCard";
 import { AICard } from "@/components/journey/cards/AICard";
-import { CapabilityGate, useCapability } from "@/components/capability/CapabilityGate";
+import { useCapability } from "@/components/capability/CapabilityGate";
 import { TierNotice } from "@/components/capability/TierBadge";
 import { ProvenanceSummary } from "@/components/ui/ProvenanceTooltip";
 import { type JourneyRequest, type PredictionRequest } from "@/lib/api";
@@ -94,34 +94,56 @@ function JourneyProvenanceSummary({ cityTier }: { cityTier: string }) {
 }
 
 export function JourneyResults({ request, cityTier }: JourneyResultsProps) {
+  // JourneyForm now resolves the real city_id itself (bbox for NYC/London,
+  // resolveCityId()'s registry lookup for everywhere else) before it ever
+  // calls onSubmit -- this used to default blindly to "nyc" whenever
+  // city_id was missing/"undefined", which is why every non-NYC/London
+  // journey's cards silently queried NYC's data. A still-missing city_id
+  // here means resolution genuinely failed (e.g. a coordinate with no
+  // WorldMove coverage), not "assume NYC".
+  const cityId = request.city_id && request.city_id !== "undefined" ? request.city_id : null;
+
+  if (!cityId) {
+    return (
+      <div className="space-y-4">
+        <Card className="border-oxide/40 bg-surface-1">
+          <p className="text-sm text-ink-secondary">
+            Could not resolve a city for this pickup location, so no predictions can be shown.
+            Try picking a location from the address suggestions.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   const predictionRequest = useMemo<PredictionRequest>(() => ({
-    city_id: request.city_id!,
+    city_id: cityId,
     pickup: { lat: request.pickup_lat, lon: request.pickup_lon },
     dropoff: { lat: request.dropoff_lat, lon: request.dropoff_lon },
     departure_time: request.departure_time,
     vehicle_type: request.vehicle_type,
     distance_km: null,
     duration_min: null,
-  }), [request]);
+  }), [request, cityId]);
 
   const routeRequest = useMemo<PredictionRequest>(() => ({
-    city_id: request.city_id!,
+    city_id: cityId,
     pickup: { lat: request.pickup_lat, lon: request.pickup_lon },
     dropoff: { lat: request.dropoff_lat, lon: request.dropoff_lon },
     departure_time: request.departure_time,
     vehicle_type: request.vehicle_type,
-  }), [request]);
+  }), [request, cityId]);
 
   // Check capabilities for conditional rendering
-  const hasFare = useCapability(request.city_id!, "fare");
-  const hasDemand = useCapability(request.city_id!, "demand");
-  const hasCongestion = useCapability(request.city_id!, "congestion");
-  const hasAvailability = useCapability(request.city_id!, "availability");
-  const hasSurge = useCapability(request.city_id!, "surge");
-  const hasCarbon = useCapability(request.city_id!, "carbon");
-  const hasBestDeparture = useCapability(request.city_id!, "best_departure");
-  const hasChat = useCapability(request.city_id!, "chat");
-  const hasRouting = useCapability(request.city_id!, "routing");
+  const hasFare = useCapability(cityId, "fare");
+  const hasDemand = useCapability(cityId, "demand");
+  const hasCongestion = useCapability(cityId, "congestion");
+  const hasAvailability = useCapability(cityId, "availability");
+  const hasSurge = useCapability(cityId, "surge");
+  const hasCarbon = useCapability(cityId, "carbon");
+  const hasBestDeparture = useCapability(cityId, "best_departure");
+  const hasChat = useCapability(cityId, "chat");
+  const hasRouting = useCapability(cityId, "routing");
 
   return (
     <div className="space-y-4">
@@ -141,13 +163,13 @@ export function JourneyResults({ request, cityTier }: JourneyResultsProps) {
       {hasBestDeparture && <BestDepartureCard request={predictionRequest} />}
 
       {/* Context section */}
-      {hasRouting && <JourneyContextSection request={predictionRequest} cityId={request.city_id!} />}
+      {hasRouting && <JourneyContextSection request={predictionRequest} cityId={cityId} />}
 
       {/* AI Recommendation - shown last after other data loads */}
       {hasChat && (
         <AICardSection
           request={predictionRequest}
-          cityId={request.city_id!}
+          cityId={cityId}
         />
       )}
 

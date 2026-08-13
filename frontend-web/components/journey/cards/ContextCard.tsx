@@ -65,7 +65,11 @@ function ContextCardContent({
             <WeatherIcon condition={weather.weather_condition} />
             <div className="flex-1">
               <p className="font-medium text-ink-primary">
-                {weather.temperature !== null ? `${Math.round(weather.temperature)}°C` : "—"}
+                {weather.severity !== null
+                  ? `Severity ${Math.round(weather.severity * 100)}%`
+                  : weather.temperature !== null
+                    ? `${Math.round(weather.temperature)}°C`
+                    : "—"}
                 {weather.weather_condition && ` · ${weather.weather_condition}`}
               </p>
               <p className="text-xs text-ink-muted">

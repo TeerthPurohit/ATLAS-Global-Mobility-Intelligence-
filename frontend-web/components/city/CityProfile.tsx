@@ -1,11 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   getCityProfile,
   getCityCapabilities,
   getCityTariff,
   getCityZones,
+  type CityTariffResponse,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { Card, CardTitle } from "@/components/ui/Card";
@@ -20,16 +21,22 @@ export function CityProfile({ cityId }: { cityId: string }) {
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: queryKeys.cityProfile(cityId),
     queryFn: () => getCityProfile(cityId),
+    enabled: !!cityId,
+    placeholderData: keepPreviousData,
   });
 
   const { data: capabilities } = useQuery({
     queryKey: queryKeys.cityCapabilities(cityId),
     queryFn: () => getCityCapabilities(cityId),
+    enabled: !!cityId,
+    placeholderData: keepPreviousData,
   });
 
   const { data: tariff } = useQuery({
     queryKey: queryKeys.cityTariff(cityId),
     queryFn: () => getCityTariff(cityId),
+    enabled: !!cityId,
+    placeholderData: keepPreviousData,
   });
 
   const { data: zones } = useQuery({
@@ -80,10 +87,30 @@ export function CityProfile({ cityId }: { cityId: string }) {
     transit_coverage: false,
   };
 
-  const defaultTariff = {
+  const defaultTariff: CityTariffResponse = {
     available: false,
     city_id: cityId,
     reason: "Tariff profile not loaded",
+    currency: null,
+    base_fare: null,
+    per_km: null,
+    per_min: null,
+    min_fare: null,
+    night_multiplier: null,
+    airport_surcharge: null,
+    booking_fee: null,
+    platform_fee: null,
+    tolls: null,
+    peak_multiplier: null,
+    vehicle_multiplier: null,
+    surge_multiplier: null,
+    effective_from: null,
+    version: null,
+    source_type: null,
+    confidence: null,
+    notes: null,
+    generated_at: null,
+    model_id: null,
   };
 
   return (

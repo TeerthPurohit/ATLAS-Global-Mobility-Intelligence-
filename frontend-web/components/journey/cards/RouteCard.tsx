@@ -4,7 +4,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { PredictionField } from "@/components/journey/PredictionField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { getRoute, type RouteRequest, type RouteResponse } from "@/lib/api";
+import { getRoute, mobilityToPrediction, type RouteRequest, type RouteResponse } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { MapPin } from "lucide-react";
@@ -29,6 +29,9 @@ function RouteCardSkeleton() {
 }
 
 function RouteCardContent({ data }: { data: RouteResponse }) {
+  const distPred = mobilityToPrediction(data.distance);
+  const durPred = mobilityToPrediction(data.duration);
+
   return (
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
@@ -36,8 +39,8 @@ function RouteCardContent({ data }: { data: RouteResponse }) {
         Route
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Distance" prediction={data.distance} />
-        <PredictionField label="Duration" prediction={data.duration} />
+        <PredictionField label="Distance" prediction={distPred} />
+        <PredictionField label="Duration" prediction={durPred} />
       </div>
       {data.request_id && (
         <div className="mt-3 pt-3 border-t border-surface-border text-xs text-ink-muted font-mono">

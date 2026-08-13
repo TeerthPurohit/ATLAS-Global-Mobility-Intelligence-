@@ -4,7 +4,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { PredictionField } from "@/components/journey/PredictionField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { getSurge, type PredictionRequest, type SurgeResponse } from "@/lib/api";
+import { getSurge, mobilityToPrediction, type PredictionRequest, type SurgeResponse, type PredictionOut } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { Zap } from "lucide-react";
@@ -29,6 +29,17 @@ function SurgeCardSkeleton() {
 }
 
 function SurgeCardContent({ data }: { data: SurgeResponse }) {
+  const pred = mobilityToPrediction(data.surge);
+  const confPred: PredictionOut = {
+    value: Math.round((data.surge.confidence || 0) * 100),
+    unit: "%",
+    basis: data.surge.status || "unavailable",
+    source: data.surge.source || "surge",
+    reason: null,
+    data_vintage: null,
+    value_usd: null,
+  };
+
   return (
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
@@ -36,8 +47,8 @@ function SurgeCardContent({ data }: { data: SurgeResponse }) {
         Surge Risk
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Surge Multiplier" prediction={data.surge} />
-        <PredictionField label="Confidence" prediction={{ value: Math.round((data.surge.confidence || 0) * 100), unit: "%", basis: data.surge.basis, source: data.surge.source, reason: null, data_vintage: null, value_usd: null }} />
+        <PredictionField label="Surge Multiplier" prediction={pred} />
+        <PredictionField label="Confidence" prediction={confPred} />
       </div>
       {data.request_id && (
         <div className="mt-3 pt-3 border-t border-surface-border text-xs text-ink-muted font-mono">

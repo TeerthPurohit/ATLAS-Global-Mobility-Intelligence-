@@ -4,7 +4,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { PredictionField } from "@/components/journey/PredictionField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { getAvailability, type PredictionRequest, type AvailabilityResponse } from "@/lib/api";
+import { getAvailability, mobilityToPrediction, type PredictionRequest, type AvailabilityResponse, type PredictionOut } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { Users } from "lucide-react";
@@ -29,6 +29,17 @@ function AvailabilityCardSkeleton() {
 }
 
 function AvailabilityCardContent({ data }: { data: AvailabilityResponse }) {
+  const pred = mobilityToPrediction(data.availability);
+  const confPred: PredictionOut = {
+    value: Math.round((data.availability.confidence || 0) * 100),
+    unit: "%",
+    basis: data.availability.status || "unavailable",
+    source: data.availability.source || "availability",
+    reason: null,
+    data_vintage: null,
+    value_usd: null,
+  };
+
   return (
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
@@ -36,8 +47,8 @@ function AvailabilityCardContent({ data }: { data: AvailabilityResponse }) {
         Availability
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Ride Availability" prediction={data.availability} />
-        <PredictionField label="Confidence" prediction={{ value: Math.round((data.availability.confidence || 0) * 100), unit: "%", basis: data.availability.basis, source: data.availability.source, reason: null, data_vintage: null, value_usd: null }} />
+        <PredictionField label="Ride Availability" prediction={pred} />
+        <PredictionField label="Confidence" prediction={confPred} />
       </div>
       {data.request_id && (
         <div className="mt-3 pt-3 border-t border-surface-border text-xs text-ink-muted font-mono">

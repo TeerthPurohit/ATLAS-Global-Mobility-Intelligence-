@@ -27,7 +27,7 @@ from backend.schemas import (
     ForecastPoint,
     PredictionEnvelope,
 )
-from backend.services import estimation_service, global_geography_service, model_service
+from backend.services import estimation_service, geography_service, global_geography_service, model_service, pricing_engine, tariff_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -95,14 +95,43 @@ def predict_demand(city_id: str, area_id: int, hour: int, day_of_week: int) -> P
 
 def predict_fare(city_id: str, pickup_area_id: int, dropoff_area_id: int, hour: int) -> PredictionEnvelope | CapabilityUnavailable:
     _require_city(city_id)
-    if models_registry.resolve_model(city_id, "fare") is None:
-        logger.info("prediction_service: fare capability unavailable for city_id=%s", city_id)
-        return CapabilityUnavailable(available=False, capability="fare", reason=f"no active fare model for city_id={city_id!r}")
-    try:
-        value, model_name = model_service.predict_fare(pickup_area_id, dropoff_area_id, hour)
-    except KeyError as exc:
-        raise DomainError(ErrorCode.PREDICTION_FAILED, str(exc), 400) from exc
-    return _envelope(city_id, pickup_area_id, dropoff_area_id, "fare", value, model_name, basis="computed")
+    if models_registry.resolve_model(city_id, "fare") is not None:
+        try:
+            value, model_name = model_service.predict_fare(pickup_area_id, dropoff_area_id, hour)
+        except KeyError as exc:
+            raise DomainError(ErrorCode.PREDICTION_FAILED, str(exc), 400) from exc
+        return _envelope(city_id, pickup_area_id, dropoff_area_id, "fare", value, model_name, basis="computed")
+
+    # No trained fare model -- fall through to the tariff-profile estimate,
+    # same source cities.py's capability matrix already promises via
+    # `fare = has_fare_model or has_tariff` (this endpoint used to only ever
+    # check has_fare_model, so capabilities.fare=True for a TRANSFER city
+    # while this call 200'd CapabilityUnavailable -- a contradiction the
+    # /api/mobility/fare path never had, since it went through pricing_engine
+    # directly).
+    if tariff_profiles.get(city_id) is None:
+        logger.info("prediction_service: fare capability unavailable for city_id=%s (no model, no tariff)", city_id)
+        return CapabilityUnavailable(
+            available=False, capability="fare",
+            reason=f"no active fare model and no tariff profile for city_id={city_id!r}",
+        )
+    pickup = geography_service.get_area(city_id, pickup_area_id)
+    dropoff = geography_service.get_area(city_id, dropoff_area_id)
+    if not pickup or not dropoff or pickup["latitude"] is None or dropoff["latitude"] is None:
+        return CapabilityUnavailable(
+            available=False, capability="fare",
+            reason="pickup/dropoff area has no resolvable coordinates for this city",
+        )
+    distance = model_service._haversine_miles(
+        (pickup["latitude"], pickup["longitude"]), (dropoff["latitude"], dropoff["longitude"])
+    )
+    result = pricing_engine.estimate_tariff_base_fare(city_id, distance, hour)
+    if result.value is None:
+        return CapabilityUnavailable(available=False, capability="fare", reason=result.reason)
+    return _envelope(
+        city_id, pickup_area_id, dropoff_area_id, "fare", result.value, result.method,
+        basis="modeled_estimate", reason=result.reason,
+    )
 
 
 def forecast(city_id: str, metric: str, hours: int = 24) -> ForecastEnvelope | CapabilityUnavailable:
