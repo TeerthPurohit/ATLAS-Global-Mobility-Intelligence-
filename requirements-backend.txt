@@ -13,6 +13,12 @@ scikit-learn>=1.4,<2.0
 openai>=1.0,<2.0
 qdrant-client>=1.9,<2.0
 python-dotenv>=1.0,<2.0
+# rag/session_store.py imports this unconditionally at module load (chat.py ->
+# rag_service.py -> rag_pipeline.py -> session_store.py), so it's a hard
+# import-time dependency of the backend image, not just a training/dbt one --
+# without it the container crashes before FastAPI even builds its routes,
+# regardless of whether Postgres is reachable at runtime.
+psycopg[binary]>=3.1,<4.0
 
 fastapi>=0.110,<1.0
 uvicorn[standard]>=0.27,<1.0

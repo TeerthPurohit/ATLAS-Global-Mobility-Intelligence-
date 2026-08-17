@@ -97,7 +97,7 @@ def capability_matrix(city_id: str) -> dict[str, bool] | None:
     Returns None for a city_id neither registry knows.
     """
     from backend.registry import global_cities as global_cities_registry  # local import: avoids import-order coupling
-    from backend.services import tariff_profiles
+    from backend.services import model_service, tariff_profiles
 
     registered = get_city(city_id)
     global_city = global_cities_registry.get_city(city_id)
@@ -112,6 +112,16 @@ def capability_matrix(city_id: str) -> dict[str, bool] | None:
     has_fare_model = models_registry.resolve_model(city_id, "fare") is not None
     source = registered or global_city or {}
     population = source.get("population")
+    # SPEC-016: any WorldMove-covered city gets real per-grid-cell hour-of-day
+    # occupancy (worldmove_area_hourly_momentum) -- the same "current pressure
+    # vs. typical" signal availability/surge/best_departure are built on for
+    # nyc/london, just sourced from a single-day trajectory instead of
+    # multi-month history (journey_predictors._demand_pressure() picks
+    # whichever real source this city actually has). This used to be a hard
+    # False for every non-nyc/london city even after that data existed
+    # (found via /debug 2026-08-13).
+    has_worldmove_momentum = model_service.has_worldmove_momentum(city_id)
+    has_momentum = has_zone_model or has_worldmove_momentum
 
     return {
         # OSRM (with a haversine fallback) routes between the coordinates the
@@ -128,10 +138,10 @@ def capability_matrix(city_id: str) -> dict[str, bool] | None:
         # only) with a weather leg the global Open-Meteo adapter serves from
         # the request's own coordinates -- one leg is enough for a bucket.
         "congestion": True,
-        "availability": has_zone_model,
-        "surge": has_zone_model,
+        "availability": has_momentum,
+        "surge": has_momentum,
         "carbon": True,  # distance x seeded emission factor, city-independent
-        "best_departure": has_zone_model,
+        "best_departure": has_momentum,
     }
 
 
@@ -148,10 +158,30 @@ def get_capabilities(city_id: str) -> dict | None:
         "area_type": city.get("geography_type", "zone"),
         "demand": has_demand,
         "fare": has_fare,
-        "journey": models_registry.resolve_model(city_id, "journey") is not None,
-        "chat": get_chat_tier(city_id) != "context_only",
+        # journey_predictors.py orchestrates routing/demand/fare/carbon/
+        # congestion/availability/surge/best_departure with per-component
+        # honest degradation (never a hard failure) -- POST /journey/estimate
+        # already returns 200 for any resolvable city (verified live for
+        # nyc/Marseille/Tokyo/Liverpool, /debug 2026-08-13). The
+        # model_registry lookup this used to gate on only ever had one row,
+        # for nyc, which made this flag False for every other city even
+        # though the endpoint it describes works the same way everywhere.
+        "journey": True,
+        # Every resolvable city gets SOME chat tier (context_only is a real,
+        # working answer path -- _answer_context_only() narrates over real
+        # geography/weather/demand-shape context, grounded and non-fabricating,
+        # see rag_service.py's _CONTEXT_ONLY_SYSTEM_PROMPT). This used to read
+        # `!= "context_only"`, which reported every non-nyc/london city as
+        # chat-incapable even though it could genuinely answer questions --
+        # confusing "not the best tier" with "no chat at all" (found via
+        # /debug 2026-08-13).
+        "chat": True,
         "chat_tier": get_chat_tier(city_id),
-        "area_analysis": registered and _area_count(city_id) > 0,
+        # canonical_areas now has real WorldMove grid_cell rows for every
+        # covered city (SPEC-016), not just nyc/london zones/stations -- the
+        # `registered and` gate here predates that and made area_analysis
+        # always False for a real, non-empty area count.
+        "area_analysis": _area_count(city_id) > 0,
         "forecast": has_demand or has_fare,
         "transit_coverage": transit_registry.has_feed(city_id),
         **matrix,

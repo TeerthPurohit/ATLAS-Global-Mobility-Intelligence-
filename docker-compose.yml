@@ -21,6 +21,15 @@ services:
       - ./backend:/app/backend
       - ./rag:/app/rag
       - ./dbt_project:/app/dbt_project
+      # RDS TLS CA bundle (ADR-009): rag/session_store.py and
+      # backend/services/prediction_log.py both need this at
+      # POSTGRES_SSLROOTCERT (certs/global-bundle.pem) for sslmode=verify-full.
+      # Neither the Dockerfile's COPY list nor this file previously included
+      # it, so every Postgres connection failed before it could even attempt
+      # TLS (found via /debug 2026-08-13, after fixing the actually-missing
+      # psycopg dependency surfaced the next layer of the same gap). Read-only
+      # -- it's a public CA bundle, nothing here ever writes to it.
+      - ./certs:/app/certs:ro
     depends_on:
       - qdrant
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000

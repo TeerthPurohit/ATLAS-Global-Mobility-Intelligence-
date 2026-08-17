@@ -161,6 +161,7 @@ def main() -> None:
 
     flush(con, updates)
     _fix_population(con)
+    _drop_unresolvable(con)
     con.close()
 
     ok = len(rows) - len(failed)
@@ -180,6 +181,23 @@ def _fix_population(con: duckdb.DuckDBPyConnection) -> None:
         "WHERE population IS NOT NULL"
     )
     print("Population fixed.")
+
+
+def _drop_unresolvable(con: duckdb.DuckDBPyConnection) -> None:
+    """A row still NULL here means every geocode() attempt exhausted (e.g.
+    WorldMove's own source tagged the wrong country_code -- Drammen/Norway
+    and Suez/Egypt both shipped as country_code='US' in the raw .npy
+    metadata, so GeoNames found nothing under that country filter). Kept
+    around it's dead weight: no coordinates means unusable for routing/
+    distance, and it still pollutes that (wrong) country's search results.
+    Only reached after a full, uninterrupted pass -- see main()."""
+    dropped = con.execute(
+        "SELECT city_id FROM global_cities WHERE latitude IS NULL OR longitude IS NULL"
+    ).fetchall()
+    if not dropped:
+        return
+    con.execute("DELETE FROM global_cities WHERE latitude IS NULL OR longitude IS NULL")
+    print(f"Dropped {len(dropped)} unresolvable row(s): {[r[0] for r in dropped]}")
 
 
 if __name__ == "__main__":

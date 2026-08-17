@@ -1,6 +1,20 @@
 version: 2
 
 models:
+  - name: worldmove_area_hourly_momentum
+    description: "Per-grid-cell hour-of-day occupancy vs. that cell's own daily mean -- real per-area momentum signal for availability/surge risk on WorldMove-covered cities."
+    columns:
+      - name: area_id
+        tests: [not_null]
+      - name: hour
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 23, inclusive: true}
+      - name: occupancy_ratio
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, inclusive: false}
+
   - name: worldmove_city_hourly_shape
     description: "Real per-city hour-of-day demand shape from WorldMove trajectories -- replaces NYC's shape being applied to every non-NYC/London city."
     columns:

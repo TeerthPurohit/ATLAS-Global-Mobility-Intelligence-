@@ -65,6 +65,33 @@ def _get_london_tree() -> KDTree:
     return _london_tree
 
 
+# (city_id -> (KDTree, (min_lat, min_lon, max_lat, max_lon))), built lazily
+# per city from its own canonical_areas grid_cell rows (SPEC-016). Unlike
+# NYC/London's hand-picked bboxes, the coverage box here is derived from the
+# real WorldMove grid points themselves -- that grid is already built snug
+# around the city's actual extent (verified: Marseille's cells span lon
+# 5.22-5.53/lat 43.17-43.39, matching the real city), so there's no separate
+# constant to hand-maintain per city and no risk of it drifting from the data.
+_grid_cell_trees: dict[str, tuple[KDTree, tuple[float, float, float, float]]] = {}
+
+
+def _get_grid_cell_tree(city_id: str) -> tuple[KDTree, tuple[float, float, float, float]] | None:
+    if city_id not in _grid_cell_trees:
+        points = [
+            ZonePoint(location_id=a["area_id"], zone=a["name"], lat=a["latitude"], lon=a["longitude"])
+            for a in list_areas(city_id)
+            if a["area_type"] == "grid_cell" and a["latitude"] is not None and a["longitude"] is not None
+        ]
+        if not points:
+            _grid_cell_trees[city_id] = None
+        else:
+            lats = [p.lat for p in points]
+            lons = [p.lon for p in points]
+            bbox = (min(lats), min(lons), max(lats), max(lons))
+            _grid_cell_trees[city_id] = (KDTree(points), bbox)
+    return _grid_cell_trees[city_id]
+
+
 def in_coverage(lat: float, lon: float) -> bool:
     min_lat, min_lon, max_lat, max_lon = _NYC_BBOX
     return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
@@ -105,7 +132,15 @@ def resolve_for_city(city_id: str, lat: float, lon: float) -> int | None:
             return None
         point = _get_london_tree().nearest(lat, lon)
         return point.location_id if point else None
-    return None  # no zone/station coverage for any other city yet
+    # Any other city with WorldMove grid-cell coverage (SPEC-016).
+    found = _get_grid_cell_tree(city_id)
+    if found is None:
+        return None  # no area coverage of any kind for this city
+    tree, (min_lat, min_lon, max_lat, max_lon) = found
+    if not (min_lat <= lat <= max_lat and min_lon <= lon <= max_lon):
+        return None
+    point = tree.nearest(lat, lon)
+    return point.location_id if point else None
 
 
 def list_areas(city_id: str) -> list[dict]:

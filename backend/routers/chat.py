@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from backend.schemas import ChatMessage, ChatRequest, ChatResponse
 from backend.services import rag_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -89,8 +92,17 @@ async def websocket_chat_stream(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as exc:
+        # Log the real exception server-side for investigation; never forward
+        # str(exc) to the client -- it can contain internal details (DB
+        # hostnames/ports, driver error text) that are none of the caller's
+        # business. Found via /debug 2026-08-13: an unreachable RDS Postgres
+        # connection string reached the frontend verbatim through this path
+        # before session_store.py/prediction_log.py were made to degrade
+        # gracefully (the actual root-cause fix); this is the defense-in-depth
+        # backstop for whatever the next unexpected failure turns out to be.
+        logger.exception("chat stream failed")
         try:
-            await websocket.send_json({"error": str(exc)})
+            await websocket.send_json({"error": "Something went wrong answering this question. Please try again."})
             await websocket.close(code=1011)
         except Exception:
             pass

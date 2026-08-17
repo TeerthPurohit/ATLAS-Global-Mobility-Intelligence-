@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.services import estimation_service, global_geography_service, transit_service  # noqa: E402
+from backend.services import estimation_service, global_geography_service, model_service, transit_service  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +260,44 @@ def get_city_context(city_id: str) -> dict:
                 "timestamp": _now_iso(),
                 "reason": (estimate.reason if estimate else "population covariate unresolvable for this location"),
             }
+
+    # 6b. Hourly Demand Shape Context -- real per-city hour-of-day fractions
+    # (SPEC-016's worldmove_city_hourly_shape for a WorldMove-covered city,
+    # or the same real multi-month shape nyc/london already load) via
+    # model_service.hourly_shape_fraction(). This is what lets a context-only
+    # tier city (chat's LLM narrator, _CONTEXT_ONLY_SYSTEM_PROMPT) answer a
+    # "what's the best time to travel" question with a real busiest/quietest
+    # hour instead of having no demand-timing data at all to work from.
+    day_of_week = datetime.now(timezone.utc).weekday()
+    hourly = [
+        (hour, model_service.hourly_shape_fraction(hour, day_of_week, city_id=city_id))
+        for hour in range(24)
+    ]
+    hourly = [(hour, frac) for hour, frac in hourly if frac is not None]
+    if hourly:
+        busiest_hour, busiest_frac = max(hourly, key=lambda h: h[1])
+        quietest_hour, quietest_frac = min(hourly, key=lambda h: h[1])
+        context_map["demand_shape"] = {
+            "status": "available",
+            "data": {
+                "busiest_hour_of_day": busiest_hour,
+                "busiest_hour_pct_of_daily_trips": round(busiest_frac * 100, 1),
+                "quietest_hour_of_day": quietest_hour,
+                "quietest_hour_pct_of_daily_trips": round(quietest_frac * 100, 1),
+            },
+            "source": "worldmove_city_hourly_shape" if city_id not in ("nyc", "london") else "zone_hourly_demand",
+            "timestamp": _now_iso(),
+            "freshness": "live",
+            "coverage": "city_wide_hour_of_day",
+        }
+    else:
+        context_map["demand_shape"] = {
+            "status": "unavailable",
+            "data": None,
+            "source": "model_service.hourly_shape_fraction",
+            "timestamp": _now_iso(),
+            "reason": "no per-hour demand shape loaded for this city",
+        }
 
     # 7. Transit Coverage Context
     feed = transit_registry.get_feed(city_id)

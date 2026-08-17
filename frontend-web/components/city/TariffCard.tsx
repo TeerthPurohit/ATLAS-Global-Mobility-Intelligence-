@@ -36,9 +36,9 @@ export function TariffCard({ tariff, className }: TariffCardProps) {
     { label: "Night Multiplier", value: tariff.night_multiplier ? `${tariff.night_multiplier.toFixed(2)}x` : "—" },
     { label: "Airport Surcharge", value: tariff.airport_surcharge ? `${tariff.currency} ${tariff.airport_surcharge.toFixed(2)}` : "—" },
     { label: "Surge Ceiling", value: tariff.surge_multiplier ? `${tariff.surge_multiplier.toFixed(2)}x` : "—" },
-    { label: "Profile Source", value: tariff.source_type || "Tariff Database" },
-    { label: "Effective Date", value: tariff.effective_from || "2024-01-01" },
-    { label: "Profile Version", value: tariff.version || "v1.0" },
+    { label: "Profile Source", value: tariff.source_type || "—" },
+    { label: "Effective Date", value: tariff.effective_from || "—" },
+    { label: "Profile Version", value: tariff.version || "—" },
   ];
 
   return (

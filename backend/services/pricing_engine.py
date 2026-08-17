@@ -26,6 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult, effective_confidence
+from backend.predictors.journey_predictors import _demand_pressure
 from backend.services import model_service, tariff_profiles
 
 # Capped adjustment rates -- product configuration, not measured facts (see
@@ -238,13 +239,17 @@ def _demand_adjustment(ctx: JourneyContext, base_fare: PredictionResult, feature
             value=None, unit=None, basis="unavailable", source="demand_adjustment",
             reason=f"base fare unavailable or pickup location outside {ctx.city_id}'s zone coverage",
         )
-    momentum = model_service.get_zone_momentum(ctx.pickup_zone_id, ctx.city_id)
-    if momentum is None or momentum["rolling_7d_avg"] <= 0:
+    # Same real momentum signal journey_predictors.predict_availability/
+    # predict_surge_risk already use (nyc/london zone momentum, or WorldMove
+    # per-cell occupancy for any other covered city) -- reused rather than
+    # re-deriving a second, only-nyc/london-aware pressure formula here
+    # (found duplicated via /debug 2026-08-13).
+    pressure = _demand_pressure(ctx)
+    if pressure is None:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="demand_adjustment",
             reason="no demand history for this zone",
         )
-    pressure = max(0.0, min(1.0, momentum["lag_1h"] / momentum["rolling_7d_avg"] / 2.0))
     sensitivity = features.vehicle_profile.demand_sensitivity if features.vehicle_profile else 1.0
     delta = round(base_fare.value * _DEMAND_MAX_PCT * pressure * sensitivity, 2)
     return PredictionResult(

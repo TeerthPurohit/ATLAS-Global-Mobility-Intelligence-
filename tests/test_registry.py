@@ -124,4 +124,12 @@ def test_london_capabilities_reflect_cycle_share_mode(client):
     assert capabilities["area_type"] == "cycle_station"
     assert capabilities["demand"] is True
     assert capabilities["fare"] is False
-    assert capabilities["journey"] is False
+    # journey_predictors.py orchestrates routing/demand/fare/carbon/congestion/
+    # availability/surge/best_departure with honest per-component degradation
+    # for ANY city -- it was never actually London-specific. This capability
+    # flag used to gate on a model_registry row that only ever existed for
+    # nyc (a seed-data gap, not a real capability gap: /journey/estimate
+    # already worked for London in production, same as every other city).
+    # Fixed via /debug 2026-08-13 alongside extending availability/surge/
+    # best_departure to WorldMove-covered cities.
+    assert capabilities["journey"] is True

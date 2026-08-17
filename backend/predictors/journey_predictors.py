@@ -123,15 +123,27 @@ def predict_congestion(features: JourneyFeatures) -> PredictionResult:
 
 
 def _demand_pressure(ctx: JourneyContext) -> float | None:
-    """Real momentum-based signal (0-1): how the zone's current lag_1h
-    compares to its own rolling_7d_avg -- >1 means busier than usual."""
+    """Real momentum-based signal (0-1): how busy this area is right now
+    relative to its own typical level -- >1 means busier than usual.
+
+    nyc/london: lag_1h vs. rolling_7d_avg from a multi-month zone mart.
+    Any WorldMove-covered city: this hour's real occupancy vs. that grid
+    cell's own daily-mean occupancy (worldmove_area_hourly_momentum) --
+    the same "now vs. typical" question, answered from a single-day
+    trajectory instead of multi-month history, honestly scoped to what
+    that source actually supports (see the mart's own docstring)."""
     if ctx.pickup_zone_id is None:
         return None
-    momentum = model_service.get_zone_momentum(ctx.pickup_zone_id, ctx.city_id)
-    if momentum is None or momentum["rolling_7d_avg"] <= 0:
+    if ctx.city_id in _ZONE_MODEL_CITIES:
+        momentum = model_service.get_zone_momentum(ctx.pickup_zone_id, ctx.city_id)
+        if momentum is None or momentum["rolling_7d_avg"] <= 0:
+            return None
+        ratio = momentum["lag_1h"] / momentum["rolling_7d_avg"]
+        return max(0.0, min(1.0, ratio / 2.0))  # ratio of 2x average maps to full pressure
+    ratio = model_service.get_worldmove_area_pressure(ctx.pickup_zone_id, ctx.departure_time.hour)
+    if ratio is None:
         return None
-    ratio = momentum["lag_1h"] / momentum["rolling_7d_avg"]
-    return max(0.0, min(1.0, ratio / 2.0))  # ratio of 2x average maps to full pressure
+    return max(0.0, min(1.0, ratio / 2.0))
 
 
 def predict_availability(ctx: JourneyContext, features: JourneyFeatures) -> PredictionResult:
@@ -197,30 +209,54 @@ def predict_surge_risk(ctx: JourneyContext, features: JourneyFeatures) -> Predic
 def sweep_best_departure_time(
     pickup_zone_id: int | None, from_hour: int, day_of_week: int, window_hours: int = 6, city_id: str = "nyc",
 ) -> PredictionResult:
-    if pickup_zone_id is None or city_id not in _ZONE_MODEL_CITIES:
+    if pickup_zone_id is None:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="best_departure_time",
-            reason=f"pickup location outside {city_id}'s zone coverage",
+            reason=f"pickup location outside {city_id}'s area coverage",
         )
+    if city_id in _ZONE_MODEL_CITIES:
+        candidates = []
+        for offset in range(window_hours):
+            hour = (from_hour + offset) % 24
+            try:
+                demand, _ = model_service.predict_demand(pickup_zone_id, hour, day_of_week, city_id=city_id)
+            except KeyError:
+                continue
+            candidates.append((hour, demand))
+        if not candidates:
+            return PredictionResult(
+                value=None, unit=None, basis="unavailable", source="best_departure_time",
+                reason="no demand history for this zone",
+            )
+        best_hour, _ = min(candidates, key=lambda c: c[1])
+        return PredictionResult(
+            value=best_hour, unit="hour_of_day", basis="computed", source="demand_sweep_xgboost_demand_v1", reason=None,
+            # A sweep over a real trained model, but only over the hours the model
+            # actually answered for -- a partial window is a weaker recommendation.
+            confidence=round(len(candidates) / window_hours, 2), method="demand_model_sweep",
+        )
+    # No trained per-zone demand model for this city -- sweep the real
+    # WorldMove-derived city-wide hourly shape instead (worldmove_city_hourly_shape).
+    # A city-wide shape, not per-cell, same honesty tradeoff estimation_service's
+    # transferred-shape estimates already make elsewhere in this codebase.
     candidates = []
     for offset in range(window_hours):
         hour = (from_hour + offset) % 24
-        try:
-            demand, _ = model_service.predict_demand(pickup_zone_id, hour, day_of_week, city_id=city_id)
-        except KeyError:
-            continue
-        candidates.append((hour, demand))
+        frac = model_service.hourly_shape_fraction(hour, day_of_week, city_id=city_id)
+        if frac is not None:
+            candidates.append((hour, frac))
     if not candidates:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="best_departure_time",
-            reason="no demand history for this zone",
+            reason="no demand shape loaded for this city",
         )
     best_hour, _ = min(candidates, key=lambda c: c[1])
     return PredictionResult(
-        value=best_hour, unit="hour_of_day", basis="computed", source="demand_sweep_xgboost_demand_v1", reason=None,
-        # A sweep over a real trained model, but only over the hours the model
-        # actually answered for -- a partial window is a weaker recommendation.
-        confidence=round(len(candidates) / window_hours, 2), method="demand_model_sweep",
+        value=best_hour, unit="hour_of_day", basis="modeled_estimate", source="worldmove_hourly_shape_sweep",
+        reason="lowest-demand hour in this window per this city's own real hourly demand shape "
+        "(WorldMove-derived, city-wide -- not per-area like the trained-model sweep)",
+        confidence=round(len(candidates) / window_hours * BASIS_CONFIDENCE["modeled_estimate"], 2),
+        method="worldmove_hourly_shape_sweep",
     )
 
 
