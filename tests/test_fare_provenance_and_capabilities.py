@@ -18,6 +18,15 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from dotenv import load_dotenv  # noqa: E402
+
+# This module calls tariff_profiles.city_ids() at import time (below), which
+# now needs DATABASE_URL (city_tariff_profiles moved to Postgres, see
+# tariff_profiles.py's module docstring) -- unlike test_api.py/test_journey.py,
+# this file imports backend.services directly rather than backend.main, so it
+# never got main.py's load_dotenv() for free.
+load_dotenv(REPO_ROOT / ".env")
+
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402

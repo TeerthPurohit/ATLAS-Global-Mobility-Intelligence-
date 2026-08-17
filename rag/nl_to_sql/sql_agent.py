@@ -52,11 +52,21 @@ this shape -- never SQL, never markdown, never an explanation:
 
 {{"intent": "area_ranking"|"metric_lookup"|"top_n"|"comparison"|"hourly_pattern", \
 "metric": "demand"|"fare"|"flow", \
-"filters": {{"hour": <int or null>, "area": <string or null>, "date_range": <[string,string] or null>}}, \
+"filters": {{"hour": <int or null>, "area": <value or null>, "dest_area": <value or null>, \
+"date_range": <[string,string] or null>}}, \
 "aggregation": "count"|"avg"|"sum"|"max"|"min", "group_by": <string or null>, \
 "order": "asc"|"desc"|null, "limit": <int or null>}}
 
-Only reference fields this schema actually resolves for the metric you pick:
+"area" is the origin/single zone a question is about; "dest_area" is ONLY for \
+a question that names a SECOND, destination zone (e.g. "trips FROM JFK TO \
+Times Square" -> area="JFK Airport", dest_area="Times Sq/Theatre District"). \
+Omit dest_area entirely for a question about just one zone -- never fill it \
+with a guess.
+
+Only reference fields this schema actually resolves for the metric you pick \
+(the schema below states each field's real value type -- output area/dest_area \
+as a JSON number, unquoted, when its type says numeric, never as a numeric \
+string like "161"):
 
 {schema}
 

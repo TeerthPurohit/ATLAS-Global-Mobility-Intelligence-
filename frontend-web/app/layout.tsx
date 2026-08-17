@@ -7,7 +7,7 @@ import { CommandPalette } from "@/components/layout/CommandPalette";
 import { SmoothScrollProvider } from "@/components/layout/SmoothScrollProvider";
 
 export const metadata: Metadata = {
-  title: "WorldMove | Mobility Intelligence",
+  title: "ATLAS | Global Mobility Analysis",
   description: "Global urban mobility intelligence platform. Understand demand, fares, and patterns across NYC, London, and 500+ WorldMove-covered cities.",
 };
 

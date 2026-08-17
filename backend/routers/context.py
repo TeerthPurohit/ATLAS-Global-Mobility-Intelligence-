@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from loguru import logger
 
 # Add repo root for imports
 import sys
@@ -49,6 +50,7 @@ def weather(
     0-1 weather severity score under `severity`; `temperature` is always None
     because no adapter here returns one (see WeatherResponse docstring).
     """
+    logger.info("GET /api/context/weather step=start city_id={} lat={} lon={} timestamp={}", city_id, lat, lon, timestamp)
     if lat is None or lon is None:
         lat, lon = _resolve_coords(city_id)
 
@@ -56,11 +58,13 @@ def weather(
         try:
             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except ValueError:
+            logger.warning("GET /api/context/weather step=invalid_timestamp value={!r}", timestamp)
             raise HTTPException(status_code=400, detail=f"invalid timestamp={timestamp!r}: expected ISO 8601")
     else:
         dt = datetime.now()
 
     weather_result = weather_openmeteo.fetch(lat, lon, dt)
+    logger.info("GET /api/context/weather step=done city_id={} source={}", city_id, weather_result.source)
 
     severity = weather_result.value if weather_result.basis == "computed" else None
     note = None
@@ -90,25 +94,30 @@ def holiday(
     date: str | None = Query(None, description="ISO date (YYYY-MM-DD), defaults to today"),
 ) -> HolidayResponse:
     """Check if a date is a holiday in the city's country."""
+    logger.info("GET /api/context/holiday step=start city_id={} lat={} lon={} date={}", city_id, lat, lon, date)
     profile = None
     if lat is None or lon is None:
         profile = global_geography_service.get_city_profile(city_id)
         if not profile:
+            logger.warning("GET /api/context/holiday step=city_not_resolvable city_id={}", city_id)
             raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
         lat = profile.get("latitude")
         lon = profile.get("longitude")
         if lat is None or lon is None:
+            logger.warning("GET /api/context/holiday step=missing_coordinates city_id={}", city_id)
             raise HTTPException(status_code=400, detail=f"City profile missing coordinates for {city_id}")
 
     if date:
         try:
             dt = datetime.fromisoformat(date)
         except ValueError:
+            logger.warning("GET /api/context/holiday step=invalid_date value={!r}", date)
             raise HTTPException(status_code=400, detail=f"invalid date={date!r}: expected YYYY-MM-DD")
     else:
         dt = datetime.now()
 
     holiday_result = holidays_nager.fetch(lat, lon, dt)
+    logger.info("GET /api/context/holiday step=done city_id={} source={}", city_id, holiday_result.source)
 
     is_holiday = holiday_result.value == 1.0 if holiday_result.value is not None else False
     holiday_name = holiday_result.reason if is_holiday and holiday_result.reason else None
@@ -135,6 +144,7 @@ def traffic(
     Returns historical traffic score where available (NYC zone pairs).
     Does NOT claim real-time traffic - only historical estimates.
     """
+    logger.info("GET /api/context/traffic step=start city_id={} lat={} lon={}", city_id, lat, lon)
     if lat is None or lon is None:
         lat, lon = _resolve_coords(city_id)
 
@@ -143,6 +153,7 @@ def traffic(
     features = journey_service.build_features(ctx)
 
     traffic_score = features.historical_traffic_score
+    logger.info("GET /api/context/traffic step=done city_id={} basis={}", city_id, traffic_score.basis)
 
     is_live = False
     congestion_level = None

@@ -48,9 +48,29 @@ def _sql_literal(value: object, is_text: bool) -> str:
         if not isinstance(value, str):
             raise ValueError(f"expected a text value, got {value!r}")
         return "'" + value.replace("'", "''") + "'"
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool):
         raise ValueError(f"expected a numeric value, got {value!r}")
-    return str(value)
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        # The QueryPlan-generating LLM is prompted to emit a numeric field
+        # unquoted (see sql_agent.py's SYSTEM_PROMPT_TEMPLATE), but a quoted
+        # numeric string ("161" for an area filter that's really an int
+        # column) is a real, observed LLM output, not a hypothetical -- found
+        # via the RAG eval set 2026-08-14 crashing every area-filtered
+        # `demand` question. Coercing a cleanly-numeric string here is the
+        # honest fix: the value IS the right number, it's just JSON-quoted;
+        # anything that doesn't parse as a number still raises, same as before.
+        stripped = value.strip()
+        try:
+            return str(int(stripped))
+        except ValueError:
+            pass
+        try:
+            return str(float(stripped))
+        except ValueError:
+            raise ValueError(f"expected a numeric value, got {value!r}") from None
+    raise ValueError(f"expected a numeric value, got {value!r}")
 
 
 def validate_plan(plan: QueryPlan, schema: CityMobilitySchema) -> None:
@@ -132,6 +152,25 @@ def demo() -> None:
     except ValueError:
         pass
     print("OK: unresolvable field raises instead of emitting a guessed query")
+
+    # Regression: dest_area must actually filter the dropoff side, not get
+    # silently dropped (the bug found via the RAG eval set 2026-08-14).
+    flow_plan = QueryPlan(
+        intent="metric_lookup", metric="flow", aggregation="sum",
+        filters=QueryFilters(area="JFK Airport", dest_area="Times Sq/Theatre District"),
+    )
+    flow_sql = compile(flow_plan, NYC_SCHEMA)
+    assert "pickup_zone = 'JFK Airport'" in flow_sql
+    assert "dropoff_zone = 'Times Sq/Theatre District'" in flow_sql
+    print(f"OK: dest_area compiles to a real dropoff filter: {flow_sql}")
+
+    # Regression: a numeric field's value arriving as a JSON-quoted string
+    # (e.g. area="161" for demand's int pickup_location_id) must coerce, not
+    # crash the whole request (the other bug found via the eval set).
+    demand_plan = QueryPlan(intent="metric_lookup", metric="demand", filters=QueryFilters(area="161"))
+    demand_sql = compile(demand_plan, NYC_SCHEMA)
+    assert "pickup_location_id = 161" in demand_sql
+    print(f"OK: numeric-looking string area coerces instead of raising: {demand_sql}")
 
 
 if __name__ == "__main__":

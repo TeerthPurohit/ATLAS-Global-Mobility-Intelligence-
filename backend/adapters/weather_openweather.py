@@ -14,6 +14,7 @@ from datetime import datetime
 from functools import lru_cache
 
 import httpx
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 
@@ -40,6 +41,7 @@ def _cached_fetch(lat_bucket: float, lon_bucket: float, hour_bucket: int) -> Pre
     # fine because Infrastructure.md's deployment target is a single
     # free-tier host, not a fleet. Upgrade path is Redis only if that changes.
     if not _API_KEY:
+        logger.debug("weather_openweather step=skip reason=no_api_key")
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="openweathermap",
             reason="OPENWEATHER_API_KEY not configured",
@@ -59,6 +61,7 @@ def _cached_fetch(lat_bucket: float, lon_bucket: float, hour_bucket: int) -> Pre
             source="openweathermap", reason=None,
         )
     except Exception as exc:  # noqa: BLE001 -- any network/API failure degrades honestly
+        logger.warning("weather_openweather step=fetch failed lat={} lon={} reason={}", lat_bucket, lon_bucket, exc)
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="openweathermap",
             reason=f"openweathermap request failed: {exc}",

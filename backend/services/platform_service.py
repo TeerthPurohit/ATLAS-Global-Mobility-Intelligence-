@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import duckdb
+from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -49,6 +50,7 @@ def _read_json(path: Path) -> dict | None:
 
 def load() -> None:
     """Read every artifact file once. Call from FastAPI's startup hook."""
+    logger.info("platform_service.load step=start")
     _artifacts["compare_results"] = _read_json(COMPARE_RESULTS_PATH)
     _artifacts["model_metadata"] = {name: _read_json(path) for name, path in MODEL_METADATA_PATHS.items()}
     _artifacts["fare_metadata"] = _read_json(FARE_METADATA_PATH)
@@ -57,6 +59,7 @@ def load() -> None:
     _artifacts["dbt_run_results"] = _read_json(DBT_TARGET / "run_results.json")
     _artifacts["dbt_manifest"] = _read_json(DBT_TARGET / "manifest.json")
     _artifacts["insight_docs"] = _load_insight_docs()
+    logger.info("platform_service.load step=done artifacts={}", list(_artifacts))
 
 
 def get_demand_model_metrics() -> dict:
@@ -201,7 +204,8 @@ def check_health() -> dict:
         con.execute("select 1").fetchone()
         con.close()
         duckdb_ok = True
-    except Exception:
+    except Exception as exc:
+        logger.warning("platform_service.check_health step=duckdb failed reason={}", exc)
         duckdb_ok = False
 
     qdrant_ok = False
@@ -215,7 +219,8 @@ def check_health() -> dict:
         client = QdrantClient(url=QDRANT_URL, timeout=2)
         client.get_collections()
         qdrant_ok = True
-    except Exception:
+    except Exception as exc:
+        logger.warning("platform_service.check_health step=qdrant failed reason={}", exc)
         qdrant_ok = False
 
     return {

@@ -1,17 +1,49 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { SearchBar } from "@/components/world/SearchBar";
 import { WorldMap } from "@/components/world/WorldMap";
-import { Card } from "@/components/ui/Card";
-import { Globe, MapPin, TrendingUp, Layers } from "lucide-react";
+import { SearchBar } from "@/components/world/SearchBar";
+import { Globe, MapPin, TrendingUp, Layers, ArrowRight } from "lucide-react";
 import { getCountries, searchCities } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { useGsapEntrance } from "@/hooks/useGsapEntrance";
 import { NumberTicker } from "@/components/magic/NumberTicker";
+import { cn } from "@/lib/utils";
+
+const TIER_STEPS = [
+  {
+    id: "OBSERVED",
+    index: "01",
+    label: "Observed Tier",
+    sub: "Local telemetry",
+    desc: "Cities with trained models based on local telemetry data. These locations have the highest prediction accuracy.",
+    color: "text-brass",
+    hoverBg: "hover:bg-brass/5",
+  },
+  {
+    id: "TRANSFER",
+    index: "02",
+    label: "Transfer Tier",
+    sub: "Similar cities",
+    desc: "Cities modeled using transfer learning from similar urban environments. Provides reliable baseline predictions.",
+    color: "text-sky-400",
+    hoverBg: "hover:bg-sky-400/5",
+  },
+  {
+    id: "NONE",
+    index: "03",
+    label: "Routing Only",
+    sub: "Network analysis",
+    desc: "Cities with routing capabilities. Predictions based on geographic and network analysis.",
+    color: "text-oxide",
+    hoverBg: "hover:bg-oxide/5",
+  },
+] as const;
 
 export default function WorldPage() {
   const containerRef = useGsapEntrance(".gsap-reveal", { stagger: 0.1, yOffset: 20 });
+  const [highlightedTier, setHighlightedTier] = useState<string | null>(null);
 
   const { data: countries } = useQuery({
     queryKey: queryKeys.countries(),
@@ -25,7 +57,7 @@ export default function WorldPage() {
 
   const totalCountries = countries?.length || 0;
   const totalCities = citiesData?.total || 0;
-  
+
   const tierCounts = citiesData?.results.reduce(
     (acc, city) => {
       acc[city.model_status as keyof typeof acc] = (acc[city.model_status as keyof typeof acc] || 0) + 1;
@@ -35,110 +67,117 @@ export default function WorldPage() {
   ) || { OBSERVED: 0, TRANSFER: 0, NONE: 0 };
 
   return (
-    <div ref={containerRef} className="flex flex-col gap-12">
-      {/* Editorial Header */}
-      <section className="gsap-reveal flex flex-col gap-6">
-        <div className="flex flex-col gap-3">
-          <span className="font-label-sm text-brass tracking-wider">
-            Global Coverage
-          </span>
-          <h1 className="font-display-lg text-ink-primary">
-            Global City Mobility Intelligence
+    <div ref={containerRef} className="overflow-x-hidden">
+      {/* IMMERSIVE MAP HERO -- the map is the page. Full-bleed, bleeds up under the transparent navbar. */}
+      <section className="relative -mx-4 -mt-24 h-[100dvh] overflow-hidden border-b border-surface-border sm:-mx-6 sm:-mt-28 xl:mx-[calc(50%-50vw)]">
+        <WorldMap highlightedTier={highlightedTier} />
+
+        {/* Legibility scrims -- text only, map stays readable underneath */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-surface-0/85 via-surface-0/15 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-surface-0/50 to-transparent" />
+
+        {/* Coordinate-grid viewfinder brackets */}
+        <div className="pointer-events-none absolute top-3 left-3 h-3 w-3 border-t border-l border-brass/30" />
+        <div className="pointer-events-none absolute top-3 right-3 h-3 w-3 border-t border-r border-brass/30" />
+        <div className="pointer-events-none absolute bottom-3 left-3 h-3 w-3 border-b border-l border-brass/30" />
+        <div className="pointer-events-none absolute bottom-3 right-3 h-3 w-3 border-b border-r border-brass/30" />
+
+        {/* Hero copy + search -- floats over the map, not above it */}
+        <div className="absolute left-6 top-[104px] z-10 max-w-[19rem] sm:left-10 sm:top-[132px] sm:max-w-md">
+          <span className="font-label-sm text-brass tracking-wider">Global Mobility Analysis</span>
+          <h1 className="mt-3 font-display-lg uppercase leading-[1.05] tracking-tight text-ink-primary sm:font-display-xl">
+            The world,
+            <br />
+            mapped by how
+            <br />
+            cities move.
           </h1>
-          <p className="font-body-md max-w-2xl text-ink-secondary">
-            Explore supported cities worldwide. Each location displays its intelligence tier: trained on local telemetry, modeled from global patterns, or routing-only.
+          <p className="mt-4 font-body-sm text-ink-secondary max-w-xs">
+            Live ATLAS coverage across cities and countries — observed telemetry, transfer
+            learning, and routing intelligence in one network.
           </p>
-        </div>
-
-        {/* Search Bar */}
-        <div className="w-full max-w-md">
-          <SearchBar placeholder="Search cities..." />
+          <div className="mt-6 max-w-xs sm:max-w-sm">
+            <SearchBar variant="command" placeholder="Search the global network..." />
+          </div>
         </div>
       </section>
 
-      {/* Hero Map Container */}
-      <section className="gsap-reveal">
-        <div className="relative h-[600px] overflow-hidden border border-surface-border bg-surface-1">
-          <WorldMap />
-          {/* Subtle overlay gradient */}
-          <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-surface-0/20 via-transparent to-transparent" />
-        </div>
-      </section>
-
-      {/* Divider */}
-      <div className="gsap-reveal separator-line" />
-
-      {/* Key Metrics Grid */}
-      <section className="gsap-reveal">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Total Countries */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-brass" />
-              <span className="font-label-sm text-ink-muted">Active Countries</span>
+      {/* DATA STORY -- editorial numbers, not cards */}
+      <section className="gsap-reveal mt-16 sm:mt-24">
+        <span className="font-label-sm text-brass tracking-wider">Global Coverage</span>
+        <div className="mt-5 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="font-display-xl text-ink-primary leading-none">
+              <NumberTicker value={totalCities} duration={0.9} />
             </div>
-            <div className="font-data-lg text-brass">
-              {totalCountries > 0 ? <NumberTicker value={totalCountries} duration={1.2} /> : "—"}
+            <div className="mt-3 flex items-center gap-2 font-label-sm text-ink-muted">
+              <MapPin className="h-3.5 w-3.5 text-brass" />
+              Supported Cities
             </div>
+            <p className="mt-2 max-w-sm font-body-sm text-ink-secondary">
+              Spanning <span className="text-ink-primary">{totalCountries}</span> active countries
+              in the ATLAS registry.
+              <span className="ml-1 inline-flex items-center gap-1 text-ink-muted">
+                <Globe className="h-3 w-3" />
+              </span>
+            </p>
           </div>
 
-          {/* Total Cities */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-verdigris" />
-              <span className="font-label-sm text-ink-muted">Supported Cities</span>
+          <div className="flex gap-10 sm:gap-16">
+            <div>
+              <div className="font-data-lg text-brass">
+                <NumberTicker value={tierCounts.OBSERVED} duration={0.7} />
+              </div>
+              <div className="mt-1 flex items-center gap-1.5 font-label-sm text-ink-muted">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Observed
+              </div>
             </div>
-            <div className="font-data-lg text-verdigris">
-              {totalCities > 0 ? <NumberTicker value={totalCities} duration={1.4} /> : "—"}
-            </div>
-          </div>
-
-          {/* OBSERVED Tier */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-brass" />
-              <span className="font-label-sm text-ink-muted">Observed Tier</span>
-            </div>
-            <div className="font-data-lg text-brass">
-              {tierCounts.OBSERVED > 0 ? <NumberTicker value={tierCounts.OBSERVED} duration={1} /> : "0"}
-            </div>
-          </div>
-
-          {/* TRANSFER Tier */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-verdigris" />
-              <span className="font-label-sm text-ink-muted">Transfer Tier</span>
-            </div>
-            <div className="font-data-lg text-verdigris">
-              {tierCounts.TRANSFER > 0 ? <NumberTicker value={tierCounts.TRANSFER} duration={1.1} /> : "0"}
+            <div>
+              <div className="font-data-lg text-sky-400">
+                <NumberTicker value={tierCounts.TRANSFER} duration={0.8} />
+              </div>
+              <div className="mt-1 flex items-center gap-1.5 font-label-sm text-ink-muted">
+                <Layers className="h-3.5 w-3.5" />
+                Transfer
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Information Section */}
-      <section className="gsap-reveal">
-        <div className="separator-line mb-8" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          <div className="flex flex-col gap-3">
-            <h3 className="font-section-md text-ink-primary">Observed Tier</h3>
-            <p className="font-body-sm text-ink-secondary">
-              Cities with trained models based on local telemetry data. These locations have the highest prediction accuracy.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <h3 className="font-section-md text-ink-primary">Transfer Tier</h3>
-            <p className="font-body-sm text-ink-secondary">
-              Cities modeled using transfer learning from similar urban environments. Provides reliable baseline predictions.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <h3 className="font-section-md text-ink-primary">Routing Only</h3>
-            <p className="font-body-sm text-ink-secondary">
-              Cities with routing capabilities. Predictions based on geographic and network analysis.
-            </p>
-          </div>
+      {/* INTELLIGENCE MODEL -- connected progression, hover emphasizes the tier on the map above */}
+      <section className="gsap-reveal mt-16 sm:mt-24 mb-4">
+        <span className="font-label-sm text-ink-muted tracking-wider">How ATLAS Understands a City</span>
+        <div className="mt-6 flex flex-col md:flex-row md:items-start">
+          {TIER_STEPS.map((step, i) => (
+            <div key={step.id} className="flex flex-1 items-start md:contents">
+              <button
+                type="button"
+                onMouseEnter={() => setHighlightedTier(step.id)}
+                onMouseLeave={() => setHighlightedTier(null)}
+                onFocus={() => setHighlightedTier(step.id)}
+                onBlur={() => setHighlightedTier(null)}
+                className={cn(
+                  "flex-1 flex flex-col gap-2 text-left rounded-sm p-4 -m-4 transition-colors focus:outline-none focus-visible:bg-surface-1",
+                  step.hoverBg
+                )}
+              >
+                <span className={cn("font-display-md", step.color)}>{step.index}</span>
+                <h3 className="font-section-md text-ink-primary">{step.label}</h3>
+                <span className="font-label-sm text-ink-muted">{step.sub}</span>
+                <p className="font-body-sm text-ink-secondary">{step.desc}</p>
+              </button>
+
+              {i < TIER_STEPS.length - 1 && (
+                <div className="hidden md:flex items-center px-4 pt-10 shrink-0">
+                  <span className="h-px w-8 bg-surface-border" />
+                  <ArrowRight className="h-4 w-4 text-ink-muted mx-2 shrink-0" />
+                  <span className="h-px w-8 bg-surface-border" />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </section>
     </div>

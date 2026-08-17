@@ -20,6 +20,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 import httpx
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 
@@ -38,12 +39,14 @@ def _cached_fetch(country_code: str) -> PredictionResult:
         payload = resp.json()
         rows = payload[1] if isinstance(payload, list) and len(payload) > 1 else None
         if not rows:
+            logger.warning("cost_of_living_worldbank step=fetch no_rows country_code={}", country_code)
             return PredictionResult(
                 value=None, unit=None, basis="unavailable", source="worldbank_ppp",
                 reason=f"no PPP conversion factor published for country_code={country_code!r}",
             )
         row = next((r for r in rows if r.get("value") is not None), None)
         if row is None:
+            logger.warning("cost_of_living_worldbank step=fetch no_non_null_value country_code={}", country_code)
             return PredictionResult(
                 value=None, unit=None, basis="unavailable", source="worldbank_ppp",
                 reason=f"no non-null PPP conversion factor for country_code={country_code!r}",
@@ -53,6 +56,7 @@ def _cached_fetch(country_code: str) -> PredictionResult:
             source="worldbank_ppp", reason=None,
         )
     except Exception as exc:  # noqa: BLE001 -- network/API failure degrades honestly upstream
+        logger.warning("cost_of_living_worldbank step=fetch failed country_code={} reason={}", country_code, exc)
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="worldbank_ppp",
             reason=f"World Bank Open Data request failed for country_code={country_code!r}: {exc}",

@@ -1,11 +1,15 @@
 """Country registry (SPEC-013 FR-4) -- thin query module over the seeded
-`countries`/`cities` dbt tables, loaded once at startup (rule 8: ~195-row-max
-dimension table, trivially small).
+`countries` dbt table plus the `cities`/`global_cities` tables, loaded once
+at startup (rule 8: ~250-row-max dimension table, trivially small).
 
 `supported`/`supported_city_count` are never stored -- derived at query time
-from the `cities` seed (a country is "supported" iff it has >=1 city row),
-matching the Data Design tradeoff in specs/013 (avoids a denormalized flag
-that can drift from the city list).
+from a UNION of `cities` (the 2-row registered-city table) and
+`global_cities` (SPEC-016's 519-row WorldMove-backed registry): a country is
+"supported" iff it has >=1 row in either. Before this fix it only counted
+`cities`, so every country except nyc/london's own (US/GB) reported
+`supported: false` regardless of real global_cities coverage (found
+2026-08-16) -- matches the Data Design tradeoff in specs/013 (avoids a
+denormalized flag that can drift from either city list).
 """
 from __future__ import annotations
 
@@ -26,7 +30,16 @@ def load() -> None:
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
         country_rows = con.execute("select iso_code, name from countries").fetchall()
-        count_rows = con.execute("select country_code, count(*) from cities group by 1").fetchall()
+        count_rows = con.execute(
+            """
+            select country_code, count(distinct city_id) from (
+                select id as city_id, country_code from cities
+                union
+                select city_id, country_code from global_cities
+            )
+            group by 1
+            """
+        ).fetchall()
     finally:
         con.close()
 

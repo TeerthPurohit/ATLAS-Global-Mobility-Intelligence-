@@ -8,9 +8,10 @@ the 2-reference-point scaling basis.
 """
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
+
+from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -24,8 +25,6 @@ from models.cross_city_estimation.estimate import (  # noqa: E402
     NYC_FARE_PER_MILE_SOURCE,
     estimate_demand_per_capita,
 )
-
-logger = logging.getLogger(__name__)
 
 # A wet-hour "is it raining" signal derived from the request-time weather
 # severity score is a coarser proxy than the real precipitation_mm the
@@ -67,7 +66,7 @@ def estimate_city_demand(
             is_holiday = bool(holiday_res.value)
 
     val, reason = estimate_demand_per_capita(population, density, is_wet=is_wet, is_holiday=is_holiday)
-    logger.info("estimation_service: city_id=%s population=%d -> estimate=%.1f", city_id, population, val)
+    logger.info("estimation_service.estimate_city_demand step=done city_id={} population={} estimate={:.1f}", city_id, population, val)
     return PredictionResult(
         value=val,
         unit="trips/day",
@@ -92,6 +91,7 @@ def estimate_fare_per_mile(country_code: str | None) -> PredictionResult:
     us_ppp = cost_of_living_worldbank.fetch("US")
     target_ppp = cost_of_living_worldbank.fetch(country_code)
     if us_ppp.basis == "unavailable" or target_ppp.basis == "unavailable" or not us_ppp.value:
+        logger.warning("estimation_service.estimate_fare_per_mile step=ppp_lookup failed country_code={} us_basis={} target_basis={}", country_code, us_ppp.basis, target_ppp.basis)
         return PredictionResult(
             value=None, unit="usd_per_mile", basis="unavailable", source="cost_of_living_worldbank",
             reason=(target_ppp.reason if target_ppp.basis == "unavailable" else us_ppp.reason)

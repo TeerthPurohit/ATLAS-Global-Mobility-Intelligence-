@@ -18,6 +18,7 @@ rather than lying.
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
+from loguru import logger
 
 from backend.errors_geography import GeographyError, GeographyErrorCode
 from backend.registry import cities as cities_registry
@@ -95,6 +96,7 @@ def _find_country_name(raw_hierarchy: list[dict]) -> str | None:
     responses={503: {"description": "GeoNames unavailable"}},
 )
 def list_countries() -> CountriesResponse:
+    logger.info("GET /api/geography/countries step=start")
     supported_iso_codes = {c["iso_code"] for c in countries_registry.list_countries() if c["supported"]}
     countries = [
         Country(
@@ -110,6 +112,7 @@ def list_countries() -> CountriesResponse:
         )
         for c in geonames_service.get_all_countries()
     ]
+    logger.info("GET /api/geography/countries step=done count={}", len(countries))
     return CountriesResponse(countries=countries)
 
 
@@ -125,6 +128,7 @@ def search_places(
     q: str = Query(..., min_length=1, description="Place name to search for"),
     country: str | None = Query(None, description="Optional ISO-3166 country code to narrow the search"),
 ) -> SearchResponse:
+    logger.info("GET /api/geography/search step=start q={!r} country={}", q, country)
     raw_results = geonames_service.search_places(q, country)
     results = [
         PlaceSearchResult(
@@ -143,6 +147,7 @@ def search_places(
         )
         for r in raw_results
     ]
+    logger.info("GET /api/geography/search step=done q={!r} count={}", q, len(results))
     return SearchResponse(results=results)
 
 
@@ -157,8 +162,10 @@ def search_places(
 )
 def country_places(country_code: str) -> PlacesResponse:
     country_code = country_code.upper()
+    logger.info("GET /api/geography/countries/{{code}}/places step=start country_code={}", country_code)
     country_geoname_id = geonames_service.get_country_geoname_id(country_code)
     if country_geoname_id is None:
+        logger.warning("GET /api/geography/countries/{{code}}/places step=not_found country_code={}", country_code)
         raise GeographyError(GeographyErrorCode.COUNTRY_NOT_FOUND, f"Unknown country code: {country_code}", 404)
     raw_children = geonames_service.get_children(country_geoname_id)
     places = [
@@ -174,6 +181,7 @@ def country_places(country_code: str) -> PlacesResponse:
         )
         for c in raw_children
     ]
+    logger.info("GET /api/geography/countries/{{code}}/places step=done country_code={} count={}", country_code, len(places))
     return PlacesResponse(country_code=country_code, places=places)
 
 
@@ -186,8 +194,10 @@ def country_places(country_code: str) -> PlacesResponse:
     responses={404: {"description": "Unknown place"}, 503: {"description": "GeoNames unavailable"}},
 )
 def place_hierarchy(geoname_id: int) -> HierarchyResponse:
+    logger.info("GET /api/geography/places/{{id}}/hierarchy step=start geoname_id={}", geoname_id)
     raw = geonames_service.get_hierarchy(geoname_id)
     if not raw:
+        logger.warning("GET /api/geography/places/{{id}}/hierarchy step=not_found geoname_id={}", geoname_id)
         raise GeographyError(GeographyErrorCode.PLACE_NOT_FOUND, f"Unknown place: {geoname_id}", 404)
 
     nodes = [
@@ -213,6 +223,7 @@ def place_hierarchy(geoname_id: int) -> HierarchyResponse:
         mobility_support=_mobility_support(leaf.get("geoname_id")),
         timezone=timezone,
     )
+    logger.info("GET /api/geography/places/{{id}}/hierarchy step=done geoname_id={}", geoname_id)
     return HierarchyResponse(place=place, hierarchy=nodes)
 
 
@@ -227,11 +238,14 @@ def reverse_geocode(
     lat: float = Query(..., description="Latitude, -90 to 90"),
     lng: float = Query(..., description="Longitude, -180 to 180"),
 ) -> ReverseGeoResponse:
+    logger.info("GET /api/geography/reverse step=start lat={} lng={}", lat, lng)
     if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        logger.warning("GET /api/geography/reverse step=invalid_coordinates lat={} lng={}", lat, lng)
         raise GeographyError(
             GeographyErrorCode.INVALID_COORDINATES, "lat must be in [-90, 90] and lng in [-180, 180].", 400
         )
     data = geonames_service.reverse_country(lat, lng)
+    logger.info("GET /api/geography/reverse step=done lat={} lng={}", lat, lng)
     return ReverseGeoResponse(
         country_code=data.get("country_code"),
         country_name=data.get("country_name"),
@@ -259,8 +273,10 @@ def search_global_cities(
 ) -> GlobalCitySearchResponse:
     from backend.services import global_geography_service
 
+    logger.info("GET /api/geography/search/global step=start q={!r} limit={} country={}", q, limit, country)
     raw_items = global_geography_service.search_cities(q, limit=limit, country_code=country)
     results = [GlobalCitySearchResult(**item) for item in raw_items]
+    logger.info("GET /api/geography/search/global step=done q={!r} count={}", q, len(results))
     return GlobalCitySearchResponse(results=results)
 
 
@@ -275,11 +291,14 @@ def search_global_cities(
 def get_city_profile(city_id: str) -> CityProfileResponse:
     from backend.services import global_geography_service
 
+    logger.info("GET /api/geography/{{city_id}} step=start city_id={}", city_id)
     profile = global_geography_service.get_city_profile(city_id)
     if not profile:
+        logger.warning("GET /api/geography/{{city_id}} step=not_resolvable city_id={}", city_id)
         raise GeographyError(
             GeographyErrorCode.PLACE_NOT_FOUND, f"Unknown or unresolvable city_id: {city_id!r}", 404
         )
+    logger.info("GET /api/geography/{{city_id}} step=done city_id={}", city_id)
     return CityProfileResponse(**profile)
 
 
@@ -293,5 +312,7 @@ def get_city_profile(city_id: str) -> CityProfileResponse:
 def get_city_context(city_id: str) -> CityContextResponse:
     from backend.services import context_orchestrator
 
+    logger.info("GET /api/geography/{{city_id}}/context step=start city_id={}", city_id)
     context_data = context_orchestrator.get_city_context(city_id)
+    logger.info("GET /api/geography/{{city_id}}/context step=done city_id={}", city_id)
     return CityContextResponse(**context_data)

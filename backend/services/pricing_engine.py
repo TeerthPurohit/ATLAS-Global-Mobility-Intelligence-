@@ -21,9 +21,10 @@ fusion in journey_predictors.py.
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
+
+from loguru import logger
 
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult, effective_confidence
 from backend.predictors.journey_predictors import _demand_pressure
@@ -35,13 +36,16 @@ _TRAFFIC_MAX_PCT = 0.15
 _WEATHER_MAX_PCT = 0.10
 _DEMAND_MAX_PCT = 0.20
 
-logger = logging.getLogger(__name__)
-
 _MILES_TO_KM = 1.609344
 # Applied only to cities whose tariff profile actually defines a
 # peak_multiplier -- the window itself is product configuration, not a
 # measured fact, same bar as the capped adjustment rates above.
 _PEAK_HOURS = frozenset({7, 8, 9, 17, 18, 19})
+# Same HIGH-bucket cutoff journey_predictors.predict_surge_risk uses on the
+# same pressure signal -- surge_multiplier is this city's documented surge
+# *ceiling* (see TariffCard's "Surge Ceiling" label), only real once actual
+# demand momentum crosses into surge territory, never a permanent markup.
+_SURGE_ACTIVE_THRESHOLD = 0.55
 
 _CALIBRATION_PATH = Path(__file__).resolve().parents[2] / "docs" / "tariff_calibration.json"
 
@@ -54,7 +58,8 @@ def _load_calibration() -> tuple[str, float | None]:
         data = json.loads(_CALIBRATION_PATH.read_text())
         note = f"reproduces real NYC fares to within {data['mape_pct']}% MAPE when blind-tested (n={data['n']}, measured, N=1 city; see docs/tariff_calibration.json)"
         return note, float(data["mape_pct"])
-    except Exception:  # noqa: BLE001 -- calibration is a nice-to-have annotation, never a hard dependency
+    except Exception as exc:  # noqa: BLE001 -- calibration is a nice-to-have annotation, never a hard dependency
+        logger.debug("pricing_engine._load_calibration step=missing path={} reason={}", _CALIBRATION_PATH, exc)
         return "calibration not yet measured -- run scripts/calibrate_tariff_nyc.py", None
 
 
@@ -81,13 +86,14 @@ def _base_fare_nyc(ctx: JourneyContext) -> PredictionResult:
             ctx.pickup_zone_id, ctx.dropoff_zone_id, ctx.departure_time.hour, ctx.departure_time.weekday(),
         )
     except KeyError as exc:
+        logger.info("pricing_engine._base_fare_nyc step=no_fare_history reason={}", exc)
         return PredictionResult(value=None, unit=None, basis="unavailable", source="xgboost_fare_v1", reason=str(exc))
     except Exception as exc:  # noqa: BLE001 -- see below
         # A model artifact that won't score (e.g. an xgboost version whose
         # categorical container disagrees with the saved model) is a data
         # problem, not a request problem: degrade to an honest `unavailable`
         # like every other missing input, instead of 500ing the whole journey.
-        logger.warning("fare model inference failed for city=nyc: %s", exc)
+        logger.warning("pricing_engine._base_fare_nyc step=model_service.predict_fare failed: {}", exc)
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="xgboost_fare_v1",
             reason=f"fare model artifact could not be scored: {exc}",
@@ -139,8 +145,12 @@ def _base_fare_tariff(ctx: JourneyContext, features: JourneyFeatures) -> Predict
         fare *= profile.vehicle_multiplier
         applied.append("vehicle_multiplier")
     if profile.surge_multiplier:
-        fare *= profile.surge_multiplier
-        applied.append("surge_multiplier")
+        sensitivity = features.vehicle_profile.demand_sensitivity if features.vehicle_profile else 1.0
+        pressure = _demand_pressure(ctx)
+        risk = min(1.0, pressure * sensitivity) if pressure is not None else 0.0
+        if risk >= _SURGE_ACTIVE_THRESHOLD:
+            fare *= profile.surge_multiplier
+            applied.append("surge_multiplier")
 
     fare = max(fare, profile.min_fare)
     version = f" v{profile.version}" if profile.version else ""
@@ -259,7 +269,9 @@ def _demand_adjustment(ctx: JourneyContext, base_fare: PredictionResult, feature
 
 
 def compute_fare(ctx: JourneyContext, features: JourneyFeatures) -> dict[str, PredictionResult]:
+    logger.debug("pricing_engine.compute_fare step=start city_id={}", ctx.city_id)
     base_fare = _base_fare(ctx, features)
+    logger.debug("pricing_engine.compute_fare step=base_fare basis={} value={}", base_fare.basis, base_fare.value)
     terms = {
         "base_fare": base_fare,
         "vehicle_adjustment": _vehicle_adjustment(base_fare, features),

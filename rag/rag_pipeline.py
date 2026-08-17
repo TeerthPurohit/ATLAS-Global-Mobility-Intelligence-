@@ -22,6 +22,7 @@ from typing import Generator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
+from embeddings.build_vector_store import COLLECTION as DEFAULT_COLLECTION  # noqa: E402
 from embeddings.build_vector_store import search as vector_search  # noqa: E402
 from insight_generation.generate_insight_docs import extract_numbers, validate_grounding  # noqa: E402
 from llm_client import chat_completion  # noqa: E402
@@ -29,6 +30,7 @@ from nl_to_sql import sql_agent  # noqa: E402
 from nl_to_sql.nyc_schema import NYC_SCHEMA  # noqa: E402
 from nl_to_sql.query_plan import CityMobilitySchema  # noqa: E402
 from router.query_classifier import EXPLANATORY, NUMERIC, classify  # noqa: E402
+import semantic_cache  # noqa: E402
 import session_store  # noqa: E402
 
 SYNTHESIS_SYSTEM_PROMPT = """Answer the user's question in 2-4 plain-language \
@@ -92,8 +94,25 @@ def _answer_numeric(question: str, db_path: Path = DEFAULT_DB_PATH, schema: City
     }
 
 
+def _hit_label(h: dict) -> str:
+    """NYC hits carry zone_name/borough; London hits carry station_name only
+    (bike-share stations have no borough field in the mart) -- one location
+    label either way, not a city-specific formatter per caller."""
+    if h.get("zone_name"):
+        return f"{h['zone_name']}, {h.get('borough', '')}".rstrip(", ")
+    return h.get("station_name", "unknown location")
+
+
+def _hit_source(h: dict) -> dict:
+    label_key = "zone_name" if h.get("zone_name") else "station_name"
+    source = {label_key: h.get(label_key), "score": h["score"]}
+    if h.get("borough"):
+        source["borough"] = h["borough"]
+    return source
+
+
 def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
-    context = "\n\n".join(f"[{h['zone_name']}, {h['borough']}] {h['doc_text']}" for h in hits)
+    context = "\n\n".join(f"[{_hit_label(h)}] {h['doc_text']}" for h in hits)
     allowed = set(extract_numbers(context))
 
     try:
@@ -117,8 +136,12 @@ def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
     return text
 
 
-def _answer_explanatory(question: str, k: int = 3) -> dict:
-    hits = vector_search(question, k=k)
+def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COLLECTION) -> dict:
+    cached = semantic_cache.get(question, namespace=collection)
+    if cached is not None:
+        return cached
+
+    hits = vector_search(question, k=k, collection=collection)
     if not hits:
         return {
             "question": question,
@@ -129,26 +152,28 @@ def _answer_explanatory(question: str, k: int = 3) -> dict:
             "sources": [],
         }
     answer_text = _synthesize_explanatory(question, hits)
-    return {
+    result = {
         "question": question,
         "route": EXPLANATORY,
         "answer": answer_text,
         "sql": None,
         "rows": None,
-        "sources": [{"zone_name": h["zone_name"], "borough": h["borough"], "score": h["score"]} for h in hits],
+        "sources": [_hit_source(h) for h in hits],
     }
+    semantic_cache.put(question, namespace=collection, result=result)
+    return result
 
 
 def answer(
     question: str, session_id: str | None = None, db_path: Path = DEFAULT_DB_PATH,
-    schema: CityMobilitySchema = NYC_SCHEMA, allow_explanatory: bool = True,
+    schema: CityMobilitySchema = NYC_SCHEMA, allow_explanatory: bool = True, collection: str = DEFAULT_COLLECTION,
 ) -> dict:
     active_session_id = session_id or str(uuid.uuid4())
     route = classify(question)
     if route == NUMERIC:
         res = _answer_numeric(question, db_path=db_path, schema=schema)
     elif allow_explanatory:
-        res = _answer_explanatory(question)
+        res = _answer_explanatory(question, collection=collection)
     else:
         res = {
             "question": question, "route": EXPLANATORY,
@@ -162,7 +187,9 @@ def answer(
     return res
 
 
-def answer_stream(question: str, session_id: str | None = None) -> Generator[dict, None, None]:
+def answer_stream(
+    question: str, session_id: str | None = None, collection: str = DEFAULT_COLLECTION,
+) -> Generator[dict, None, None]:
     """Streaming generator variant yielding tokens/chunks and final complete payload."""
     active_session_id = session_id or str(uuid.uuid4())
     route = classify(question)
@@ -178,7 +205,7 @@ def answer_stream(question: str, session_id: str | None = None) -> Generator[dic
         return
 
     # Explanatory route with streaming LLM synthesis
-    hits = vector_search(question, k=3)
+    hits = vector_search(question, k=3, collection=collection)
     if not hits:
         fallback_ans = "No insight documents are available yet for this question -- not yet measured."
         payload = {
@@ -195,7 +222,7 @@ def answer_stream(question: str, session_id: str | None = None) -> Generator[dic
         yield {"type": "done", "payload": payload}
         return
 
-    context = "\n\n".join(f"[{h['zone_name']}, {h['borough']}] {h['doc_text']}" for h in hits)
+    context = "\n\n".join(f"[{_hit_label(h)}] {h['doc_text']}" for h in hits)
     allowed = set(extract_numbers(context))
     accumulated_text = ""
 
@@ -231,7 +258,7 @@ def answer_stream(question: str, session_id: str | None = None) -> Generator[dic
         "answer": final_text,
         "sql": None,
         "rows": None,
-        "sources": [{"zone_name": h["zone_name"], "borough": h["borough"], "score": h["score"]} for h in hits],
+        "sources": [_hit_source(h) for h in hits],
         "session_id": active_session_id,
     }
     session_store.save_message(active_session_id, "assistant", final_text, route=EXPLANATORY)

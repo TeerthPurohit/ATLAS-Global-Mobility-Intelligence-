@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rag import journey_narrative  # noqa: E402
 
 from fastapi import APIRouter, Query
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 from backend.schemas import JourneyEstimate, JourneyHistoryEntry, JourneyRequest, PredictionOut
@@ -33,13 +34,25 @@ def _to_out(pr: PredictionResult) -> PredictionOut:
     )
 
 
-@router.post("/estimate", response_model=JourneyEstimate)
+@router.post(
+    "/estimate",
+    response_model=JourneyEstimate,
+    summary="Full journey estimate (canonical, city_id in body)",
+    description="The canonical journey engine -- 11 signals (distance, duration, fare, "
+    "fare_range, demand, carbon, congestion, availability, surge, best_departure_time, "
+    "AI recommendation) for any resolvable city. `/api/cities/{city_id}/journey/estimate` "
+    "calls this same engine and returns a deliberately trimmed 4-field summary view "
+    "(distance/duration/demand/fare) -- the two are not divergent implementations, just "
+    "different-sized views of one engine.",
+)
 def estimate(req: JourneyRequest) -> JourneyEstimate:
+    logger.info("POST /journey/estimate step=start city_id={} vehicle_type={}", req.city_id, req.vehicle_type)
     components = journey_service.estimate(
         pickup_lat=req.pickup_lat, pickup_lon=req.pickup_lon,
         dropoff_lat=req.dropoff_lat, dropoff_lon=req.dropoff_lon,
         departure_time=req.departure_time, vehicle_type=req.vehicle_type, city_id=req.city_id,
     )
+    logger.info("POST /journey/estimate step=components_computed city_id={}", components.get("city_id"))
     text, basis = journey_narrative.generate(components)
     # basis is always "modeled_estimate" (grounded LLM/template prose) or
     # "unavailable" (not enough computed data) -- never "computed", since
@@ -72,18 +85,23 @@ def estimate(req: JourneyRequest) -> JourneyEstimate:
         fare_breakdown=fare_breakdown,
         ai_recommendation=ai_recommendation,
     )
+    logger.info("POST /journey/estimate step=logging_prediction city_id={}", req.city_id)
     prediction_log.log_prediction(
         pickup_lat=req.pickup_lat, pickup_lon=req.pickup_lon,
         dropoff_lat=req.dropoff_lat, dropoff_lon=req.dropoff_lon,
         departure_time=req.departure_time.isoformat(), vehicle_type=req.vehicle_type,
         response=result.model_dump(),
     )
+    logger.info("POST /journey/estimate step=done city_id={}", req.city_id)
     return result
 
 
 @router.get("/history", response_model=list[JourneyHistoryEntry])
 def history(limit: int = Query(50, ge=1, le=200)) -> list[JourneyHistoryEntry]:
-    return [JourneyHistoryEntry(**row) for row in prediction_log.get_recent_predictions(limit=limit)]
+    logger.info("GET /journey/history step=start limit={}", limit)
+    rows = [JourneyHistoryEntry(**row) for row in prediction_log.get_recent_predictions(limit=limit)]
+    logger.info("GET /journey/history step=done count={}", len(rows))
+    return rows
 
 
 @router.get("/features")
@@ -93,8 +111,10 @@ def features(
     departure_time: datetime = Query(...), vehicle_type: str = Query(...),
     city_id: str | None = Query(None),
 ) -> dict:
+    logger.info("GET /journey/features step=start city_id={} vehicle_type={}", city_id, vehicle_type)
     ctx = journey_service.build_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, departure_time, vehicle_type, city_id)
     features = journey_service.build_features(ctx)
+    logger.info("GET /journey/features step=done city_id={}", ctx.city_id)
     return {
         "city_id": ctx.city_id,
         "pickup_zone_id": ctx.pickup_zone_id,

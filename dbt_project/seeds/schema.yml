@@ -26,11 +26,20 @@ seeds:
 
   - name: countries
     description: >
-      Sovereign-state registry for the Global Mobility Domain Model
-      (SPEC-013). `supported` is never stored here -- it's derived at query
-      time in backend/registry/countries.py by joining against `cities` (a
-      country is "supported" iff it has >=1 city row), avoiding a
-      denormalized flag that can drift from the city list.
+      Full sovereign-state registry (250 rows, GeoNames countryInfoJSON --
+      same source backend/services/global_geography_service.py already uses
+      for per-country currency, scripts/dump_countries_seed.py) for the
+      Global Mobility Domain Model (SPEC-013). Deliberately every real
+      country, not just the ones with an onboarded city -- until SPEC-016
+      (WorldMove global_cities, 519 rows across 45 countries) this table
+      only had the 2 rows for nyc/london's own countries (US/GB), which made
+      every other real, resolvable country report `supported: false`
+      regardless of global_cities coverage (found 2026-08-16). `supported`
+      is never stored here -- it's derived at query time in
+      backend/registry/countries.py from a UNION of `cities` (the 2-row
+      registered-city table) and `global_cities` (a country is "supported"
+      iff it has >=1 row in either), avoiding a denormalized flag that can
+      drift from either city list.
     columns:
       - name: iso_code
         tests: [not_null, unique]

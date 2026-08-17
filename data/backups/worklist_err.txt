@@ -1,0 +1,23 @@
+[32m2026-08-16 03:56:47.334[0m | [1mINFO    [0m | [36mbackend.services.tariff_profiles[0m:[36mload[0m:[36m238[0m - [1mtariff_profiles.load step=start table=city_tariff_profiles[0m
+Traceback (most recent call last):
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\scripts\find_cities_needing_tariff_validation.py", line 106, in <module>
+    main()
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\scripts\find_cities_needing_tariff_validation.py", line 78, in main
+    items = worklist()
+            ^^^^^^^^^^
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\scripts\find_cities_needing_tariff_validation.py", line 49, in worklist
+    tariff_profiles.load()  # fresh read -- this worklist must reflect the live table, not a stale cache
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\backend\services\tariff_profiles.py", line 241, in load
+    ensure_table(conninfo, table_name)
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\backend\services\tariff_profiles.py", line 228, in ensure_table
+    _table_for(table_name).create(get_engine(conninfo), checkfirst=True)
+                                  ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\rag\db.py", line 50, in get_engine
+    _default_engine = build_engine()
+                      ^^^^^^^^^^^^^^
+  File "C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\rag\db.py", line 30, in build_engine
+    dsn = conninfo or os.environ["DATABASE_URL"]
+                      ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "<frozen os>", line 714, in __getitem__
+KeyError: 'DATABASE_URL'

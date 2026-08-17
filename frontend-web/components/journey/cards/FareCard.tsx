@@ -46,17 +46,17 @@ function FareCardContent({ data }: { data: FareResponse }) {
             {data.breakdown.base !== null && (
               <PredictionField label="Base Fare" prediction={{ value: data.breakdown.base, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
-            {data.breakdown.distance !== null && (
-              <PredictionField label="Distance" prediction={{ value: data.breakdown.distance, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+            {data.breakdown.vehicle !== null && (
+              <PredictionField label="Vehicle Class" prediction={{ value: data.breakdown.vehicle, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
-            {data.breakdown.duration !== null && (
-              <PredictionField label="Duration" prediction={{ value: data.breakdown.duration, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+            {data.breakdown.traffic !== null && (
+              <PredictionField label="Traffic" prediction={{ value: data.breakdown.traffic, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
-            {data.breakdown.fees !== null && (
-              <PredictionField label="Fees" prediction={{ value: data.breakdown.fees, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+            {data.breakdown.weather !== null && (
+              <PredictionField label="Weather" prediction={{ value: data.breakdown.weather, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
-            {data.breakdown.surge !== null && (
-              <PredictionField label="Surge" prediction={{ value: data.breakdown.surge, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
+            {data.breakdown.demand !== null && (
+              <PredictionField label="Demand" prediction={{ value: data.breakdown.demand, unit: data.currency, basis: farePred.basis, source: farePred.source, reason: null, data_vintage: null, value_usd: null }} isCurrency />
             )}
           </div>
         )}

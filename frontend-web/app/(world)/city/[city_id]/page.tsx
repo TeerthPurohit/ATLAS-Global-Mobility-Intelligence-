@@ -1,22 +1,32 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, MapPin } from "lucide-react";
 import { SearchBar } from "@/components/world/SearchBar";
 import { CityProfile } from "@/components/city/CityProfile";
 import { useQuery } from "@tanstack/react-query";
-import { getCityProfile } from "@/lib/api";
+import { getCityProfile, type City } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
+import { useAppContext } from "@/context/AppContext";
 
 export default function CityPage() {
   const params = useParams();
   const cityId = params.city_id as string;
+  const { setSelectedCity } = useAppContext();
 
   const { data: profile } = useQuery({
     queryKey: queryKeys.cityProfile(cityId),
     queryFn: () => getCityProfile(cityId),
   });
+
+  // Ask page (global nav tab, no city_id in its own URL) reads
+  // selectedCity to scope chat questions to the right city_id -- without
+  // this, chat silently defaulted every question to NYC's schema.
+  useEffect(() => {
+    if (profile) setSelectedCity({ ...profile, model_status: profile.model_status as City["model_status"] });
+  }, [profile, setSelectedCity]);
 
   return (
     <div className="flex flex-col gap-6">

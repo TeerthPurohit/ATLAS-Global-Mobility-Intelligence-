@@ -28,6 +28,7 @@ import os
 from functools import lru_cache
 
 import httpx
+from loguru import logger
 
 from backend.errors_geography import GeographyError, GeographyErrorCode
 from backend.services import google_places_service
@@ -54,6 +55,7 @@ def _num(val) -> float | None:
 
 def _get(path: str, params: dict) -> dict:
     if not _USERNAME:
+        logger.debug("geonames_service._get step=skip path={} reason=no_username", path)
         raise GeographyError(GeographyErrorCode.GEONAMES_UNAVAILABLE, _UNAVAILABLE_MESSAGE, 503)
     try:
         resp = httpx.get(f"{_BASE_URL}/{path}", params={**params, "username": _USERNAME}, timeout=_TIMEOUT)
@@ -64,17 +66,21 @@ def _get(path: str, params: dict) -> dict:
         # drives error classification below, not the HTTP status code alone.
         data = resp.json()
     except Exception as exc:  # noqa: BLE001 -- network/timeout/non-JSON body degrades honestly
+        logger.warning("geonames_service._get step=request failed path={} reason={}", path, exc)
         raise GeographyError(GeographyErrorCode.GEONAMES_UNAVAILABLE, _UNAVAILABLE_MESSAGE, 503) from exc
 
     if isinstance(data, dict) and "status" in data:
         code = data["status"].get("value")
         if code in _AUTH_CODES:
+            logger.warning("geonames_service._get step=auth_failed path={} code={}", path, code)
             raise GeographyError(GeographyErrorCode.GEONAMES_AUTH_FAILED, _UNAVAILABLE_MESSAGE, 503)
         if code in _RATE_LIMIT_CODES:
+            logger.warning("geonames_service._get step=rate_limited path={} code={}", path, code)
             raise GeographyError(
                 GeographyErrorCode.GEONAMES_RATE_LIMITED,
                 "Geographic discovery is temporarily busy, please retry shortly.", 503,
             )
+        logger.warning("geonames_service._get step=api_error path={} code={}", path, code)
         raise GeographyError(GeographyErrorCode.GEONAMES_UNAVAILABLE, _UNAVAILABLE_MESSAGE, 503)
     return data
 
@@ -148,8 +154,8 @@ def search_places(q: str, country: str | None = None) -> list[dict]:
         results = list(_search_geonames_cached(q, country))
         if results:
             return results
-    except GeographyError:
-        pass
+    except GeographyError as exc:
+        logger.info("geonames_service.search_places step=geonames_failed q={!r} reason={} -- falling back to google_places", q, exc)
     return google_places_service.search(q, country)
 
 

@@ -1,0 +1,14 @@
+[
+  {
+    "query": "Rovaniemi Finland taxi fare per km base fare 2026",
+    "source": "GoByTaxi / EstimaTaxi",
+    "url": "https://www.gobytaxi.com/europe/finland/lapland/rovaniemi",
+    "snippet": "Base Fee: 9.00 EUR, Price per KM: 2.00 EUR (updated October 3, 2025). Alternative source: starting price 8.5 EUR, 1.6 EUR per km."
+  },
+  {
+    "query": "Rovaniemi Finland taxi fare per km base fare 2026",
+    "source": "Taksi Rovaniemi (official)",
+    "url": "https://taksirovaniemi.fi/en/fares/",
+    "snippet": "Base fee for 5-8 persons is 12 EUR."
+  }
+]

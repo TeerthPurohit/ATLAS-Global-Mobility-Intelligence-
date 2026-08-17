@@ -111,6 +111,9 @@ export function CityProfile({ cityId }: { cityId: string }) {
     notes: null,
     generated_at: null,
     model_id: null,
+    validation_method: null,
+    evidence_sources: null,
+    validated_at: null,
   };
 
   return (
@@ -120,7 +123,7 @@ export function CityProfile({ cityId }: { cityId: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <CapabilityMatrix capabilities={capabilities || defaultCaps} />
-          <TariffCard tariff={tariff || defaultTariff} />
+          <TariffCard tariff={tariff || defaultTariff} skipEnrichment={cityId === "nyc" || cityId === "london"} />
 
           {/* Zones list (NYC Specialization) */}
           {zones?.available && zones.zones && (

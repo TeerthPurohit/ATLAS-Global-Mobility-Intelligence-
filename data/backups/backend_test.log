@@ -1,0 +1,49 @@
+INFO:     Started server process [22228]
+INFO:     Waiting for application startup.
+2026-08-16 11:44:01 INFO backend.main: Loading model_service...
+2026-08-16 11:44:01 INFO backend.services.model_service: model_service.load step=demand_models_start
+2026-08-16 11:44:01 INFO backend.services.model_service: model_service.load step=demand_model city_id=nyc
+2026-08-16 11:44:47 INFO backend.services.model_service: model_service.load step=demand_model city_id=london
+2026-08-16 11:45:58 INFO backend.services.model_service: model_service.load step=fare_model_start path=C:\Users\teert\OneDrive\Documents\Teerth Projects\Uber nyc TLC Dataset\models\fare_prediction\fare_xgb_model.json
+2026-08-16 11:46:01 INFO backend.services.model_service: model_service.load step=fare_categories
+2026-08-16 11:46:01 INFO backend.services.model_service: model_service.load step=zone_centroids
+2026-08-16 11:46:01 INFO backend.services.model_service: model_service.load step=worldmove_hourly_shapes
+2026-08-16 11:46:02 INFO backend.services.model_service: model_service.load step=worldmove_area_momentum
+2026-08-16 11:48:39 INFO backend.services.model_service: model_service.load step=done demand_models=['nyc', 'london'] fare_model_loaded=True
+2026-08-16 11:48:39 INFO backend.main: Loading tariff_profiles...
+2026-08-16 11:48:39 INFO backend.services.tariff_profiles: tariff_profiles.load step=start table=city_tariff_profiles
+2026-08-16 11:48:40 INFO backend.services.tariff_profiles: tariff_profiles.load step=done count=517
+2026-08-16 11:48:40 INFO backend.main: Loading platform_service...
+2026-08-16 11:48:40 INFO backend.services.platform_service: platform_service.load step=start
+2026-08-16 11:48:40 INFO backend.services.platform_service: platform_service.load step=done artifacts=['compare_results', 'model_metadata', 'fare_metadata', 'kdtree_benchmark', 'pagerank_hubs', 'dbt_run_results', 'dbt_manifest', 'insight_docs']
+2026-08-16 11:48:40 INFO backend.main: Loading journey_service...
+2026-08-16 11:48:41 INFO backend.main: Loading countries_registry...
+2026-08-16 11:48:41 INFO backend.main: Loading models_registry...
+2026-08-16 11:48:41 INFO backend.main: Loading transit_registry...
+2026-08-16 11:48:41 INFO backend.main: Loading cities_registry...
+2026-08-16 11:48:41 INFO backend.main: Loading global_cities_registry...
+2026-08-16 11:48:41 INFO backend.main: All services loaded!
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+cepted city_id=KR_SEOUL
+INFO:     127.0.0.1:11359 - "WebSocket /api/cities/NL_LEEUWARDEN/tariff/enrich" [accepted]
+INFO:     connection open
+2026-08-16 11:47:00 INFO backend.routers.cities: WS /api/cities/{city_id}/tariff/enrich step=accepted city_id=NL_LEEUWARDEN
+2026-08-16 11:47:09 WARNING backend.adapters.cost_of_living_worldbank: cost_of_living_worldbank step=fetch failed country_code=NL reason=The read operation timed out
+2026-08-16 11:47:09 WARNING backend.services.estimation_service: estimation_service.estimate_fare_per_mile step=ppp_lookup failed country_code=NL us_basis=computed target_basis=unavailable
+2026-08-16 11:47:19 INFO backend.routers.cities: WS /api/cities/{city_id}/tariff/enrich step=done city_id=NL_LEEUWARDEN
+2026-08-16 11:56:09 INFO backend.main: -> GET /api/cities/IN_MUMBAI/tariff
+2026-08-16 11:56:09 INFO backend.routers.cities: GET /api/cities/{city_id}/tariff step=start city_id=IN_MUMBAI
+2026-08-16 11:56:09 INFO backend.routers.cities: GET /api/cities/{city_id}/tariff step=done city_id=IN_MUMBAI
+2026-08-16 11:56:09 INFO backend.main: <- GET /api/cities/IN_MUMBAI/tariff 200 (0.0ms)
+INFO:     127.0.0.1:9218 - "GET /api/cities/IN_MUMBAI/tariff HTTP/1.1" 200 OK
+2026-08-16 11:56:14 INFO backend.main: -> GET /api/cities/NZ_TAURANGA/tariff
+2026-08-16 11:56:14 INFO backend.routers.cities: GET /api/cities/{city_id}/tariff step=start city_id=NZ_TAURANGA
+2026-08-16 11:56:14 INFO backend.routers.cities: GET /api/cities/{city_id}/tariff step=done city_id=NZ_TAURANGA
+2026-08-16 11:56:14 INFO backend.main: <- GET /api/cities/NZ_TAURANGA/tariff 200 (0.0ms)
+INFO:     127.0.0.1:9222 - "GET /api/cities/NZ_TAURANGA/tariff HTTP/1.1" 200 OK
+2026-08-16 11:56:23 INFO backend.main: -> GET /openapi.json
+2026-08-16 11:56:24 INFO backend.main: <- GET /openapi.json 200 (625.0ms)
+INFO:     127.0.0.1:9229 - "GET /openapi.json HTTP/1.1" 200 OK

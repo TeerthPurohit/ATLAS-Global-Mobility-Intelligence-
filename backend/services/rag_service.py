@@ -13,11 +13,14 @@ import uuid
 from pathlib import Path
 from typing import Any, Generator
 
+from loguru import logger
+
 RAG_DIR = Path(__file__).resolve().parents[2] / "rag"
 if str(RAG_DIR) not in sys.path:
     sys.path.insert(0, str(RAG_DIR))
 
 import rag_pipeline  # noqa: E402
+import semantic_cache  # noqa: E402
 import session_store  # noqa: E402
 from llm_client import chat_completion  # noqa: E402
 from nl_to_sql.london_schema import LONDON_SCHEMA  # noqa: E402
@@ -28,6 +31,9 @@ from backend.services import context_orchestrator, estimation_service, global_ge
 
 _CITY_DB_PATH = {"london": Path(__file__).resolve().parents[2] / "data" / "warehouse" / "london_cycles.duckdb"}
 _CITY_SCHEMA = {"london": LONDON_SCHEMA}
+# nyc omitted -- rag_pipeline.answer()/answer_stream() default to the nyc
+# collection (embeddings.build_vector_store.COLLECTION) when not overridden.
+_CITY_INSIGHT_COLLECTION = {"london": "insight_docs_london"}
 
 _CONTEXT_ONLY_SYSTEM_PROMPT = """You are a mobility-data assistant for {city_name}. \
 You may ONLY state facts that literally appear in the JSON context below -- \
@@ -45,6 +51,14 @@ Context (real data, from this platform's own geography/weather/holiday/estimate 
 
 
 def _answer_context_only(question: str, city_id: str) -> dict[str, Any]:
+    namespace = f"context_only:{city_id}"
+    cached = semantic_cache.get(question, namespace=namespace)
+    if cached is not None:
+        logger.debug("rag_service._answer_context_only step=cache_hit city_id={}", city_id)
+        cached["session_id"] = str(uuid.uuid4())
+        return cached
+
+    logger.debug("rag_service._answer_context_only step=cache_miss city_id={}", city_id)
     ctx = context_orchestrator.get_city_context(city_id)
     profile = global_geography_service.get_city_profile(city_id)
     fare_estimate = None
@@ -77,15 +91,18 @@ def _answer_context_only(question: str, city_id: str) -> dict[str, Any]:
         )
         text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # noqa: BLE001 -- LLM failure still gives a real, non-fabricated answer
+        logger.warning("rag_service._answer_context_only step=chat_completion failed city_id={} reason={}", city_id, exc)
         text = (
             f"Live narration isn't available right now ({exc}), but here's what's real for {ctx.get('city_name', city_id)}: "
             + json.dumps(context_payload, default=str)
         )
 
-    return {
+    result = {
         "answer": text, "route": "context_grounded", "sql": None,
         "session_id": str(uuid.uuid4()), "sources": ["context_orchestrator"],
     }
+    semantic_cache.put(question, namespace=namespace, result=result)
+    return result
 
 
 _PUBLIC_ROUTES = frozenset({"numeric", "explanatory"})
@@ -101,6 +118,7 @@ def _public_route(route: str) -> str:
 
 def answer_question(question: str, session_id: str | None = None, city_id: str = "nyc") -> dict[str, Any]:
     tier = cities_registry.get_chat_tier(city_id)
+    logger.info("rag_service.answer_question step=routed city_id={} tier={}", city_id, tier)
     if tier == "context_only":
         res = _answer_context_only(question, city_id)
         res["session_id"] = session_id or res["session_id"]
@@ -110,6 +128,7 @@ def answer_question(question: str, session_id: str | None = None, city_id: str =
             db_path=_CITY_DB_PATH.get(city_id, rag_pipeline.DEFAULT_DB_PATH),
             schema=_CITY_SCHEMA.get(city_id, NYC_SCHEMA),
             allow_explanatory=(tier == "full_rag"),
+            collection=_CITY_INSIGHT_COLLECTION.get(city_id, rag_pipeline.DEFAULT_COLLECTION),
         )
     res["route"] = _public_route(res["route"])
     return res
@@ -144,7 +163,10 @@ def stream_answer(question: str, session_id: str | None = None, city_id: str = "
         yield {"type": "chunk", "text": res["answer"]}
         yield {"type": "done", "payload": res}
         return
-    yield from rag_pipeline.answer_stream(question=question, session_id=session_id)
+    yield from rag_pipeline.answer_stream(
+        question=question, session_id=session_id,
+        collection=_CITY_INSIGHT_COLLECTION.get(city_id, rag_pipeline.DEFAULT_COLLECTION),
+    )
 
 
 def get_history(session_id: str) -> list[dict[str, Any]] | None:

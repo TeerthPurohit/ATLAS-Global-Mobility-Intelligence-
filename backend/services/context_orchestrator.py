@@ -19,10 +19,11 @@ Never fabricates metrics when data sources are unavailable.
 
 from __future__ import annotations
 
-import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -32,8 +33,6 @@ from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
 from backend.services import estimation_service, global_geography_service, model_service, transit_service  # noqa: E402
 
-logger = logging.getLogger(__name__)
-
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -41,8 +40,10 @@ def _now_iso() -> str:
 
 def get_city_context(city_id: str) -> dict:
     """Orchestrate all available context sources for a city/place."""
+    logger.info("context_orchestrator.get_city_context step=start city_id={}", city_id)
     profile = global_geography_service.get_city_profile(city_id)
     if not profile:
+        logger.warning("context_orchestrator.get_city_context step=profile_unresolvable city_id={}", city_id)
         return {
             "city_id": city_id,
             "city_name": city_id,
@@ -109,6 +110,7 @@ def get_city_context(city_id: str) -> dict:
                     "reason": weather_res.reason or "OPENWEATHER_API_KEY unset",
                 }
         except Exception as exc:  # noqa: BLE001
+            logger.warning("context_orchestrator.get_city_context step=weather failed city_id={} reason={}", city_id, exc)
             context_map["weather"] = {
                 "status": "unavailable",
                 "data": None,
@@ -143,6 +145,7 @@ def get_city_context(city_id: str) -> dict:
                 "reason": holiday_res.reason if holiday_res.basis != "computed" else None,
             }
         except Exception as exc:  # noqa: BLE001
+            logger.warning("context_orchestrator.get_city_context step=calendar failed city_id={} reason={}", city_id, exc)
             context_map["calendar"] = {
                 "status": "unavailable",
                 "data": None,
@@ -207,6 +210,7 @@ def get_city_context(city_id: str) -> dict:
             "reason": route_check.reason if route_check.basis != "computed" else None,
         }
     except Exception as exc:  # noqa: BLE001
+        logger.warning("context_orchestrator.get_city_context step=routing failed city_id={} reason={}", city_id, exc)
         context_map["routing"] = {
             "status": "unavailable",
             "data": None,
@@ -329,6 +333,7 @@ def get_city_context(city_id: str) -> dict:
             "reason": "latitude/longitude unresolvable",
         }
 
+    logger.info("context_orchestrator.get_city_context step=done city_id={} sources={}", city_id, list(context_map))
     return {
         "city_id": profile["city_id"],
         "city_name": profile["city"],

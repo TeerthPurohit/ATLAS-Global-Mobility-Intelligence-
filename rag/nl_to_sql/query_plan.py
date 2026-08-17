@@ -28,7 +28,14 @@ AGGREGATIONS: tuple[Aggregation, ...] = ("count", "avg", "sum", "max", "min")
 # a metric's own value column. Not every schema/metric resolves every one of
 # these -- e.g. NYC's `zone_fare_stats` mart has no hour column, so "hour" is
 # simply absent from that metric's `filters` map (see nyc_schema.py).
-CANONICAL_FIELDS = ("area", "hour", "day_of_week", "date_range")
+# `dest_area` is the destination side of a two-zone question (e.g. "trips
+# FROM JFK TO Times Sq") -- distinct from `area` (the origin/single-zone
+# filter every metric already had). Only `flow` resolves it (a flow row IS a
+# pickup/dropoff pair); found missing 2026-08-14 via the RAG eval set: with
+# no dest_area field, "trips from JFK to Times Sq" silently compiled to
+# "trips from JFK" (any destination) -- a confidently wrong number, not a
+# refusal, which is worse (ADR-004/rule 2).
+CANONICAL_FIELDS = ("area", "dest_area", "hour", "day_of_week", "date_range")
 
 
 @dataclass
@@ -36,6 +43,7 @@ class QueryFilters:
     hour: int | None = None
     day_of_week: int | None = None
     area: str | int | None = None
+    dest_area: str | int | None = None
     date_range: tuple[str, str] | None = None
 
     def active(self) -> dict[str, object]:
@@ -67,6 +75,7 @@ class QueryPlan:
             hour=filters_data.get("hour"),
             day_of_week=filters_data.get("day_of_week"),
             area=filters_data.get("area"),
+            dest_area=filters_data.get("dest_area"),
             date_range=tuple(date_range) if date_range else None,  # type: ignore[arg-type]
         )
         return QueryPlan(
@@ -143,17 +152,25 @@ class CityMobilitySchema:
         return bool(m and canonical_field in m.filters)
 
     def describe(self) -> str:
-        """Compact `TABLE <name> (<column> -- <canonical>: <meaning>, ...)`
+        """Compact `TABLE <name> (<column> -- <canonical>: <meaning> [type], ...)`
         text for LLM context -- mirrors `sql_agent.get_mart_schema()`'s
-        rendering style so both NL-to-SQL paths read the same to a model."""
+        rendering style so both NL-to-SQL paths read the same to a model.
+
+        The `[numeric]`/`[text]` tag is load-bearing, not decoration: a plan
+        that emits a numeric field's value as a quoted JSON string (e.g.
+        area="161" for NYC's demand metric, whose area is really a numeric
+        pickup_location_id) fails query_plan_compiler._sql_literal's type
+        check and crashes the whole request -- found via the RAG eval set
+        2026-08-14. Without the type spelled out here, the LLM has no way to
+        know area is sometimes numeric."""
         by_table: dict[str, list[str]] = {}
         for metric_name, m in self.metrics.items():
             cols = by_table.setdefault(m.table, [])
-            value_entry = f"{m.value.column} -- {metric_name}: {m.value.meaning}"
+            value_entry = f"{m.value.column} -- {metric_name}: {m.value.meaning} [{'text' if m.value.is_text else 'numeric'}]"
             if value_entry not in cols:
                 cols.append(value_entry)
             for canonical, fmap in m.filters.items():
-                entry = f"{fmap.column} -- {canonical}: {fmap.meaning}"
+                entry = f"{fmap.column} -- {canonical}: {fmap.meaning} [{'text' if fmap.is_text else 'numeric'}]"
                 if entry not in cols:
                     cols.append(entry)
         return "\n\n".join(f"TABLE {t} (\n  " + ",\n  ".join(cols) + "\n)" for t, cols in by_table.items())

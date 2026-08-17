@@ -26,6 +26,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import httpx
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 
@@ -48,7 +49,8 @@ def _year_holidays(year: int, country_code: str) -> frozenset[str] | None:
         resp.raise_for_status()
         rows = resp.json()
         return frozenset(r["date"] for r in rows)
-    except Exception:  # noqa: BLE001 -- caller turns this into an honest PredictionResult
+    except Exception as exc:  # noqa: BLE001 -- caller turns this into an honest PredictionResult
+        logger.warning("holidays_nager step=year_holidays failed year={} country={} reason={}", year, country_code, exc)
         return None
 
 

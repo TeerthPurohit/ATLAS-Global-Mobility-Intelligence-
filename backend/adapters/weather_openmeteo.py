@@ -28,6 +28,7 @@ from datetime import datetime
 from functools import lru_cache
 
 import httpx
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 
@@ -47,6 +48,7 @@ def _severity_from_conditions(temp_c: float, precip_mm_hr: float) -> float:
 
 @lru_cache(maxsize=256)
 def _cached_fetch(lat_bucket: float, lon_bucket: float, hour_bucket: int) -> PredictionResult:
+    logger.debug("weather_openmeteo step=fetch lat={} lon={}", lat_bucket, lon_bucket)
     try:
         resp = httpx.get(
             _URL,
@@ -65,6 +67,7 @@ def _cached_fetch(lat_bucket: float, lon_bucket: float, hour_bucket: int) -> Pre
             value=severity, unit="severity_0_to_1", basis="computed", source="open-meteo", reason=None,
         )
     except Exception as exc:  # noqa: BLE001 -- any network/API failure degrades honestly
+        logger.warning("weather_openmeteo step=fetch failed lat={} lon={} reason={}", lat_bucket, lon_bucket, exc)
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="open-meteo",
             reason=f"open-meteo request failed: {exc}",

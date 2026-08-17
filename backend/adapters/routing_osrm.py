@@ -21,6 +21,7 @@ from datetime import datetime
 from functools import lru_cache
 
 import httpx
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 
@@ -35,10 +36,12 @@ def _cached_route(pickup_lat: float, pickup_lon: float, dropoff_lat: float, drop
         resp.raise_for_status()
         data = resp.json()
         if data.get("code") != "Ok" or not data.get("routes"):
+            logger.warning("routing_osrm step=route no_route code={}", data.get("code"))
             return None
         route = data["routes"][0]
         return {"distance_m": route["distance"], "duration_s": route["duration"]}
-    except Exception:  # noqa: BLE001 -- network/API failure degrades honestly upstream
+    except Exception as exc:  # noqa: BLE001 -- network/API failure degrades honestly upstream
+        logger.warning("routing_osrm step=route failed url={} reason={}", url, exc)
         return None
 
 

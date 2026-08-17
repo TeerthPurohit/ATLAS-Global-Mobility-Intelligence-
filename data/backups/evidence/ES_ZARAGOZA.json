@@ -1,0 +1,14 @@
+[
+  {
+    "query": "Zaragoza Spain taxi Uber fare per km base fare 2026",
+    "source": "todotaxi.org",
+    "url": "https://todotaxi.org/tarifas-del-taxi-en-zaragoza/",
+    "snippet": "Tarifa 1 (daytime weekday, central Zaragoza): base fare approx EUR 2.10, per-km approx EUR 0.94. Tarifa 2 (nighttime weekday): per-km approx EUR 1.28, hourly waiting approx EUR 35.73. Tarifa 3 (daytime outside central zone): EUR 1.36/km. Tarifa 4 (night/holidays): EUR 1.50/km."
+  },
+  {
+    "query": "Zaragoza Spain taxi Uber fare per km base fare 2026",
+    "source": "taxi-allo.com",
+    "url": "https://www.taxi-allo.com/uber-cost-zaragoza-uber-price-aragon-uber-fare-spain",
+    "snippet": "For Uber/ridesharing in Zaragoza, base fare ranges EUR 1.50-2.00 and per-km rate is EUR 0.80-1.00, generally slightly cheaper than taxis."
+  }
+]

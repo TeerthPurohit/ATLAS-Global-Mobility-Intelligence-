@@ -13,6 +13,7 @@ from pathlib import Path
 
 import duckdb
 from fastapi import APIRouter, HTTPException
+from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -60,17 +61,23 @@ def _get_zones() -> dict[int, Zone]:
     registry's defensive-load convention)."""
     global _zones
     if _zones is None:
+        logger.info("zones step=loading warehouse={}", WAREHOUSE_PATH)
         try:
             _zones = _load_zones()
         except (duckdb.Error, OSError) as exc:  # noqa: BLE001 -- missing warehouse must not kill startup
-            print(f"[zones] could not load zone metadata: {exc}", flush=True)
+            logger.warning("zones step=load_zones failed: {} -- serving empty zone list", exc)
             _zones = {}
+        else:
+            logger.info("zones step=loaded count={}", len(_zones))
     return _zones
 
 
 @router.get("", response_model=list[Zone], summary="List all NYC TLC zones", description="~265 zones, loaded once at startup.")
 def list_zones() -> list[Zone]:
-    return list(_get_zones().values())
+    logger.info("GET /zones step=start")
+    zones = list(_get_zones().values())
+    logger.info("GET /zones step=done count={}", len(zones))
+    return zones
 
 
 @router.get(
@@ -78,7 +85,10 @@ def list_zones() -> list[Zone]:
     responses={400: {"description": "unknown zone_id"}},
 )
 def get_zone(zone_id: int) -> Zone:
+    logger.info("GET /zones/{{id}} step=start zone_id={}", zone_id)
     zone = _get_zones().get(zone_id)
     if zone is None:
+        logger.warning("GET /zones/{{id}} step=not_found zone_id={}", zone_id)
         raise HTTPException(status_code=400, detail=f"unknown zone_id={zone_id}")
+    logger.info("GET /zones/{{id}} step=done zone_id={}", zone_id)
     return zone

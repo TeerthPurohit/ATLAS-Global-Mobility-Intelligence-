@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 
 import httpx
+from loguru import logger
 
 _API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
 _URL = "https://places.googleapis.com/v1/places:searchText"
@@ -29,6 +30,7 @@ def _address_components(place: dict) -> dict[str, dict]:
 
 def search(q: str, country: str | None = None) -> list[dict]:
     if not _API_KEY:
+        logger.debug("google_places_service.search step=skip reason=no_api_key")
         return []
     text_query = f"{q}, {country}" if country else q
     try:
@@ -44,7 +46,8 @@ def search(q: str, country: str | None = None) -> list[dict]:
         )
         resp.raise_for_status()
         data = resp.json()
-    except Exception:  # noqa: BLE001 -- fallback source; degrade to empty, never raise
+    except Exception as exc:  # noqa: BLE001 -- fallback source; degrade to empty, never raise
+        logger.warning("google_places_service.search step=request failed q={!r} reason={}", q, exc)
         return []
 
     results = []

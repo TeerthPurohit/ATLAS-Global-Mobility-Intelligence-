@@ -30,16 +30,18 @@ logger = logging.getLogger(__name__)
 # Chat tier is a pure function of two real infrastructure facts, not a
 # curated allowlist: does this city have a registered, queryable warehouse
 # (needed for any SQL-grounded answer at all), and does it have a generated
-# insight-doc corpus for vector RAG (only NYC today -- no insight docs exist
-# for London's bike-share marts yet). Adding a third city's real chat
-# capability later means registering its warehouse path (infrastructure it
-# needs anyway for predictions/journey) and, optionally, generating its
-# insight docs -- never a chat-specific code change here.
+# insight-doc corpus for vector RAG. London's station-level corpus was
+# generated 2026-08-14 (rag/insight_generation/generate_london_insight_docs.py,
+# embedded into the "insight_docs_london" Qdrant collection -- see
+# backend/services/rag_service.py's _CITY_INSIGHT_COLLECTION). Adding a
+# further city's real chat capability means registering its warehouse path
+# (infrastructure it needs anyway for predictions/journey) and, optionally,
+# generating its insight docs -- never a chat-specific code change here.
 _CITY_WAREHOUSE_PATHS = {
     "nyc": REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb",
     "london": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
 }
-_CITY_HAS_INSIGHT_DOCS = {"nyc"}
+_CITY_HAS_INSIGHT_DOCS = {"nyc", "london"}
 
 
 def get_chat_tier(city_id: str) -> str:

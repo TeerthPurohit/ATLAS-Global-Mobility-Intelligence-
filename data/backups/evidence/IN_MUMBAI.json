@@ -1,0 +1,14 @@
+[
+  {
+    "query": "Uber Ola Mumbai fare rate per km base fare 2026",
+    "source": "angelone.in / freepressjournal.in (MMRTA regulatory directive, Sept 2026)",
+    "url": "https://www.angelone.in/news/market-updates/ola-uber-rapido-directed-to-adopt-black-and-yellow-taxi-fare-structure-in-mumbai",
+    "snippet": "MMRTA directed Ola/Uber/Rapido to adopt kaali-peeli taxi fare structure. Regulated per-km: ~Rs 28/km hatchback, Rs 31/km sedan, Rs 34/km SUV. Base fare from ~Rs 31. Surge capped at 1.5x during peak hours, discounts up to 25% off-peak. This replaces the old ~Rs 15/km app-only fares -- a real, dated regulatory change, not a generic estimate."
+  },
+  {
+    "query": "Mumbai Ola Uber minimum fare night charge airport surcharge rupees",
+    "source": "taxifarefinder.com / taxibazaar.in",
+    "url": "https://www.taxifarefinder.com/main.php?city=Ola-Mini-Mumbai-India",
+    "snippet": "Ola Mini: base fare Rs 50, minimum fare Rs 60, per-minute Rs 1.25. Uber: base fare Rs 99.75-157.50 depending on tier, per-km Rs 7.35-17.85, per-minute Rs 1.05-2.01 (these are pre-regulation self-reported app rates, likely superseded by the MMRTA directive above for the per-km rate specifically). Night surcharge +25% (1.25x). Airport pickup surcharge Rs 50-130 depending on source."
+  }
+]

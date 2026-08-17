@@ -13,6 +13,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 import xgboost as xgb
+from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -111,7 +112,7 @@ def load() -> None:
     """Load all artifacts once. Call this from FastAPI's startup hook."""
     global _fare_model
 
-    print("[startup] Loading per-city demand XGBoost models...", flush=True)
+    logger.info("model_service.load step=demand_models_start")
     _demand_models.clear()
     _zone_momentum.clear()
     _zone_seasonal_profile.clear()
@@ -119,6 +120,7 @@ def load() -> None:
     _hourly_shape.clear()
     _data_vintage.clear()
     for city_id, cfg in _CITY_ARTIFACTS.items():
+        logger.info("model_service.load step=demand_model city_id={}", city_id)
         try:
             demand_path = cfg["demand_model_path"]
             warehouse_path = cfg["warehouse_path"]
@@ -134,25 +136,25 @@ def load() -> None:
                     _load_zone_demand_artifacts(con, city_id, cfg)
                 finally:
                     con.close()
-        except Exception as err:
-            print(f"[startup] Warning: could not load model artifacts for {city_id}: {err}", flush=True)
+        except Exception:
+            logger.exception("model_service.load step=demand_model failed city_id={} -- this city's demand predict will report unavailable", city_id)
 
-    print("[startup] Loading fare XGBoost model...", flush=True)
+    logger.info("model_service.load step=fare_model_start path={}", FARE_MODEL_PATH)
     _fare_model = xgb.XGBRegressor(enable_categorical=True)
     _fare_model._estimator_type = "regressor"
     _fare_model.load_model(str(FARE_MODEL_PATH))
 
-    print("[startup] Loading fare categories...", flush=True)
+    logger.info("model_service.load step=fare_categories")
     _load_fare_categories()
 
-    print("[startup] Loading zone centroids...", flush=True)
+    logger.info("model_service.load step=zone_centroids")
     _load_zone_centroids()
 
-    print("[startup] Loading WorldMove city hourly shapes...", flush=True)
+    logger.info("model_service.load step=worldmove_hourly_shapes")
     _load_worldmove_hourly_shapes()
-    print("[startup] Loading WorldMove area hourly momentum...", flush=True)
+    logger.info("model_service.load step=worldmove_area_momentum")
     _load_worldmove_area_momentum()
-    print("[startup] All artifacts loaded successfully!", flush=True)
+    logger.info("model_service.load step=done demand_models={} fare_model_loaded={}", list(_demand_models), _fare_model is not None)
 
 
 _PROFILE_FEATURE_COLS = ("lag_1h", "lag_24h", "lag_168h", "ewma", "rolling_7d_avg", "temperature_c", "precipitation_mm")
@@ -358,9 +360,11 @@ def data_vintage(city_id: str) -> str | None:
 
 def predict_demand(zone_id: int, hour: int, day_of_week: int, city_id: str = "nyc", month: int | None = None) -> tuple[float, str]:
     if city_id not in _demand_models:
+        logger.debug("model_service.predict_demand step=no_model_for_city city_id={}", city_id)
         raise KeyError(f"no demand model loaded for city_id={city_id!r}")
     momentum_by_area = _zone_momentum.get(city_id, {})
     if zone_id not in momentum_by_area:
+        logger.debug("model_service.predict_demand step=no_history city_id={} zone_id={}", city_id, zone_id)
         raise KeyError(f"no demand history for city_id={city_id!r} zone_id={zone_id}")
 
     cfg = _CITY_ARTIFACTS[city_id]

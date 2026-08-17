@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Query
+from loguru import logger
 
 # Add repo root for imports
 import sys
@@ -65,6 +66,7 @@ def _response_payload(row: dict) -> dict:
 @router.get("/summary", response_model=AnalyticsSummaryResponse)
 def summary() -> AnalyticsSummaryResponse:
     """Analytics summary from real prediction log rows."""
+    logger.info("GET /api/analytics/summary step=start")
     history = prediction_log.get_recent_predictions(limit=_HISTORY_SCAN_LIMIT)
     total_predictions = len(history)
 
@@ -92,6 +94,7 @@ def summary() -> AnalyticsSummaryResponse:
         for city_id, count in sorted(cities.items(), key=lambda kv: kv[1], reverse=True)[:10]
     ]
 
+    logger.info("GET /api/analytics/summary step=done total_predictions={} cities_served={}", total_predictions, len(cities))
     return AnalyticsSummaryResponse(
         total_predictions=total_predictions,
         cities_served=len(cities),
@@ -103,7 +106,9 @@ def summary() -> AnalyticsSummaryResponse:
 @router.get("/insights", response_model=AnalyticsInsightsResponse)
 def insights(limit: int = Query(20, ge=1, le=100)) -> AnalyticsInsightsResponse:
     """Get insight documents from the RAG pipeline."""
+    logger.info("GET /api/analytics/insights step=start limit={}", limit)
     insight_docs = platform_service.get_insight_docs(limit=limit)
+    logger.info("GET /api/analytics/insights step=done count={}", len(insight_docs))
     return AnalyticsInsightsResponse(insights=insight_docs)
 
 
@@ -113,8 +118,10 @@ def history(
     offset: int = Query(0, ge=0),
 ) -> AnalyticsHistoryResponse:
     """Get recent prediction history."""
+    logger.info("GET /api/analytics/history step=start limit={} offset={}", limit, offset)
     all_history = prediction_log.get_recent_predictions(limit=limit + offset)
     paginated = all_history[offset:offset + limit]
+    logger.info("GET /api/analytics/history step=done returned={}", len(paginated))
     return AnalyticsHistoryResponse(history=paginated, limit=limit, offset=offset)
 
 
@@ -124,6 +131,7 @@ def trends(
 ) -> AnalyticsTrendsResponse:
     """Real trend series bucketed from log timestamps and response payloads.
     `now` and every log timestamp are aware UTC -- no naive/aware mix."""
+    logger.info("GET /api/analytics/trends step=start period={}", period)
     history = prediction_log.get_recent_predictions(limit=_HISTORY_SCAN_LIMIT)
 
     now = datetime.now(timezone.utc)
@@ -156,6 +164,7 @@ def trends(
             bucket["distances"].append(float(distance))
 
     sorted_keys = sorted(buckets.keys())
+    logger.info("GET /api/analytics/trends step=done period={} buckets={}", period, len(sorted_keys))
     return AnalyticsTrendsResponse(
         trends={
             "predictions": [buckets[k]["count"] for k in sorted_keys],

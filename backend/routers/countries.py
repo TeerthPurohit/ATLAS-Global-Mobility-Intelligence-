@@ -5,6 +5,7 @@ this platform doesn't carry a row for.
 from __future__ import annotations
 
 from fastapi import APIRouter
+from loguru import logger
 
 from backend.errors import DomainError
 from backend.registry import countries as countries_registry
@@ -21,7 +22,10 @@ router = APIRouter(prefix="/api/countries", tags=["Countries"])
     "`supported` is true iff the country has >=1 onboarded city.",
 )
 def list_countries() -> CountriesResponse:
-    return CountriesResponse(countries=[Country(**c) for c in countries_registry.list_countries()])
+    logger.info("GET /api/countries step=start")
+    countries = [Country(**c) for c in countries_registry.list_countries()]
+    logger.info("GET /api/countries step=done count={}", len(countries))
+    return CountriesResponse(countries=countries)
 
 
 @router.get(
@@ -31,7 +35,10 @@ def list_countries() -> CountriesResponse:
     responses={404: {"model": ErrorResponse, "description": "Country not supported"}},
 )
 def get_country(code: str) -> Country:
+    logger.info("GET /api/countries/{{code}} step=start code={}", code)
     country = countries_registry.get_country(code)
     if country is None:
+        logger.warning("GET /api/countries/{{code}} step=not_supported code={}", code)
         raise DomainError(ErrorCode.COUNTRY_NOT_SUPPORTED, f"country not supported: {code!r}", 404)
+    logger.info("GET /api/countries/{{code}} step=done code={}", code)
     return Country(**country)

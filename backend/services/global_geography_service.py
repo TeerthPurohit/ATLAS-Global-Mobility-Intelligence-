@@ -7,12 +7,12 @@ separating global geography from mobility data availability and modeling capabil
 
 from __future__ import annotations
 
-import logging
 import sys
 from functools import lru_cache
 from pathlib import Path
 
 import duckdb
+from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -20,8 +20,6 @@ sys.path.insert(0, str(REPO_ROOT))
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import global_cities as global_cities_registry  # noqa: E402
 from backend.services import geonames_service  # noqa: E402
-
-logger = logging.getLogger(__name__)
 
 _WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
@@ -40,7 +38,8 @@ def _worldmove_population() -> dict[tuple[str, str], float]:
             ).fetchall()
         finally:
             con.close()
-    except duckdb.Error:  # noqa: BLE001 -- table/file missing degrades to no fallback, never a crash
+    except duckdb.Error as exc:  # noqa: BLE001 -- table/file missing degrades to no fallback, never a crash
+        logger.debug("global_geography_service._worldmove_population step=table_missing reason={}", exc)
         return {}
     return {(cc, name.lower()): pop for cc, name, pop in rows}
 
@@ -67,7 +66,8 @@ def get_currency_for_country(country_code: str | None) -> str:
         return "USD"
     try:
         return _country_currencies().get(country_code.upper(), "USD")
-    except Exception:  # noqa: BLE001 -- GeoNames unavailable degrades to USD, never a hard failure
+    except Exception as exc:  # noqa: BLE001 -- GeoNames unavailable degrades to USD, never a hard failure
+        logger.warning("global_geography_service.get_currency_for_country step=geonames failed country_code={} reason={}", country_code, exc)
         return "USD"
 
 
@@ -134,6 +134,7 @@ def resolve_city_tier(city_name: str | None, country_code: str | None, populatio
 
 def get_city_profile(city_id: str) -> dict | None:
     """Phase 3: Fetch authoritative geographic facts for a city_id or geoname_id."""
+    logger.debug("global_geography_service.get_city_profile step=start city_id={}", city_id)
     # Check registered cities first
     registered = cities_registry.get_city(city_id)
     if registered:
@@ -232,19 +233,21 @@ def get_city_profile(city_id: str) -> dict | None:
         try:
             raw_hierarchy = geonames_service.get_hierarchy(geoname_id)
         except Exception as exc:  # noqa: BLE001
-            logger.debug("GeoNames hierarchy failed for id %s: %s", geoname_id, exc)
+            logger.debug("global_geography_service.get_city_profile step=hierarchy_lookup failed geoname_id={} reason={}", geoname_id, exc)
 
     if not raw_hierarchy:
         # Search by place name
         places = geonames_service.search_places(city_id)
         if not places:
+            logger.info("global_geography_service.get_city_profile step=unresolvable city_id={}", city_id)
             return None
         place = places[0]
         geoname_id = place.get("geoname_id")
         if geoname_id:
             try:
                 raw_hierarchy = geonames_service.get_hierarchy(geoname_id)
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("global_geography_service.get_city_profile step=hierarchy_lookup failed geoname_id={} reason={}", geoname_id, exc)
                 raw_hierarchy = []
 
     if not geoname_id and not places:
@@ -271,8 +274,8 @@ def get_city_profile(city_id: str) -> dict | None:
         try:
             tz = geonames_service.get_timezone(lat, lng)
             tz_id = tz.get("timezone_id") or "UTC"
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("global_geography_service.get_city_profile step=timezone_lookup failed lat={} lng={} reason={}", lat, lng, exc)
 
     hierarchy_nodes = []
     if raw_hierarchy:

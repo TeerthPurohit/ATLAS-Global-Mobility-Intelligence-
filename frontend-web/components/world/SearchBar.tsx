@@ -11,9 +11,12 @@ import { cn } from "@/lib/utils";
 interface SearchBarProps {
   placeholder?: string;
   onResultClick?: (city: City) => void;
+  /** "command" = wide instrument-panel styling for the Explore map hero. Default is unchanged elsewhere. */
+  variant?: "default" | "command";
 }
 
-export function SearchBar({ placeholder = "Search cities, countries...", onResultClick }: SearchBarProps) {
+export function SearchBar({ placeholder = "Search cities, countries...", onResultClick, variant = "default" }: SearchBarProps) {
+  const isCommand = variant === "command";
   const [query, setQuery] = useState("");
   // debouncedQuery is what actually triggers the API call — updated 300ms after typing stops
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -59,6 +62,22 @@ export function SearchBar({ placeholder = "Search cities, countries...", onResul
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, data, focusedIndex]);
 
+  // Command variant: "/" focuses search, like GitHub's shortcut -- doesn't collide with
+  // the shell-wide Cmd/Ctrl+K "Go to" palette (components/layout/CommandPalette.tsx).
+  useEffect(() => {
+    if (!isCommand) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (e.key === "/" && !isTyping) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isCommand]);
+
   const handleSelect = useCallback((city: City) => {
     if (onResultClick) {
       onResultClick(city);
@@ -102,18 +121,22 @@ export function SearchBar({ placeholder = "Search cities, countries...", onResul
           onBlur={() => setTimeout(() => setIsOpen(false), 200)}
           placeholder={placeholder}
           className={cn(
-            "w-full px-4 py-3 pl-11 pr-11 rounded-xl bg-surface-1 border",
-            "text-ink-primary placeholder-ink-muted",
-            "focus:outline-none focus:ring-2 focus:ring-brass/50",
-            "transition-colors"
+            "w-full text-ink-primary placeholder-ink-muted focus:outline-none transition-colors",
+            isCommand
+              ? cn(
+                  "px-5 py-4 pl-12 pr-14 rounded-lg bg-surface-0/60 border border-surface-border/80 backdrop-blur-md",
+                  "focus:border-brass/60 focus:ring-1 focus:ring-brass/40 focus:bg-surface-0/80",
+                  "placeholder:uppercase placeholder:tracking-[0.1em] placeholder:text-xs placeholder:font-medium"
+                )
+              : "px-4 py-3 pl-11 pr-11 rounded-xl bg-surface-1 border focus:ring-2 focus:ring-brass/50"
           )}
           autoComplete="off"
           aria-autocomplete="list"
           aria-controls="search-results"
           aria-expanded={isOpen && (data?.results.length ?? 0) > 0}
         />
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-ink-muted" aria-hidden="true" />
-        {query && (
+        <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-ink-muted", isCommand && "left-4")} aria-hidden="true" />
+        {query ? (
           <button
             onClick={clearQuery}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-surface-2 transition-colors"
@@ -121,6 +144,12 @@ export function SearchBar({ placeholder = "Search cities, countries...", onResul
           >
             <X className="h-5 w-5 text-ink-muted" />
           </button>
+        ) : (
+          isCommand && (
+            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden sm:flex items-center rounded border border-surface-border px-1.5 py-0.5 font-mono text-[10px] text-ink-muted">
+              /
+            </kbd>
+          )
         )}
       </div>
 

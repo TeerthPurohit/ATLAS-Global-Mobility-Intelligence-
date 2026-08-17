@@ -1,0 +1,1942 @@
+[
+  {
+    "city_id": "AU_ADELAIDE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_ALBANY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_ALICE_SPRINGS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_BATHURST",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_BIRDUM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_BOMBO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_CANBERRA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_FREMANTLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_GEORGE_TOWN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "AU_GISBORNE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_KINGSTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_MOOSONEE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_NAMUR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_QUEBEC",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_SAINT_JOHN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_SASKATOON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_SCHEFFERVILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_WINNIPEG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CA_YELLOWKNIFE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_AARAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_APPENZELL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_AQUILA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_BASEL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_BELLINZONA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_CHUR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_FRAUENFELD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_GLARUS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_GUARDA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_HERISAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_LAUSANNE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_LIESTAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_LUZERN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_MONTANA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_SARNEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "CH_SCHAFFHAUSEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_ALTDORF",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_BONN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_BREMERHAVEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_DORTMUND",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_DUISBURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_ERFURT",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_ESSEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_HANNOVER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_LEIPZIG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_MAGDEBURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_MAINZ",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_MARIENTAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_SCHWERIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_TARNOW",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DE_WIESBADEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DK_ODENSE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DK_RIBE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DK_ROSKILDE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "DK_VEJLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "EE_TALLINN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_BARCELONA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_BILBAO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_CEUTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_CORDOBA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_CUENCA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_GUADALAJARA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_IBARRA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_LOJA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_MADRID",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_MELILLA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_MURCIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_POSADAS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_SANTANDER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_SANTA_CRUZ_DE_TENERIFE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_SANTA_MARTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_TRUJILLO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_VALLADOLID",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_ZAMORA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "ES_ZARAGOZA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_HELSINKI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_JOENSUU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_KOUVOLA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_KUOPIO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_MIKKELI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_OULU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_ROVANIEMI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_TURKU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FI_VAASA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_AJACCIO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_AMIENS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_BORDEAUX",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_BOUAFLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_BREST",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_BRUGES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_CAEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_CLERMONT_FERRAND",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_DIJON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_FRIBOURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_LAGOS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_LE_HAVRE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_LILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_LIMOGES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_LYON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MACAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MALANGE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MANDEVILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MARSEILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MONS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MONTPELLIER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_MUS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_NANCY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_NANTES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_PALMAS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_PARIS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_POITIERS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_REIMS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_RENNES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_RIVAS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_ROUEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_SAINT_DENIS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_SAINT_PIERRE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_STRASBOURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_SURIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "FR_TOULOUSE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_BELFAST",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_BIRMINGHAM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_CHESTER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_CHRISTCHURCH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_CHURCHILL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_CONSTANTINE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_DENVER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_DOVER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_DUNDEE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_DUNKIRK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_EDINBURGH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_FALMOUTH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_FAWLEY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_GLASGOW",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_HALIFAX",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_HAMILTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_HASTINGS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_ILAM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_KIMBERLEY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_LEEDS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_LINCOLN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_LIVERPOOL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_MANCHESTER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_MONTGOMERY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_MOSS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_NELSON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_PLYMOUTH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_RICHMOND",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_ROCKHAMPTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_SALEM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_SHEFFIELD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_SOUTHAMPTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_VAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_VICTORIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GB_WELLINGTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "GR_ATHENS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HK_HONG_KONG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HR_BOL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HR_RIJEKA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HR_SLATINA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HR_ZAGREB",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_BUDAPEST",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_DEBRECEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_EGER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_MEDINA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_MISKOLC",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_SZEGED",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_SZOLNOK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_SZOMBATHELY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "HU_ZALAEGERSZEG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IE_CORK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IE_DUBLIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IE_GALWAY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IL_BEERSHEBA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IL_HAIFA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_AGARTALA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_AMRITSAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_BECHAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_BHOPAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_BISSAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_CHANDIGARH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_CHENNAI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_DAMAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_DELHI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_DHAKA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_FARAH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_GANDHINAGAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_GANGTOK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_HYDERABAD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_JAIPUR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_JAWHAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_KANPUR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_KAVARATTI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_LUCKNOW",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_MADURAI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_MANGALORE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_MANSA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_NAGPUR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_NEW_DELHI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_PANAJI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_PATNA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_PORT_BLAIR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_PUNE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_SAMANA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_SHILLONG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_SILVASSA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_SORO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_SRINAGAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_TANDA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_TURA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IN_VARANASI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IS_REYKJAVIK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_ANCONA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_AOSTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_AUGUSTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_BARI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_BOLOGNA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_CAGLIARI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_CAMPOBASSO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_CATANZARO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_COLOGNE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_NICOSIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_NOLA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_PALERMO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_PERUGIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_POTENZA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_ROME",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_TRENTO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_TRIESTE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_TURIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "IT_VARNA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "JP_KAWASAKI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "JP_KYOTO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "JP_NAGASAKI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "JP_TOKYO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "JP_YORO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "KR_KWANGJU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "KR_PUSAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "KR_SEOUL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "LI_VADUZ",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "LT_VILNIUS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "LU_DIEKIRCH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "LU_GREVENMACHER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "LU_LUXEMBOURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "MC_MONACO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "MT_VALLETTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_ARNHEM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_ASSEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_GRONINGEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_HAARLEM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_LEEUWARDEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_MAASTRICHT",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NL_THE_HAGUE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_ARENDAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_HAMAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_HAMMERFEST",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_KRISTIANSAND",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_LILLEHAMMER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_MOLDE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_NARVIK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_SKIEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_STEINKJER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NO_TRONDHEIM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_GOOSE_BAY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_GREYMOUTH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_INVERCARGILL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_LIVINGSTONE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_TAURANGA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_WANGANUI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "NZ_WHANGAREI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "OM_MUSCAT",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_BYDGOSZCZ",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_GDYNIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_KALISZ",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_KATOWICE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_KIELCE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_KONIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_KOSZALIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_KROSNO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_LEGNICA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_LESZNO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_OLSZTYN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_OPOLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_SIEDLCE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_SIERADZ",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_SKIERNIEWICE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_SZCZECIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PL_TARNOBRZEG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PT_FUNCHAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PT_LEIRIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "PT_VILA_REAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "QA_DOHA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SA_ABHA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SA_BURAYDAH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SA_JEDDAH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SA_NAJRAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SA_RIYADH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SA_TABUK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SE_KARLSKRONA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SE_KRISTIANSTAD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SE_MARIESTAD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SE_UPPSALA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SE_VISBY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SG_SINGAPORE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SI_LJUBLJANA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "SK_BRATISLAVA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "TW_TAIPEI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ADAMSTOWN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ALEPPO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ANCHORAGE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ARMENIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ATLANTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_AUSTIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BALTIMORE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BATON_ROUGE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BELGRADE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BERGEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BLACK_RIVER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BOGOTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BREMEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BRIDGETOWN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BRISBANE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BROOKLYN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BRUSSELS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BUCHANAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_BUFFALO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CAIRO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CALLAO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CARSON_CITY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CARTAGO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CHARLESTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CHARLOTTE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CHEYENNE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CHICAGO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CINCINNATI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CLEVELAND",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_COLUMBIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_COLUMBUS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_CONCORD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_COPENHAGEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DALLAS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DAMASCUS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DARWIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DES_MOINES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DETROIT",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DONGOLA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DRESDEN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_DUNEDIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_EDMONTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_EL_PASO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_FAIRBANKS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_FALUN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_FLORENCE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_FREETOWN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_GALVESTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_GORE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_GRANADA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_GREENVILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HAMBURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HARPER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HARRISBURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HARTFORD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HILO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HOBART",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_HOUSTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_INDIANAPOLIS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_JACKSON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_JALAPA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_JAMESTOWN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_JEFFERSON_CITY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_JOHANNESBURG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_JUNEAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KALMAR",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KANSAS_CITY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KARLSTAD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KERMAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KIEL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KINGSTOWN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_KRAKOW",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LAKOTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LA_PALMA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LA_PLATA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LA_UNION",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LIMA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LISBON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LITTLE_ROCK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LOS_ANGELES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_LUBLIN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MAMOU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MANILA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MARY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MECCA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MEMPHIS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MERCEDES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MIAMI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MILAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MILWAUKEE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MINNEAPOLIS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MOBILE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MONTPELIER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MONTREAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MOSCOW",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_MUNICH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NAPLES",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NASHVILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NASSAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NAZARETH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NEUCHATEL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NEWARK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NEW_ORLEANS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NEW_PLYMOUTH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NEW_YORK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NOME",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_NORFOLK",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_OAKLAND",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_OKLAHOMA_CITY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_OLYMPIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ORAN",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ORLEANS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_OSLO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_OTTAWA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_OVIEDO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PANAMA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PHILADELPHIA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PHOENIX",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PIERRE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PITTSBURGH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_POTOSI",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_POTSDAM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PRAGUE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PROVIDENCE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_PUNTA_GORDA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_RADOM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_RALEIGH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_RAWSON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_REGINA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_REHOBOTH",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ROCHESTER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ROSEAU",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SACRAMENTO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SALT_LAKE_CITY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SANTA_ANA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SANTA_BARBARA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SANTA_CLARA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SANTA_FE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SANTIAGO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_ANTONIO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_CARLOS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_CRISTOBAL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_DIEGO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_FELIPE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_FRANCISCO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_JOSE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_JUAN_BAUTISTA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_LUIS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_MARCOS",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_MARINO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_MIGUEL",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SAN_PEDRO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SEATTLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SEVILLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SIMLA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_SPRINGFIELD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_STANLEY",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_STAVANGER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_STOCKHOLM",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_STUTTGART",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TACNA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TALLAHASSEE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TAMPA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TAMPICO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TOLEDO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TOLUCA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TRENTON",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_TRINIDAD",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_VALPARAISO",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_VANCOUVER",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_VENICE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_VIBORG",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_VIENNA",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_WARSAW",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_WHITEHORSE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "US_ZWOLLE",
+    "reason": "never_evidence_validated"
+  },
+  {
+    "city_id": "london",
+    "reason": "missing"
+  },
+  {
+    "city_id": "nyc",
+    "reason": "missing"
+  }
+]

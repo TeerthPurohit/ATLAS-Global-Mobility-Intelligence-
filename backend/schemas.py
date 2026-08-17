@@ -364,12 +364,18 @@ class RouteResponse(BaseModel):
 
 
 class FareBreakdown(BaseModel):
-    """Fare breakdown - only includes components actually calculated."""
+    """Fare breakdown - only includes components actually calculated. Field
+    names match pricing_engine.compute_fare's own term names (base_fare/
+    vehicle_adjustment/traffic_adjustment/weather_adjustment/demand_adjustment)
+    -- previously named base/distance/duration/fees/surge, which described
+    fare components that don't exist in this engine and mislabeled what the
+    values actually were (found 2026-08-16 investigating a stale/incorrect
+    Journey page report)."""
     base: float | None = None
-    distance: float | None = None
-    duration: float | None = None
-    fees: float | None = None
-    surge: float | None = None
+    vehicle: float | None = None
+    traffic: float | None = None
+    weather: float | None = None
+    demand: float | None = None
     total: float | None = None
 
 
@@ -536,6 +542,13 @@ class CityTariffResponse(BaseModel):
     notes: str | None = None
     generated_at: str | None = None
     model_id: str | None = None
+    # None means "never evidence/analytically validated" -- the frontend uses
+    # this to decide whether to open WS /api/cities/{city_id}/tariff/enrich
+    # (see tariff_enrichment.py's needs_enrichment()), not just whether a
+    # profile row exists at all (every row has one, even the stale pre-2026-08-16 ones).
+    validation_method: str | None = None
+    evidence_sources: str | None = None
+    validated_at: str | None = None
 
 
 class CityZonesResponse(BaseModel):

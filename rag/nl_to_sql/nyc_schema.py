@@ -50,6 +50,7 @@ NYC_SCHEMA = CityMobilitySchema(
             value=FieldMapping("trip_count", "count of trips between a pickup/dropoff zone pair"),
             filters={
                 "area": FieldMapping("pickup_zone", "pickup zone name", is_text=True),
+                "dest_area": FieldMapping("dropoff_zone", "dropoff zone name", is_text=True),
                 "date_range": FieldMapping("pickup_date", "pickup calendar date"),
             },
         ),

@@ -19,6 +19,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 import httpx
+from loguru import logger
 
 from backend.predictors.base import PredictionResult
 
@@ -38,8 +39,10 @@ def _fetch_rates(base: str) -> tuple[dict, str] | None:
             rates = data.get(base)
             if rates:
                 return rates, str(data.get("date", "unknown"))
-        except Exception:  # noqa: BLE001 -- network/API failure degrades honestly upstream
+        except Exception as exc:  # noqa: BLE001 -- network/API failure degrades honestly upstream
+            logger.warning("fx_rates step=fetch failed url={} reason={}", url_tmpl, exc)
             continue
+    logger.warning("fx_rates step=fetch exhausted base={} -- both primary and fallback failed", base)
     return None
 
 

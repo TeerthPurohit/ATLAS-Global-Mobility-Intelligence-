@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { getChatHistory, streamChat, type ChatMessage, type ChatRoute } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
+import { useAppContext } from "@/context/AppContext";
 
 interface Turn {
   role: "user" | "assistant";
@@ -32,6 +33,7 @@ function looksNumeric(text: string): boolean {
 }
 
 export default function AnalystPage() {
+  const { selectedCity } = useAppContext();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
@@ -73,7 +75,7 @@ export default function AnalystPage() {
     setTurns((prev) => [...prev, { role: "user", content: question }, { role: "assistant", content: "", pending: true }]);
 
     closeRef.current = streamChat(
-      { question, session_id: sessionId },
+      { question, session_id: sessionId, city_id: selectedCity?.id },
       {
         onFrame: (frame) => {
           if ("error" in frame) {

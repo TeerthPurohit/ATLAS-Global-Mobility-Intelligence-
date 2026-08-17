@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "insight_generation"))
@@ -108,5 +109,5 @@ def test_session_store_crud():
         assert history[1]["sql"] == "SELECT 1"
     finally:
         with session_store.get_connection() as conn:
-            conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
             conn.commit()

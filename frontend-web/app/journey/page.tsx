@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { JourneyForm } from "@/components/journey/JourneyForm";
 import { JourneyMap } from "@/components/journey/JourneyMap";
@@ -16,7 +17,19 @@ const defaultPickup = { lat: 40.7484, lon: -73.9857 };
 const defaultDropoff = { lat: 40.7061, lon: -74.0088 };
 
 export default function JourneyPage() {
+  return (
+    <Suspense fallback={null}>
+      <JourneyPageContent />
+    </Suspense>
+  );
+}
+
+function JourneyPageContent() {
   const containerRef = useGsapEntrance(".gsap-reveal", { stagger: 0.1, yOffset: 16 });
+  // Set by QuickActions' "Plan Journey" link (`/journey?city=<cityId>`) -- was
+  // previously read nowhere, so the form silently defaulted to NYC no matter
+  // which city's page the user came from.
+  const cityIdParam = useSearchParams().get("city");
   const [route, setRoute] = useState({ pickup: defaultPickup, dropoff: defaultDropoff });
   const [journeyRequest, setJourneyRequest] = useState<JourneyRequest | null>(null);
   const [cityTier, setCityTier] = useState<string>("OBSERVED");
@@ -62,7 +75,7 @@ export default function JourneyPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[420px_1fr]">
         {/* Sidebar Form */}
         <div className="gsap-reveal flex flex-col gap-6">
-          <JourneyForm onSubmit={handleSubmit} isPending={false} />
+          <JourneyForm onSubmit={handleSubmit} isPending={false} initialCityId={cityIdParam} />
           <div className="border border-surface-border bg-surface-1 p-6 rounded-sm">
             <JourneyMap pickup={route.pickup} dropoff={route.dropoff} />
           </div>

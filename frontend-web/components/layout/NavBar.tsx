@@ -18,9 +18,19 @@ const navLinks = [
 
 export function NavBar() {
   const pathname = usePathname();
+  // Explore's hero is a full-bleed map -- let the nav float translucent over it there.
+  // Every other route keeps the original solid header untouched.
+  const isHeroPage = pathname === "/";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-surface-border bg-surface-0/95 backdrop-blur-sm transition-shadow duration-300">
+    <header
+      className={cn(
+        "sticky top-0 z-40 transition-colors duration-300",
+        isHeroPage
+          ? "border-b border-transparent bg-gradient-to-b from-surface-0/70 to-transparent backdrop-blur-[2px]"
+          : "border-b border-surface-border bg-surface-0/95 backdrop-blur-sm"
+      )}
+    >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
         {/* Logo & Brand */}
         <Link
@@ -31,14 +41,14 @@ export function NavBar() {
             <Compass className="h-5 w-5 text-brass transition-transform duration-500 group-hover:rotate-45" />
           </div>
           <div className="flex flex-col gap-0">
-            <span className="hidden sm:block font-section-md text-ink-primary leading-tight">
-              WORLDMOVE
+            <span className="hidden sm:block font-section-md text-ink-primary leading-tight tracking-wide">
+              ATLAS
             </span>
             <span className="hidden sm:block font-label-sm text-ink-muted">
-              Mobility Intelligence
+              Global Mobility Analysis
             </span>
-            <span className="sm:hidden font-section-md text-ink-primary">
-              WORLDMOVE
+            <span className="sm:hidden font-section-md text-ink-primary tracking-wide">
+              ATLAS
             </span>
           </div>
           <PulsingStatusDot status="live" size={6} className="ml-2" />
@@ -66,7 +76,7 @@ export function NavBar() {
                 {isActive && (
                   <motion.div
                     layoutId="activeNavUnderline"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brass"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brass shadow-[0_0_6px_rgba(201,146,42,0.5)]"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
