@@ -22,6 +22,7 @@ from backend.schemas import (
     CityDemandPredictRequest,
     CityFarePredictRequest,
     CityJourneyEstimate,
+    CityContextResponse,
     CityJourneyRequest,
     CityProfileResponse,
     CitySearchResponse,
@@ -323,6 +324,25 @@ def get_city_tariff(city_id: str) -> CityTariffResponse:
     data["city_id"] = city_id
     logger.info("GET /api/cities/{{city_id}}/tariff step=done city_id={}", city_id)
     return CityTariffResponse(**data)
+
+
+@router.get(
+    "/api/cities/{city_id}/context",
+    response_model=CityContextResponse,
+    summary="Real environmental/urban context for a city",
+    description="Geography, weather, calendar, urban density, routing capability and "
+    "demand shape, each in a standardized provenance envelope. An unavailable source "
+    "carries a real reason, never a fabricated value.",
+    responses={404: {"model": ErrorResponse, "description": "City not found"}},
+)
+def get_city_context(city_id: str) -> CityContextResponse:
+    from backend.services import context_orchestrator
+
+    logger.info("GET /api/cities/{{city_id}}/context step=start city_id={}", city_id)
+    _require_city(city_id)
+    context_data = context_orchestrator.get_city_context(city_id)
+    logger.info("GET /api/cities/{{city_id}}/context step=done city_id={}", city_id)
+    return CityContextResponse(**context_data)
 
 
 @router.get(

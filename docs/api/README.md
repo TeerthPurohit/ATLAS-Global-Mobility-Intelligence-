@@ -128,6 +128,7 @@ true/true/true. An unregistered `city_id` is a 404, not a degraded estimate.
 | `/api/cities/{city_id}/predict/fare` | POST | `PredictionEnvelope` or `{available:false,...}` | same |
 | `/api/cities/{city_id}/forecast?metric=demand&hours=24` | GET | `ForecastEnvelope` or `{available:false,...}` | `CITY_NOT_FOUND` (404), `INVALID_TIME_RANGE` (400) |
 | `/api/cities/{city_id}/chat` | POST | `ChatResponse` | `CITY_NOT_FOUND` (404), `CHAT_FAILED` (500) |
+| `/api/cities/{city_id}/context` | GET | `CityContextResponse` (geography/weather/calendar/density/routing/demand-shape, each in a provenance envelope) | `CITY_NOT_FOUND` (404) |
 
 `PredictionEnvelope`: `{city_id, area_id, dropoff_area_id, metric,
 prediction, model, model_version, generated_at, data_timestamp, source}` --

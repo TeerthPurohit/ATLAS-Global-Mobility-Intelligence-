@@ -606,3 +606,23 @@ class AnalyticsTrendsResponse(BaseModel):
     """Analytics trends response."""
     trends: dict[str, list[float]]
     period: str
+
+
+class ContextSourceEnvelope(BaseModel):
+    """One context source's answer, with its own provenance. `status` is
+    "available" | "unavailable" -- an unavailable source carries a real
+    `reason`, never a fabricated `data` payload."""
+    status: str
+    data: dict | list | str | float | int | None = None
+    source: str
+    timestamp: str
+    freshness: str | None = None
+    coverage: str | None = None
+    reason: str | None = None
+
+
+class CityContextResponse(BaseModel):
+    city_id: str
+    city_name: str
+    generated_at: str
+    context: dict[str, ContextSourceEnvelope]
