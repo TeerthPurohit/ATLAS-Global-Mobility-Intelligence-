@@ -1,6 +1,7 @@
 # ADR-008: External data-source adapters under a $0 budget
 
-**Status:** Accepted (Journey Intelligence Engine, Phase 1)
+**Status:** Accepted, partially superseded by [ADR-011](ADR-011-retreat-from-global-coverage.md) — the global-coverage
+framing here no longer applies; the pattern itself still stands for NYC/London.
 
 ## Context
 

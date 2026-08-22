@@ -78,15 +78,11 @@ _zone_centroids: dict[int, tuple[float, float]] = {}
 _zone_seasonal_profile: dict[str, dict[tuple[int, int, int], dict[str, float]]] = {}
 # (city_id -> {(hour, day_of_week) -> fraction of that day-of-week's total
 # volume falling in this hour, real SUM(total_trips) across every zone,
-# sums to 1.0 across the 24 hours of a given day_of_week}). Used as a
-# transferred prior to hourly-shape a population-scaled daily estimate for
-# cities with no zone-level model of their own -- see
-# estimation_service.estimate_hourly_demand().
+# sums to 1.0 across the 24 hours of a given day_of_week}).
 _hourly_shape: dict[str, dict[tuple[int, int], float]] = {}
 # (city_id -> {month -> multiplier}), a real SUM(total_trips)-weighted ratio
 # of that month's average hourly volume to the city's overall average,
-# clamped [0.5, 2.0] same convention as estimation_service's density/wet
-# multipliers. Only months actually present in the warehouse get a
+# clamped [0.5, 2.0]. Only months actually present in the warehouse get a
 # non-neutral factor (see the Jan/Mar/Jun 2024 data-gap note in
 # .claude/memory.md) -- an unmeasured month honestly falls back to 1.0.
 _month_factor: dict[str, dict[int, float]] = {}
@@ -95,17 +91,6 @@ _MONTH_FACTOR_MIN, _MONTH_FACTOR_MAX = 0.5, 2.0
 # city's mart covers, surfaced on every computed PredictionOut so nothing
 # claims to be more current than it is.
 _data_vintage: dict[str, str] = {}
-# (area_id -> {hour -> occupancy_ratio}), real per-cell "this hour vs. this
-# cell's own daily mean" from SPEC-016's worldmove_area_hourly_momentum --
-# the WorldMove-city analogue of _zone_momentum's lag_1h/rolling_7d_avg
-# ratio, used by journey_predictors._demand_pressure() so
-# availability/surge risk are computed from real data for WorldMove cities
-# too, not just nyc/london.
-_worldmove_area_momentum: dict[int, dict[int, float]] = {}
-# city_ids with at least one area covered by _worldmove_area_momentum --
-# lets capability_matrix answer "does this city have real momentum data"
-# without re-deriving it from an area-id membership scan on every request.
-_worldmove_momentum_cities: set[str] = set()
 
 
 def load() -> None:
@@ -150,10 +135,6 @@ def load() -> None:
     logger.info("model_service.load step=zone_centroids")
     _load_zone_centroids()
 
-    logger.info("model_service.load step=worldmove_hourly_shapes")
-    _load_worldmove_hourly_shapes()
-    logger.info("model_service.load step=worldmove_area_momentum")
-    _load_worldmove_area_momentum()
     logger.info("model_service.load step=done demand_models={} fare_model_loaded={}", list(_demand_models), _fare_model is not None)
 
 
@@ -230,76 +211,6 @@ def _load_fare_categories() -> None:
         _fare_categories[col] = pd.Series(entry["values"], dtype=_FARE_CATEGORY_DTYPES[col])
 
 
-def _load_worldmove_hourly_shapes() -> None:
-    """Real per-city hour-of-day shape for every WorldMove-covered city
-    (SPEC-016's `worldmove_city_hourly_shape` mart), so
-    hourly_shape_fraction() has an actual answer for the ~521 cities that
-    aren't nyc/london instead of estimation_service.py falling back to NYC's
-    shape for all of them (the direct cause of every non-NYC/London city's
-    demand estimate looking NYC-shaped). Does not overwrite nyc/london,
-    which already got a real (multi-month) shape from
-    _load_zone_demand_artifacts above -- WorldMove only fills in cities that
-    have no entry yet.
-    """
-    if not WAREHOUSE_PATH.exists():
-        return
-    con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
-    try:
-        exists = con.execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'worldmove_city_hourly_shape'"
-        ).fetchone()[0]
-        if not exists:
-            return
-        df = con.execute(
-            "SELECT city_id, hour, day_of_week, pct_of_daily_trips FROM worldmove_city_hourly_shape"
-        ).fetchdf()
-    finally:
-        con.close()
-
-    for city_id, group in df.groupby("city_id"):
-        if city_id in _hourly_shape:
-            continue  # nyc/london keep their real multi-month shape
-        _hourly_shape[city_id] = {
-            (int(row.hour), int(row.day_of_week)): float(row.pct_of_daily_trips)
-            for row in group.itertuples()
-            if row.pct_of_daily_trips == row.pct_of_daily_trips  # skip NaN (zero-trip hour)
-        }
-
-
-def _load_worldmove_area_momentum() -> None:
-    """Real per-grid-cell hour-of-day occupancy ratios (SPEC-016's
-    worldmove_area_hourly_momentum), so get_worldmove_area_pressure() has an
-    actual answer for WorldMove-covered cities' availability/surge risk."""
-    _worldmove_area_momentum.clear()
-    _worldmove_momentum_cities.clear()
-    if not WAREHOUSE_PATH.exists():
-        return
-    con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
-    try:
-        exists = con.execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'worldmove_area_hourly_momentum'"
-        ).fetchone()[0]
-        if not exists:
-            return
-        df = con.execute(
-            "SELECT area_id, city_id, hour, occupancy_ratio FROM worldmove_area_hourly_momentum"
-        ).fetchdf()
-    finally:
-        con.close()
-
-    _worldmove_momentum_cities.update(df["city_id"].unique().tolist())
-    for area_id, group in df.groupby("area_id"):
-        _worldmove_area_momentum[int(area_id)] = {
-            int(row.hour): float(row.occupancy_ratio)
-            for row in group.itertuples()
-            if row.occupancy_ratio == row.occupancy_ratio  # skip NaN
-        }
-
-
-def has_worldmove_momentum(city_id: str) -> bool:
-    return city_id in _worldmove_momentum_cities
-
-
 def _load_zone_centroids() -> None:
     _zone_centroids.clear()
     for point in load_zone_points():
@@ -322,14 +233,6 @@ def get_zone_momentum(zone_id: int, city_id: str = "nyc") -> dict[str, float] | 
     Not used for predict_demand()'s hour/day-of-week-conditioned prediction
     -- see _zone_seasonal_profile for that."""
     return _zone_momentum.get(city_id, {}).get(zone_id)
-
-
-def get_worldmove_area_pressure(area_id: int, hour: int) -> float | None:
-    """WorldMove-city analogue of get_zone_momentum -- real occupancy_ratio
-    for this grid cell at this hour (see worldmove_area_hourly_momentum.sql
-    for exactly what it measures and why). None means no momentum data for
-    this area, same "don't fabricate a number" contract as get_zone_momentum."""
-    return _worldmove_area_momentum.get(area_id, {}).get(hour)
 
 
 def get_zone_centroid(zone_id: int) -> tuple[float, float] | None:

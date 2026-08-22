@@ -1,5 +1,4 @@
-"""Exception type for the Global Mobility Domain Model routes (SPEC-013
-FR-8). Mirrors `backend/errors_geography.py`'s pattern: routers/services
+"""Exception type for the city-scoped routes. Routers/services
 raise `DomainError(code, message, status_code)`, one FastAPI exception
 handler (`backend/main.py`) turns it into an `ErrorResponse` body -- no
 route hand-rolls its own error JSON shape.

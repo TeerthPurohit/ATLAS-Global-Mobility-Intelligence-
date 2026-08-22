@@ -1,5 +1,11 @@
 # Global City Registry & Model Tiers Implementation Plan
 
+> **SUPERSEDED (2026-08-23) by [ADR-011](../../adr/ADR-011-retreat-from-global-coverage.md).**
+> The global-coverage layer this describes has been removed: the platform now
+> serves only cities with real observed trip data (NYC, London). Kept as a
+> record of the decision and why it was reversed, not as a description of the
+> current system.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give every city the platform can talk about — NYC, London, and the 522 WorldMove cities — a stable `city_id`, a `model_status` tier (`OBSERVED` / `TRANSFER` / `INSUFFICIENT_DATA`), and a confidence score, sourced from real registered data instead of an ad hoc `population > 0` boolean.

@@ -19,7 +19,8 @@ from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # 
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, PredictionResult  # noqa: E402
 from backend.schemas import HolidayResponse, TrafficResponse, WeatherResponse  # noqa: E402
-from backend.services import global_geography_service, journey_service  # noqa: E402
+from backend.registry import cities as cities_registry  # noqa: E402
+from backend.services import journey_service  # noqa: E402
 
 router = APIRouter(prefix="/api/context", tags=["Context"])
 
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/api/context", tags=["Context"])
 def _resolve_coords(city_id: str) -> tuple[float, float]:
     """Resolve a city to (lat, lon). Raises 400 -- not a bare 500 -- when the
     city is unknown or has no coordinates."""
-    profile = global_geography_service.get_city_profile(city_id)
+    profile = cities_registry.get_city_profile(city_id)
     if not profile:
         raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
     lat = profile.get("latitude")
@@ -97,7 +98,7 @@ def holiday(
     logger.info("GET /api/context/holiday step=start city_id={} lat={} lon={} date={}", city_id, lat, lon, date)
     profile = None
     if lat is None or lon is None:
-        profile = global_geography_service.get_city_profile(city_id)
+        profile = cities_registry.get_city_profile(city_id)
         if not profile:
             logger.warning("GET /api/context/holiday step=city_not_resolvable city_id={}", city_id)
             raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
@@ -122,7 +123,7 @@ def holiday(
     is_holiday = holiday_result.value == 1.0 if holiday_result.value is not None else False
     holiday_name = holiday_result.reason if is_holiday and holiday_result.reason else None
 
-    country = (profile or global_geography_service.get_city_profile(city_id) or {}).get("country_code", "XX")
+    country = (profile or cities_registry.get_city_profile(city_id) or {}).get("country_code", "XX")
 
     return HolidayResponse(
         is_holiday=is_holiday,

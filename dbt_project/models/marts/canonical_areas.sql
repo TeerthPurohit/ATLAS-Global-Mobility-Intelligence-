@@ -1,10 +1,10 @@
 -- Generalizes the existing NYC zone dimension into the cross-city
 -- (area_id, city_id, name, area_type, parent_area_id, latitude, longitude)
--- shape (SPEC-013 FR-3). Reads from the staging zone model plus the
--- zone_centroids seed -- never from a mart -- to respect rule 6 ("marts
--- don't read marts"). Grain: one row per NYC TLC zone plus one row per
--- London Santander Cycle Hire docking station -- a second city adds rows
--- here via its own staging model, no schema change needed.
+-- shape. Reads from the staging zone model plus the zone_centroids seed --
+-- never from a mart -- to respect rule 6 ("marts don't read marts").
+-- Grain: one row per NYC TLC zone plus one row per London Santander Cycle
+-- Hire docking station -- a further city adds rows here via its own staging
+-- model, no schema change needed.
 --
 -- London's station_id is a zero-padded VARCHAR terminal number
 -- (stg_london_stations); cast to INTEGER so area_id stays a single type
@@ -32,18 +32,3 @@ SELECT
     s.latitude,
     s.longitude
 FROM {{ ref('stg_london_stations') }} s
-
-UNION ALL
-
--- WorldMove grid cells for every non-NYC/London city (SPEC-016). area_id is
--- pre-offset by stg_worldmove_grid to avoid colliding with NYC zone ids
--- (1-265) or London station ids (max observed 300253).
-SELECT
-    g.area_id,
-    g.city_id,
-    g.city_key || '#' || g.cell_index AS name,
-    'grid_cell'                       AS area_type,
-    NULL                               AS parent_area_id,
-    g.latitude,
-    g.longitude
-FROM {{ ref('stg_worldmove_grid') }} g

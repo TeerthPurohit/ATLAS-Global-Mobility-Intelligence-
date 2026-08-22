@@ -40,7 +40,6 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
   // See JourneyForm.tsx's identical field for why this replaced a
   // disconnected manual "City" text input.
   const [resolvedCityId, setResolvedCityId] = useState<string | null>("nyc");
-  const [cityResolving, setCityResolving] = useState(false);
 
   const {
     register,
@@ -107,11 +106,7 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
             setValue("pickup_lat", place.lat);
             setValue("pickup_lon", place.lon);
             setCoordError(null);
-            setResolvedCityId(null);
-            setCityResolving(true);
-            resolveCityId(place.lat, place.lon, place.city, place.countryCode)
-              .then(setResolvedCityId)
-              .finally(() => setCityResolving(false));
+            setResolvedCityId(resolveCityId(place.lat, place.lon));
           }}
         />
 
@@ -149,12 +144,10 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
 
         <div className="text-xs text-ink-muted">
           <span className="uppercase tracking-wider">Detected city: </span>
-          {cityResolving ? (
-            <span className="italic">resolving…</span>
-          ) : resolvedCityId ? (
+          {resolvedCityId ? (
             <span className="font-mono text-brass">{resolvedCityId}</span>
           ) : (
-            <span className="text-oxide">not resolvable — pick a pickup location from the suggestions</span>
+            <span className="text-oxide">outside NYC and London coverage</span>
           )}
         </div>
 

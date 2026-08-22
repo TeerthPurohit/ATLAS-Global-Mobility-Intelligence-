@@ -80,7 +80,7 @@ export function CityProfile({ cityId }: { cityId: string }) {
     surge: false,
     carbon: false,
     best_departure: false,
-    chat_tier: "context_only" as const,
+    chat_tier: "sql_only" as const,
     mobility_mode: "",
     area_type: "",
     forecast: false,
@@ -123,7 +123,7 @@ export function CityProfile({ cityId }: { cityId: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           <CapabilityMatrix capabilities={capabilities || defaultCaps} />
-          <TariffCard tariff={tariff || defaultTariff} skipEnrichment={cityId === "nyc" || cityId === "london"} />
+          <TariffCard tariff={tariff || defaultTariff} />
 
           {/* Zones list (NYC Specialization) */}
           {zones?.available && zones.zones && (

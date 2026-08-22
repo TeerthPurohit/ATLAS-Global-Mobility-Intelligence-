@@ -3,8 +3,8 @@
 
 export const queryKeys = {
   // Countries & Cities
-  countries: () => ["countries"] as const,
   cities: (params?: Record<string, unknown>) => ["cities", params] as const,
+  zoneDemandTotals: () => ["zone-demand-totals"] as const,
   cityProfile: (cityId: string) => ["city", "profile", cityId] as const,
   cityCapabilities: (cityId: string) => ["city", "capabilities", cityId] as const,
   cityTariff: (cityId: string) => ["city", "tariff", cityId] as const,

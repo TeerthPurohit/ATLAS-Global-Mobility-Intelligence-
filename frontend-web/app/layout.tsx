@@ -7,8 +7,8 @@ import { CommandPalette } from "@/components/layout/CommandPalette";
 import { SmoothScrollProvider } from "@/components/layout/SmoothScrollProvider";
 
 export const metadata: Metadata = {
-  title: "ATLAS | Global Mobility Analysis",
-  description: "Global urban mobility intelligence platform. Understand demand, fares, and patterns across NYC, London, and 500+ WorldMove-covered cities.",
+  title: "ATLAS | NYC Ride Intelligence",
+  description: "Urban mobility intelligence built on real trip records. Demand, fares, and journey estimates for New York City and London.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

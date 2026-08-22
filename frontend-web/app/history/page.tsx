@@ -165,7 +165,7 @@ export default function HistoryPage() {
         className="max-w-2xl max-h-[85vh] overflow-y-auto"
       >
         {request ? (
-          <JourneyResults request={request} cityTier="OBSERVED" />
+          <JourneyResults request={request} />
         ) : (
           <p className="font-body-sm text-ink-muted">Could not parse trip request details.</p>
         )}

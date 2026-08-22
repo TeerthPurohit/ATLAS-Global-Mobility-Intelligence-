@@ -154,7 +154,6 @@ class CityProfileCapabilities(BaseModel):
     geographic: bool = True
     context: bool = True
     observed_mobility: bool = False
-    cross_city_model: bool = True
 
 
 class CityProfileResponse(BaseModel):

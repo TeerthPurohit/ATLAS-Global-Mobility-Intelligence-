@@ -1,7 +1,6 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
-import { TierBadge } from "@/components/capability/TierBadge";
 import type { CityProfileResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MapPin, Globe, DollarSign, Users, Clock, Database } from "lucide-react";
@@ -41,7 +40,6 @@ export function CityHero({ profile }: CityHeroProps) {
               <h1 className="font-display text-2xl font-bold tracking-tight text-ink-primary sm:text-3xl">
                 {profile.name}
               </h1>
-              <TierBadge tier={profile.tier} size="lg" />
             </div>
 
             <p className="mt-1 text-sm font-medium text-ink-secondary">

@@ -21,28 +21,6 @@ sources:
       - name: raw_journeys
         description: "Raw Santander Cycle Hire journeys — see data/raw/london/manifest.json for the exact files/date range pulled."
 
-  - name: worldmove
-    description: >
-      Synthetic per-city mobility grids (Tsinghua WorldMove project) loaded by
-      scripts/load_worldmove_mobility.py from data/raw/worldmove_{traj,grid,data}.
-      A "trip" here is one simulated agent moving between adjacent 1km grid
-      cells across a single representative day (48 half-hour slots) -- not an
-      observed trip. Real for coordinates/population; modeled for movement.
-      Previously loaded only as summary scalars by a standalone script with no
-      dbt visibility (the gap that let wrong WorldMove country codes reach
-      production undetected) -- now a real source with schema tests.
-    database: nyc_rides
-    schema: main
-    tables:
-      - name: worldmove_city
-        description: "One row per WorldMove city: agent/slot counts, grid shape, total population."
-      - name: worldmove_city_grid
-        description: "One row per (city, grid cell): true lon/lat from WorldMove's own coordinate file, plus that cell's population."
-      - name: worldmove_cell_halfhour
-        description: "One row per (city, cell, half-hour slot) with departures/arrivals/occupancy, sparse (only active slots)."
-      - name: worldmove_cell_flows
-        description: "One row per (city, from_cell, to_cell) with total simulated trips that day."
-
 models:
   - name: stg_trips
     description: "Cleaned and typed trip records from raw parquet data"
@@ -75,32 +53,6 @@ models:
         tests: [not_null]
       - name: zone_name
         tests: [not_null]
-
-  - name: stg_worldmove_cities
-    description: "Cleaned WorldMove city dimension, one row per city with a trajectory corpus."
-    columns:
-      - name: city_key
-        tests: [unique, not_null]
-      - name: city_id
-        tests: [unique, not_null]
-      - name: n_agents
-        tests:
-          - dbt_utils.accepted_range:
-              arguments: {min_value: 0, inclusive: false}
-
-  - name: stg_worldmove_grid
-    description: "One row per WorldMove grid cell with a globally-unique area_id."
-    columns:
-      - name: area_id
-        tests: [unique, not_null]
-      - name: longitude
-        tests:
-          - dbt_utils.accepted_range:
-              arguments: {min_value: -180, max_value: 180}
-      - name: latitude
-        tests:
-          - dbt_utils.accepted_range:
-              arguments: {min_value: -90, max_value: 90}
 
   - name: stg_london_cycle_journeys
     description: "Cleaned and typed Santander Cycle Hire journey records (SPEC-015)"

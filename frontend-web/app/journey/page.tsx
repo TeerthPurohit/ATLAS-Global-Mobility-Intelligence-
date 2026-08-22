@@ -1,13 +1,10 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import { JourneyForm } from "@/components/journey/JourneyForm";
 import { JourneyMap } from "@/components/journey/JourneyMap";
 import { JourneyResults } from "@/components/journey/JourneyResults";
-import { getCityProfile } from "@/lib/api";
-import { queryKeys } from "@/lib/queryKeys";
 import { type JourneyRequest } from "@/lib/api";
 import { useGsapEntrance } from "@/hooks/useGsapEntrance";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,19 +29,6 @@ function JourneyPageContent() {
   const cityIdParam = useSearchParams().get("city");
   const [route, setRoute] = useState({ pickup: defaultPickup, dropoff: defaultDropoff });
   const [journeyRequest, setJourneyRequest] = useState<JourneyRequest | null>(null);
-  const [cityTier, setCityTier] = useState<string>("OBSERVED");
-
-  const { data: cityProfile } = useQuery({
-    queryKey: queryKeys.cityProfile(journeyRequest?.city_id || ""),
-    queryFn: () => getCityProfile(journeyRequest!.city_id!),
-    enabled: !!journeyRequest?.city_id,
-  });
-
-  useEffect(() => {
-    if (cityProfile) {
-      setCityTier(cityProfile.tier || cityProfile.model_status || "OBSERVED");
-    }
-  }, [cityProfile]);
 
   function handleSubmit(req: JourneyRequest) {
     setRoute({
@@ -92,7 +76,7 @@ function JourneyPageContent() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               >
-                <JourneyResults request={journeyRequest} cityTier={cityTier} />
+                <JourneyResults request={journeyRequest} />
               </motion.div>
             ) : (
               <motion.div

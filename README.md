@@ -1,6 +1,6 @@
-# Global Mobility Intelligence — NYC TLC & Multi-city Platform
+# NYC Ride Intelligence — TLC & London Mobility Platform
 
-An engineer-focused mobility intelligence platform built from the NYC Taxi & Limousine Commission trip records and extended with global priors (WorldMove), weather, holiday, and tariff data. The repo demonstrates a complete analytic lifecycle: raw ingestion → reproducible transforms (dbt) → classical algorithms → model training & evaluation → grounded RAG insight generation → serving via a typed FastAPI.
+An engineer-focused mobility intelligence platform built from the NYC Taxi & Limousine Commission trip records and London's Santander Cycles corpus, enriched with weather, holiday, and tariff data. Every city served has real observed trip data behind it — see [ADR-011](docs/adr/ADR-011-retreat-from-global-coverage.md) for why the previous 519-city global layer was removed. The repo demonstrates a complete analytic lifecycle: raw ingestion → reproducible transforms (dbt) → classical algorithms → model training & evaluation → grounded RAG insight generation → serving via a typed FastAPI.
 
 Snapshot & scale
 
@@ -40,7 +40,7 @@ Mobility data and intelligence are often city-specific and hard to generalize. T
 
 04. Platform at a glance (quick metrics)
 
-- Core dataset: 113M+ trip rows (NYC) + WorldMove priors
+- Core dataset: 113M+ trip rows (NYC) + London Santander Cycles
 - Zones: ~265
 - Major tech: DuckDB, dbt, XGBoost, PyTorch (LSTM), OpenAI embeddings, Qdrant, FastAPI
 
@@ -51,8 +51,9 @@ NYC TLC
 - Ingestion: `scripts/load_raw_to_duckdb.py` loads/parses Parquet into `data/warehouse/nyc_rides.duckdb`.
 - Final marts: produced by `dbt_project/` (notably `zone_hourly_demand`, `zone_pair_flows`, `zone_fare_stats`).
 
-WorldMove & external priors
-- Used for cross-city transfer estimation (`models/global_transfer`). See `scripts/` and `models/global_transfer` for build steps and provenance.
+London
+- Source: TfL Santander Cycle Hire journey records. Ingested by `scripts/ingest_tfl_cycle_hire.py` into `data/warehouse/london_cycles.duckdb`.
+- Final mart: `london_station_hourly_demand`.
 
 06. Data sources
 
@@ -60,11 +61,11 @@ WorldMove & external priors
 
 07. Geographic coverage
 
-Primary high-fidelity coverage: NYC. Example London artifacts and dbt models for London stations exist (see `dbt_project/models/marts/london_station_hourly_demand.sql`). Cross-city transfer estimation supports cities lacking full history.
+Two cities, both with real observed trip data: **NYC** (265 TLC zones, high-volume for-hire records) and **London** (Santander Cycles docking stations, see `dbt_project/models/marts/london_station_hourly_demand.sql`). A city is added only when it brings its own corpus — there is no prior-based coverage.
 
 08. City capability model
 
-Cities are classified by capability: OBSERVED (local history + models), TRANSFER (partial support using WorldMove priors), PRIOR_ONLY (no local history; prior-based estimates). This enables graceful degradation of predictions with provenance.
+Every served city is OBSERVED: local trip history plus trained models. Capability is derived per-field from what is actually wired (`backend/registry/cities.py`'s `capability_matrix`) — a fare needs a trained fare model or a real calibrated tariff, never a tier label. An unregistered `city_id` returns 404 rather than a degraded estimate.
 
 09. System architecture
 
@@ -92,7 +93,7 @@ Explanatory question (RAG path):
 11. Backend architecture (key files)
 
 - `backend/main.py`: FastAPI app and lifespan preloads (`model_service.load()`, registries)
-- `backend/routers/`: predictions, zones, chat, journey, analytics, geography, cities, countries
+- `backend/routers/`: predictions, zones, chat, journey, analytics, cities, mobility, context, platform
 - `backend/services/`: model_service, journey_service, platform_service, rag_service
 - `backend/registry/`: city and model registries
 
@@ -153,7 +154,6 @@ All numeric responses indicate the source (model name or SQL/mart). The RAG pipe
 - XGBoost demand (`models/xgboost_model`) and fare (`models/fare_prediction`)
 - LSTM sequence model (`models/lstm_model`)
 - ETA quantiles (`models/eta`)
-- Global-transfer estimator (`models/global_transfer`)
 
 21. Model training & evaluation
 
@@ -184,7 +184,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# configure OPENAI_API_KEY, QDRANT_URL, OPENWEATHER_API_KEY as needed
+# configure OPENAI_API_KEY, QDRANT_URL as needed
 python scripts/load_raw_to_duckdb.py  # optional: small sample or full ingestion
 cd dbt_project && dbt build
 cd backend && uvicorn main:app --reload
@@ -206,7 +206,7 @@ Work remaining for full production:
 
 - High-fidelity coverage primarily for NYC; other cities vary in fidelity
 - Not all zones have insight-docs for RAG explanations yet
-- Real-time traffic/availability is not globally implemented
+- Real-time traffic/availability is not implemented (no live feed; see ADR-008)
 
 27. Roadmap
 
@@ -281,7 +281,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY, OPENWEATHER_API_KEY, etc.
+# Edit .env and set OPENAI_API_KEY, etc.
 ```
 
 3) (Optional) Run docs site locally:
@@ -340,7 +340,6 @@ If you'd like, I can also run tests, render the docs site locally, or add a shor
 	- XGBoost demand and fare models with feature builders and training scripts (`models/xgboost_model`, `models/fare_prediction`).
 	- LSTM sequence model and training pipeline (`models/lstm_model`).
 	- ETA quantile models and congestion model artifacts (`models/eta`, `models/congestion`).
-	- Global-transfer / cross-city estimation utilities (`models/global_transfer`).
 - Data engineering & modeling discipline:
 	- Chronological train/test splits, precompute-heavy transforms, and model artifacts persisted and loaded at startup (`models/data_prep`, `backend/main.py`).
 - Hybrid RAG (retrieval + controlled LLM synthesis):
@@ -351,7 +350,7 @@ If you'd like, I can also run tests, render the docs site locally, or add a shor
 	- Prediction endpoints: `/predict/demand`, `/predict/fare` (`backend/routers/predictions.py`).
 	- Zone metadata: `/zones` and `/zones/{zone_id}` (`backend/routers/zones.py`).
 	- Hybrid chat: `/chat` (POST), `/chat/history/{session_id}`, and WebSocket streaming (`backend/routers/chat.py`).
-	- Additional routers for journeys, analytics, geography, cities, countries, mobility, platform, and context (`backend/routers/`).
+	- Additional routers for journeys, analytics, cities, mobility, platform, and context (`backend/routers/`).
 
 This list is grounded in the repository files and docs; if you want, I can expand any capability into a short README subsection with usage examples and commands to re-run the precompute steps that generate the artifacts.
 

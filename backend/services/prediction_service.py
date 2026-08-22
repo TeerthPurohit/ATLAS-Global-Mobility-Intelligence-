@@ -28,17 +28,17 @@ from backend.schemas import (
     ForecastPoint,
     PredictionEnvelope,
 )
-from backend.services import estimation_service, geography_service, global_geography_service, model_service, pricing_engine, tariff_profiles
+from backend.registry import cities as cities_registry
+from backend.services import geography_service, model_service, pricing_engine, tariff_profiles
 
 _FORECASTABLE_METRICS = ("demand", "fare")
 
 
 def _require_city(city_id: str) -> dict:
-    """Broadened per the "any resolvable city, never a bare 404" design
-    decision: resolves via global_geography_service (real GeoNames geocoding
-    for any city on Earth), not the registered-cities-only cities_registry.
-    Only genuinely unresolvable input (e.g. a nonexistent place name) 404s."""
-    profile = global_geography_service.get_city_profile(city_id)
+    """Resolves against the registered-cities registry (ADR-011). An
+    unregistered city_id is a 404: this repo only serves cities it has real
+    trip data for."""
+    profile = cities_registry.get_city_profile(city_id)
     if profile is None:
         logger.info("prediction_service._require_city step=not_resolvable city_id={}", city_id)
         raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
@@ -69,29 +69,19 @@ def _envelope(
 
 def predict_demand(city_id: str, area_id: int, hour: int, day_of_week: int) -> PredictionEnvelope | CapabilityUnavailable:
     logger.info("prediction_service.predict_demand step=start city_id={} area_id={} hour={}", city_id, area_id, hour)
-    profile = _require_city(city_id)
-    if models_registry.resolve_model(city_id, "demand") is not None:
-        try:
-            value, model_name = model_service.predict_demand(area_id, hour, day_of_week, city_id=city_id)
-        except KeyError as exc:
-            logger.info("prediction_service.predict_demand step=model_service.predict_demand failed city_id={} reason={}", city_id, exc)
-            raise DomainError(ErrorCode.PREDICTION_FAILED, str(exc), 400) from exc
-        return _envelope(city_id, area_id, None, "demand", value, model_name, basis="computed")
-
-    # No trained model for this city -- fall through to the real, honestly
-    # labeled cross-city estimate instead of stopping at CapabilityUnavailable,
-    # per the "any resolvable city gets a real answer" design decision.
-    population = profile.get("population")
-    if population is None:
-        logger.info("prediction_service.predict_demand step=capability_unavailable city_id={} reason=no_model_no_population", city_id)
+    _require_city(city_id)
+    if models_registry.resolve_model(city_id, "demand") is None:
+        logger.info("prediction_service.predict_demand step=capability_unavailable city_id={} reason=no_model", city_id)
         return CapabilityUnavailable(
             available=False, capability="demand",
-            reason=f"no active demand model and no population covariate for city_id={city_id!r}",
+            reason=f"no active demand model for city_id={city_id!r}",
         )
-    result = estimation_service.estimate_city_demand(city_id, population)
-    if result.basis != "modeled_estimate" or result.value is None:
-        return CapabilityUnavailable(available=False, capability="demand", reason=result.reason)
-    return _envelope(city_id, area_id, None, "demand", result.value, "cross_city_estimation", basis="modeled_estimate")
+    try:
+        value, model_name = model_service.predict_demand(area_id, hour, day_of_week, city_id=city_id)
+    except KeyError as exc:
+        logger.info("prediction_service.predict_demand step=model_service.predict_demand failed city_id={} reason={}", city_id, exc)
+        raise DomainError(ErrorCode.PREDICTION_FAILED, str(exc), 400) from exc
+    return _envelope(city_id, area_id, None, "demand", value, model_name, basis="computed")
 
 
 def predict_fare(city_id: str, pickup_area_id: int, dropoff_area_id: int, hour: int) -> PredictionEnvelope | CapabilityUnavailable:
@@ -106,12 +96,8 @@ def predict_fare(city_id: str, pickup_area_id: int, dropoff_area_id: int, hour: 
         return _envelope(city_id, pickup_area_id, dropoff_area_id, "fare", value, model_name, basis="computed")
 
     # No trained fare model -- fall through to the tariff-profile estimate,
-    # same source cities.py's capability matrix already promises via
-    # `fare = has_fare_model or has_tariff` (this endpoint used to only ever
-    # check has_fare_model, so capabilities.fare=True for a TRANSFER city
-    # while this call 200'd CapabilityUnavailable -- a contradiction the
-    # /api/mobility/fare path never had, since it went through pricing_engine
-    # directly).
+    # the same source cities.py's capability matrix promises via
+    # `fare = has_fare_model or has_tariff`.
     if tariff_profiles.get(city_id) is None:
         logger.info("prediction_service.predict_fare step=capability_unavailable city_id={} reason=no_model_no_tariff", city_id)
         return CapabilityUnavailable(

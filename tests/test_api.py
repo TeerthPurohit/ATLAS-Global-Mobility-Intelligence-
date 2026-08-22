@@ -100,51 +100,14 @@ def test_websocket_chat_stream(client):
         assert received[-1]["type"] == "done"
 
 
-# ── Global Mobility Domain Model (SPEC-013) -- one happy-path test per new endpoint ──
+# ── City-scoped endpoints -- one happy-path test per endpoint ──
 
 
-def test_list_countries_happy_path(client):
-    resp = client.get("/api/countries")
+def test_list_cities_happy_path(client):
+    resp = client.get("/api/cities")
     assert resp.status_code == 200
-    countries = resp.json()["countries"]
-    assert any(c["iso_code"] == "US" for c in countries)
-    # Full ~250-country registry (dbt_project/seeds/countries.csv), not just
-    # the 2 countries that happen to have a fully-registered city -- and
-    # `supported` must reflect global_cities coverage too (found 2026-08-16:
-    # every country except US/GB reported unsupported despite 519 real
-    # global_cities rows across 45 countries).
-    assert len(countries) > 100
-    supported_codes = {c["iso_code"] for c in countries if c["supported"]}
-    assert "IN" in supported_codes  # India has no registered city, only global_cities rows
-    assert "AQ" not in supported_codes  # Antarctica has no city in either table
-
-
-def test_get_country_happy_path(client):
-    resp = client.get("/api/countries/US")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["iso_code"] == "US"
-    assert body["supported"] is True
-    # >1, not exactly 1 -- US has both nyc (registered) and many global_cities
-    # rows; the old exact-1 assertion encoded the pre-fix bug (only `cities`
-    # was counted, global_cities was invisible to this endpoint).
-    assert body["supported_city_count"] > 1
-
-
-def test_list_country_cities_happy_path(client):
-    resp = client.get("/api/countries/US/cities")
-    assert resp.status_code == 200
-    assert any(c["id"] == "nyc" for c in resp.json())
-
-
-def test_list_country_cities_global_only_country(client):
-    # India has no fully-registered city (only global_cities/WorldMove rows)
-    # -- this endpoint used to 404 every such country outright.
-    resp = client.get("/api/countries/IN/cities")
-    assert resp.status_code == 200
-    cities = resp.json()
-    assert len(cities) > 0
-    assert all(c["country_code"] == "IN" for c in cities)
+    ids = {c["id"] for c in resp.json()["results"]}
+    assert ids == {"nyc", "london"}
 
 
 def test_get_city_happy_path(client):

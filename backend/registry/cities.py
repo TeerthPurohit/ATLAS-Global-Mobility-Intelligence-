@@ -90,60 +90,39 @@ JOURNEY_CAPABILITIES: tuple[str, ...] = (
 
 
 def capability_matrix(city_id: str) -> dict[str, bool] | None:
-    """Per-journey-field support for ANY city in either registry (the 2-row
-    `cities` seed or the 524-row `global_cities` table), derived from what's
-    actually wired -- never from the tier label. `TRANSFER` does not imply
-    fare support: a fare needs a trained fare model OR a real tariff profile
+    """Per-journey-field support for a registered city, derived from what's
+    actually wired. A fare needs a trained fare model OR a real tariff profile
     keyed by this exact city_id, nothing else.
 
-    Returns None for a city_id neither registry knows.
+    Returns None for a city_id this registry doesn't know.
     """
-    from backend.registry import global_cities as global_cities_registry  # local import: avoids import-order coupling
-    from backend.services import model_service, tariff_profiles
+    from backend.services import tariff_profiles
 
     registered = get_city(city_id)
-    global_city = global_cities_registry.get_city(city_id)
-    has_tariff = tariff_profiles.get(city_id) is not None
-    if registered is None and global_city is None and not has_tariff:
+    if registered is None:
         return None
 
     # Zone-level predictors (availability/surge/best_departure/congestion's
     # traffic leg) all bottom out in model_service's per-city zone marts,
-    # which only exist for a registered city with an active demand model.
-    has_zone_model = registered is not None and models_registry.resolve_model(city_id, "demand") is not None
+    # which only exist for a city with an active demand model.
+    has_zone_model = models_registry.resolve_model(city_id, "demand") is not None
     has_fare_model = models_registry.resolve_model(city_id, "fare") is not None
-    source = registered or global_city or {}
-    population = source.get("population")
-    # SPEC-016: any WorldMove-covered city gets real per-grid-cell hour-of-day
-    # occupancy (worldmove_area_hourly_momentum) -- the same "current pressure
-    # vs. typical" signal availability/surge/best_departure are built on for
-    # nyc/london, just sourced from a single-day trajectory instead of
-    # multi-month history (journey_predictors._demand_pressure() picks
-    # whichever real source this city actually has). This used to be a hard
-    # False for every non-nyc/london city even after that data existed
-    # (found via /debug 2026-08-13).
-    has_worldmove_momentum = model_service.has_worldmove_momentum(city_id)
-    has_momentum = has_zone_model or has_worldmove_momentum
 
     return {
         # OSRM (with a haversine fallback) routes between the coordinates the
         # request itself carries -- no per-city data needed, so this is true
         # for every resolvable city, same as carbon.
         "routing": True,
-        # A registered city's demand always comes from its own zone model
-        # (journey_predictors never population-scales one); an unregistered
-        # global city's comes from population scaling, which needs a real
-        # population covariate.
-        "demand": has_zone_model if registered is not None else bool(population and population > 0),
-        "fare": has_fare_model or has_tariff,
+        "demand": has_zone_model,
+        "fare": has_fare_model or tariff_profiles.get(city_id) is not None,
         # predict_congestion fuses a historical-traffic leg (zone-model cities
-        # only) with a weather leg the global Open-Meteo adapter serves from
-        # the request's own coordinates -- one leg is enough for a bucket.
+        # only) with a weather leg the Open-Meteo adapter serves from the
+        # request's own coordinates -- one leg is enough for a bucket.
         "congestion": True,
-        "availability": has_momentum,
-        "surge": has_momentum,
+        "availability": has_zone_model,
+        "surge": has_zone_model,
         "carbon": True,  # distance x seeded emission factor, city-independent
-        "best_departure": has_momentum,
+        "best_departure": has_zone_model,
     }
 
 
@@ -206,6 +185,53 @@ def list_cities(country_code: str | None = None) -> list[dict]:
     if country_code:
         rows = [c for c in rows if c["country_code"] == country_code.upper()]
     return [_with_computed_fields(c) for c in rows]
+
+
+def get_city_profile(city_id: str) -> dict | None:
+    """Authoritative geographic facts for a registered city (ADR-011).
+
+    Was `global_geography_service.get_city_profile`, whose other two branches
+    (the 524-row WorldMove registry and a live GeoNames search) are gone with
+    the global layer. Every city this repo serves is now a row in the `cities`
+    seed with real trip data behind it, so there is nothing left to resolve --
+    `model_status`/`confidence` are no longer tier estimates but statements
+    about a city we actually measured.
+    """
+    registered = get_city(city_id)
+    if registered is None:
+        return None
+    return {
+        "city_id": registered["id"],
+        "city": registered["name"],
+        "country": registered.get("country_code"),
+        "country_code": registered.get("country_code"),
+        "coordinates": {
+            "latitude": registered.get("latitude"),
+            "longitude": registered.get("longitude"),
+        },
+        "timezone": registered.get("timezone", "UTC"),
+        "currency": registered.get("currency", "USD"),
+        "population": registered.get("population"),
+        "administrative_hierarchy": [
+            {"name": registered["name"], "type": "city"},
+            {"name": registered.get("country_code"), "type": "country"},
+        ],
+        "alternate_names": [registered["name"]],
+        "geographic_classification": {
+            "feature_class": "P",
+            "feature_code": "PPL",  # generic "populated place" -- a real per-city GeoNames
+                                     # feature code (e.g. PPLC for a capital) was never looked
+                                     # up for these seeded rows, so this doesn't claim one.
+            "place_type": "city",
+        },
+        "capabilities": {
+            "geographic": True,
+            "context": True,
+            "observed_mobility": (get_capabilities(city_id) or {}).get("demand", False),
+        },
+        "model_status": "OBSERVED",
+        "confidence": 1.0,
+    }
 
 
 def get_city(city_id: str) -> dict | None:

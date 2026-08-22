@@ -243,114 +243,9 @@ export function streamChat(
   return () => ws.close();
 }
 
-// --- Tariff enrichment (WS /api/cities/{city_id}/tariff/enrich, backend/routers/cities.py) ---
-// Fires once per city, the first time its page is opened with a never-validated
-// tariff profile (validation_method === null) -- see tariff_enrichment.py.
-
-export interface TariffEnrichStatusFrame {
-  type: "status";
-  message: string;
-}
-export interface TariffEnrichResultFrame {
-  type: "result";
-  profile: TariffProfilePayload;
-  cached?: boolean;
-}
-export interface TariffEnrichErrorFrame {
-  type: "error";
-  message: string;
-}
-export type TariffEnrichFrame = TariffEnrichStatusFrame | TariffEnrichResultFrame | TariffEnrichErrorFrame;
-
-// Raw shape of the backend TariffProfile dataclass (backend/services/tariff_profiles.py),
-// sent as-is in the WS result frame. Overlaps CityTariffResponse but adds `source`
-// ("measured" | "llm_anchored") and `extras_backfilled_at`, which mergeTariffProfile drops.
-export interface TariffProfilePayload {
-  city_id: string;
-  currency: string;
-  base_fare: number;
-  per_km: number;
-  per_min: number;
-  min_fare: number;
-  night_multiplier: number;
-  airport_surcharge: number;
-  source: string;
-  generated_at: string;
-  model_id: string;
-  confidence: number;
-  notes: string;
-  booking_fee: number | null;
-  platform_fee: number | null;
-  tolls: number | null;
-  peak_multiplier: number | null;
-  vehicle_multiplier: number | null;
-  surge_multiplier: number | null;
-  effective_from: string | null;
-  version: string | null;
-  source_type: string | null;
-  extras_backfilled_at: string | null;
-  evidence_sources: string | null;
-  validation_method: string | null;
-  validated_at: string | null;
-}
-
-// Merges a WS result frame's profile into the displayed CityTariffResponse without
-// a refetch -- fields not present on TariffProfilePayload (available, reason) are
-// set explicitly rather than assumed.
-export function mergeTariffProfile(base: CityTariffResponse, profile: TariffProfilePayload): CityTariffResponse {
-  return {
-    ...base,
-    available: true,
-    city_id: profile.city_id,
-    reason: null,
-    currency: profile.currency,
-    base_fare: profile.base_fare,
-    per_km: profile.per_km,
-    per_min: profile.per_min,
-    min_fare: profile.min_fare,
-    night_multiplier: profile.night_multiplier,
-    airport_surcharge: profile.airport_surcharge,
-    booking_fee: profile.booking_fee,
-    platform_fee: profile.platform_fee,
-    tolls: profile.tolls,
-    peak_multiplier: profile.peak_multiplier,
-    vehicle_multiplier: profile.vehicle_multiplier,
-    surge_multiplier: profile.surge_multiplier,
-    effective_from: profile.effective_from,
-    version: profile.version,
-    source_type: profile.source_type,
-    confidence: profile.confidence,
-    notes: profile.notes,
-    generated_at: profile.generated_at,
-    model_id: profile.model_id,
-    validation_method: profile.validation_method,
-    evidence_sources: profile.evidence_sources,
-    validated_at: profile.validated_at,
-  };
-}
-
-export function streamTariffEnrichment(
-  cityId: string,
-  handlers: { onFrame: (frame: TariffEnrichFrame) => void; onError?: (err: Event) => void; onClose?: () => void }
-): () => void {
-  const wsUrl = `${API_BASE_URL.replace(/^http/, "ws")}/api/cities/${cityId}/tariff/enrich`;
-  const ws = new WebSocket(wsUrl);
-  ws.onmessage = (evt) => handlers.onFrame(JSON.parse(evt.data));
-  ws.onerror = (evt) => handlers.onError?.(evt);
-  ws.onclose = () => handlers.onClose?.();
-  return () => ws.close();
-}
-
 // ============================================================================
-// Countries & Cities (backend/routers/cities.py, countries registry)
+// Cities (backend/routers/cities.py)
 // ============================================================================
-
-export interface Country {
-  iso_code: string;
-  name: string;
-  supported: boolean;
-  supported_city_count: number;
-}
 
 export interface City {
   id: string;
@@ -360,7 +255,7 @@ export interface City {
   longitude: number;
   timezone: string;
   currency: string;
-  model_status: "OBSERVED" | "TRANSFER" | "NONE";
+  model_status: string;
   data_source: string;
   geography_type: string;
   mobility_mode: string;
@@ -369,10 +264,6 @@ export interface City {
 export interface CitySearchParams {
   q?: string;
   country?: string;
-  tier?: string;
-  supported?: boolean;
-  page?: number;
-  limit?: number;
 }
 
 export interface CitySearchResponse {
@@ -394,7 +285,7 @@ export interface Capabilities {
   surge: boolean;
   carbon: boolean;
   best_departure: boolean;
-  chat_tier: "full_rag" | "sql_only" | "context_only";
+  chat_tier: "full_rag" | "sql_only";
   mobility_mode: string;
   area_type: string;
   forecast: boolean;
@@ -627,20 +518,10 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return resp.json();
 }
 
-// Countries & Cities
-export async function getCountries(): Promise<Country[]> {
-  const resp = await fetchJson<Country[] | { countries: Country[] }>("/api/countries");
-  return Array.isArray(resp) ? resp : resp.countries || [];
-}
-
-export async function searchCities(params: CitySearchParams = {}): Promise<CitySearchResponse> {
+export async function listCities(params: CitySearchParams = {}): Promise<CitySearchResponse> {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set("q", params.q);
   if (params.country) searchParams.set("country", params.country);
-  if (params.tier) searchParams.set("tier", params.tier);
-  if (params.supported !== undefined) searchParams.set("supported", String(params.supported));
-  if (params.page) searchParams.set("page", String(params.page));
-  if (params.limit) searchParams.set("limit", String(params.limit));
   return fetchJson<CitySearchResponse>(`/api/cities?${searchParams.toString()}`);
 }
 
@@ -658,31 +539,13 @@ function detectRegisteredCity(lat: number, lon: number): "nyc" | "london" | null
 }
 
 /**
- * Resolves a picked address to the real backend city_id that every
- * /api/mobility/* call needs -- NYC/London by bbox (no request needed),
- * anything else via /api/cities?q= (the mobility/WorldMove city registry --
- * same one City/capabilities/profile endpoints key off). Previously this
- * queried /api/geography/search/global, a broader any-place-on-earth
- * GeoNames search whose `id` is a GeoNames id, not a mobility-registry
- * city_id -- every /api/cities/{city_id}/profile|capabilities call for a
- * non-NYC/London address then 404'd (CITY_NOT_FOUND), silently breaking the
- * tier/capability-gated honest messaging for exactly the cities it exists to
- * describe. Returns null if nothing resolves (e.g. open ocean, or Nominatim
- * gave no city name to search on, or the place has no mobility coverage) --
- * callers should treat that as "unavailable", not silently fall back to nyc.
+ * Resolves a picked address to the backend city_id every /api/mobility/*
+ * call needs. This platform serves the cities it has real trip data for
+ * (ADR-011), so a point outside NYC/London resolves to null and callers
+ * must treat that as "unavailable" -- never silently fall back to nyc.
  */
-export async function resolveCityId(lat: number, lon: number, city?: string, countryCode?: string): Promise<string | null> {
-  const registered = detectRegisteredCity(lat, lon);
-  if (registered) return registered;
-  if (!city) return null;
-  const params = new URLSearchParams({ q: city, limit: "1" });
-  if (countryCode) params.set("country", countryCode.toUpperCase());
-  try {
-    const resp = await fetchJson<{ results: { id: string }[] }>(`/api/cities?${params.toString()}`);
-    return resp.results[0]?.id ?? null;
-  } catch {
-    return null;
-  }
+export function resolveCityId(lat: number, lon: number): "nyc" | "london" | null {
+  return detectRegisteredCity(lat, lon);
 }
 
 export async function getCityProfile(cityId: string): Promise<CityProfileResponse> {
@@ -699,6 +562,20 @@ export async function getCityTariff(cityId: string): Promise<CityTariffResponse>
 
 export async function getCityZones(cityId: string): Promise<CityZonesResponse> {
   return fetchJson<CityZonesResponse>(`/api/cities/${cityId}/zones`);
+}
+
+// Per-zone measured trip totals backing the landing map's choropleth.
+// Precomputed at backend startup from zone_hourly_demand.
+export interface ZoneDemandTotal {
+  location_id: number;
+  zone: string;
+  borough: string;
+  total_trips: number;
+  avg_fare: number | null;
+}
+
+export async function getZoneDemandTotals(): Promise<ZoneDemandTotal[]> {
+  return fetchJson<ZoneDemandTotal[]>("/marts/zone_demand_totals");
 }
 
 // Mobility

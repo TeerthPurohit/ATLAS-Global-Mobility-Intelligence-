@@ -1,12 +1,10 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
-import type { City, Country, JourneyRequest, VehicleClass } from "@/lib/api";
+import type { City, JourneyRequest, VehicleClass } from "@/lib/api";
 
 interface AppContextValue {
   // Drill-down state
-  selectedCountry: Country | null;
-  setSelectedCountry: (country: Country | null) => void;
   selectedCity: City | null;
   setSelectedCity: (city: City | null) => void;
   selectedArea: { id: string; name: string } | null;
@@ -40,7 +38,6 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [selectedArea, setSelectedArea] = useState<{ id: string; name: string } | null>(null);
   const [journeyRequest, setJourneyRequest] = useState<JourneyRequest | null>(null);
@@ -74,8 +71,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        selectedCountry,
-        setSelectedCountry,
         selectedCity,
         setSelectedCity,
         selectedArea,

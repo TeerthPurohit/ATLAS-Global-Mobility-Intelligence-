@@ -23,7 +23,8 @@ from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402
-from backend.services import geography_service, global_geography_service, model_service, pricing_engine, vehicle_profiles  # noqa: E402
+from backend.registry import cities as cities_registry  # noqa: E402
+from backend.services import geography_service, model_service, pricing_engine, vehicle_profiles  # noqa: E402
 
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 DEPARTURE_TIME_SWEEP_WINDOW_HOURS = 6
@@ -120,18 +121,15 @@ _UNRESOLVED_CITY = "unresolved"
 
 
 def _resolve_city_id(pickup_lat: float, pickup_lon: float, city_id: str | None) -> str:
-    """Explicit `city_id` wins (normalized through global_geography_service
-    so "mumbai" and its GeoNames id always resolve to the same
-    city_tariff_profiles row). Otherwise NYC/London bbox auto-detection --
-    same behavior every caller had before city_id existed. Anywhere else, a
-    bare lat/lon pair alone doesn't uniquely identify a city worth caching a
-    tariff profile for -- resolves to a sentinel that carries no zone/tariff
-    coverage, so every city-scoped field honestly degrades to `unavailable`
-    (same "degrade honestly, never fabricate" contract as an unrecognized
-    vehicle_type) rather than erroring out. The caller should pass city_id
-    explicitly whenever it's known (the frontend's city picker always does)."""
+    """Explicit `city_id` wins (normalized through the city registry).
+    Otherwise NYC/London bbox auto-detection -- same behavior every caller
+    had before city_id existed. Anywhere else, a bare lat/lon pair alone
+    doesn't identify a city this repo has data for -- resolves to a sentinel
+    that carries no zone/tariff coverage, so every city-scoped field honestly
+    degrades to `unavailable` (same "degrade honestly, never fabricate"
+    contract as an unrecognized vehicle_type) rather than erroring out."""
     if city_id:
-        profile = global_geography_service.get_city_profile(city_id)
+        profile = cities_registry.get_city_profile(city_id)
         return profile["city_id"] if profile else city_id
     detected = geography_service.detect_city_from_coords(pickup_lat, pickup_lon)
     return detected or _UNRESOLVED_CITY

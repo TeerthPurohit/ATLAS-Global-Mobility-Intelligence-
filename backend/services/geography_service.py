@@ -112,8 +112,7 @@ def resolve(lat: float, lon: float) -> int | None:
 def detect_city_from_coords(lat: float, lon: float) -> str | None:
     """NYC/London bbox detection for a journey request that didn't specify
     city_id explicitly -- None means "no zone-enriched city recognizes this
-    point," not "no city exists here" (the caller falls back to reverse
-    geocoding via global_geography_service for anywhere else on Earth)."""
+    point," and the caller degrades every city-scoped field honestly."""
     if in_coverage(lat, lon):
         return "nyc"
     if _in_london_coverage(lat, lon):

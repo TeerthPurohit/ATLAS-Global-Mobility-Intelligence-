@@ -1,5 +1,11 @@
 # SPEC-013: Global Mobility Domain Model (Phase 1 — architecture generalization)
 
+> **SUPERSEDED (2026-08-23) by [ADR-011](../../docs/adr/ADR-011-retreat-from-global-coverage.md).**
+> The global-coverage layer this describes has been removed: the platform now
+> serves only cities with real observed trip data (NYC, London). Kept as a
+> record of the decision and why it was reversed, not as a description of the
+> current system.
+
 Owner: solo builder · Status: draft · Layer: 5+ (extends Layers 1, 4, 5) ·
 Depends on: SPEC-002, SPEC-006, SPEC-007, SPEC-008, SPEC-009, SPEC-012
 

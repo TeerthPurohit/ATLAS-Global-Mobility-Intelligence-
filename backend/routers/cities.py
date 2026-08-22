@@ -1,5 +1,5 @@
-"""City discovery + city-scoped predict/chat routes (SPEC-013 FR-9). Thin:
-delegates to backend/registry/{countries,cities}.py, backend/services/
+"""City discovery + city-scoped predict/chat routes. Thin:
+delegates to backend/registry/cities.py, backend/services/
 geography_service.py, backend/services/prediction_service.py, and the
 existing (unchanged) backend/services/rag_service.py. Every pre-existing
 route (`/predict/demand`, `/predict/fare`, `/zones`, `/chat`,
@@ -7,12 +7,11 @@ route (`/predict/demand`, `/predict/fare`, `/zones`, `/chat`,
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query
 from loguru import logger
 
 from backend.errors import DomainError
 from backend.registry import cities as cities_registry
-from backend.registry import countries as countries_registry
 from backend.schemas import (
     Area,
     CapabilityUnavailable,
@@ -25,7 +24,6 @@ from backend.schemas import (
     CityJourneyEstimate,
     CityJourneyRequest,
     CityProfileResponse,
-    CitySearchRequest,
     CitySearchResponse,
     CityTariffResponse,
     CityZonesResponse,
@@ -38,7 +36,6 @@ from backend.schemas import (
 from backend.services import (
     city_journey_service,
     geography_service,
-    global_geography_service,
     prediction_service,
     rag_service,
     tariff_profiles,
@@ -71,157 +68,24 @@ def _require_city(city_id: str) -> dict:
     return city
 
 
-def _global_city_to_city(c: dict) -> City:
-    """Maps a global_cities row onto the same City shape search_cities()
-    already builds -- so a country's listing includes its WorldMove-tier
-    cities, not just the 2 fully-registered ones (see countries.py: the
-    country's `supported` flag now reflects global_cities too, so this
-    endpoint must actually return those cities or the two would disagree)."""
-    return City(
-        id=c.get("city_id", ""),
-        name=c.get("name", ""),
-        country_code=c.get("country_code", ""),
-        latitude=c.get("latitude") if c.get("latitude") is not None else 0.0,
-        longitude=c.get("longitude") if c.get("longitude") is not None else 0.0,
-        timezone=c.get("timezone") or "UTC",
-        currency=c.get("currency") or "USD",
-        status=c.get("model_status", "unknown"),
-        data_source=c.get("population_source", "unknown"),
-        geography_type="zone",
-        mobility_mode="ride_hailing",
-        model_status=c.get("model_status", "unknown"),
-        last_updated="",
-    )
-
-
-@router.get(
-    "/api/countries/{code}/cities",
-    response_model=list[City],
-    summary="List a country's onboarded cities",
-    tags=["Countries"],
-    responses={404: {"model": ErrorResponse, "description": "Country not supported"}},
-)
-def list_country_cities(code: str) -> list[City]:
-    from backend.registry import global_cities as global_cities_registry
-
-    logger.info("GET /api/countries/{{code}}/cities step=start code={}", code)
-    country = countries_registry.get_country(code)
-    if country is None or not country["supported"]:
-        logger.warning("GET /api/countries/{{code}}/cities step=country_not_supported code={}", code)
-        raise DomainError(ErrorCode.COUNTRY_NOT_SUPPORTED, f"country not supported: {code!r}", 404)
-    registered = [City(**c) for c in cities_registry.list_cities(country_code=code)]
-    seen_ids = {c.id for c in registered}
-    global_extra = [
-        _global_city_to_city(c)
-        for c in global_cities_registry.list_cities()
-        if c.get("country_code", "").upper() == code.upper() and c.get("city_id") not in seen_ids
-    ]
-    cities = registered + global_extra
-    logger.info("GET /api/countries/{{code}}/cities step=done code={} count={}", code, len(cities))
-    return cities
-
-
 @router.get(
     "/api/cities",
     response_model=CitySearchResponse,
-    summary="List/Search cities with filters",
-    description="Search and filter cities by query, country, tier, and supported status.",
+    summary="List registered cities",
+    description="Every city this platform has real trip data for (ADR-011).",
 )
 def search_cities(
-    q: str | None = Query(None, description="Search query (name)"),
+    q: str | None = Query(None, description="Filter by name or id substring"),
     country: str | None = Query(None, description="Country code filter"),
-    tier: str | None = Query(None, description="Tier filter: OBSERVED or TRANSFER"),
-    supported: bool | None = Query(None, description="Filter by supported status"),
-    page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=2000),
 ) -> CitySearchResponse:
-    from backend.registry import global_cities as global_cities_registry
-
-    logger.info("GET /api/cities step=start q={!r} country={} tier={} supported={} page={} limit={}", q, country, tier, supported, page, limit)
-
-    all_cities = global_cities_registry.list_cities()
-
-    # Apply filters
+    logger.info("GET /api/cities step=start q={!r} country={}", q, country)
+    rows = cities_registry.list_cities(country_code=country)
     if q:
         q_lower = q.lower()
-        all_cities = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
-
-    if country:
-        all_cities = [c for c in all_cities if c.get("country_code", "").upper() == country.upper()]
-
-    if tier:
-        all_cities = [c for c in all_cities if c.get("model_status", "").upper() == tier.upper()]
-
-    if supported is not None:
-        all_cities = [c for c in all_cities if (cities_registry.get_city(c["city_id"]) is not None) == supported]
-
-    total = len(all_cities)
-    start = (page - 1) * limit
-    end = start + limit
-    paginated = all_cities[start:end]
-
-    # Convert to City model
-    results = []
-    for c in paginated:
-        results.append(City(
-            id=c.get("city_id", ""),
-            name=c.get("name", ""),
-            country_code=c.get("country_code", ""),
-            latitude=c.get("latitude") if c.get("latitude") is not None else 0.0,
-            longitude=c.get("longitude") if c.get("longitude") is not None else 0.0,
-            timezone=c.get("timezone") or "UTC",
-            currency=c.get("currency") or "USD",
-            status=c.get("model_status", "unknown"),
-            data_source=c.get("population_source", "unknown"),
-            geography_type="zone",
-            mobility_mode="ride_hailing",
-            model_status=c.get("model_status", "unknown"),
-            last_updated="",
-        ))
-
-    logger.info("GET /api/cities step=done total={} returned={}", total, len(results))
-    return CitySearchResponse(results=results, total=total, page=page, limit=limit)
-
-
-@router.get(
-    "/api/cities/search",
-    response_model=CitySearchResponse,
-    summary="Search cities by name",
-    description="Quick city name search.",
-)
-def search_cities_by_name(
-    q: str | None = Query(None, description="City name to search for"),
-    limit: int = Query(10, ge=1, le=2000),
-) -> CitySearchResponse:
-    from backend.registry import global_cities as global_cities_registry
-
-    logger.info("GET /api/cities/search step=start q={!r} limit={}", q, limit)
-    all_cities = global_cities_registry.list_cities()
-    if q:
-        q_lower = q.lower()
-        all_cities = [c for c in all_cities if q_lower in c.get("name", "").lower() or q_lower in c.get("city_id", "").lower()]
-    filtered = all_cities[:limit]
-
-    results = []
-    for c in filtered:
-        results.append(City(
-            id=c.get("city_id", ""),
-            name=c.get("name", ""),
-            country_code=c.get("country_code", ""),
-            latitude=c.get("latitude") if c.get("latitude") is not None else 0.0,
-            longitude=c.get("longitude") if c.get("longitude") is not None else 0.0,
-            timezone=c.get("timezone") or "UTC",
-            currency=c.get("currency") or "USD",
-            status=c.get("model_status", "unknown"),
-            data_source=c.get("population_source", "unknown"),
-            geography_type="zone",
-            mobility_mode="ride_hailing",
-            model_status=c.get("model_status", "unknown"),
-            last_updated="",
-        ))
-
-    logger.info("GET /api/cities/search step=done returned={}", len(results))
-    return CitySearchResponse(results=results, total=len(results), page=1, limit=limit)
+        rows = [c for c in rows if q_lower in c["name"].lower() or q_lower in c["id"].lower()]
+    results = [City(**c) for c in rows]
+    logger.info("GET /api/cities step=done returned={}", len(results))
+    return CitySearchResponse(results=results, total=len(results), page=1, limit=len(results))
 
 
 @router.get(
@@ -248,9 +112,6 @@ def get_city(city_id: str) -> City:
 def get_capabilities(city_id: str) -> Capabilities:
     logger.info("GET /api/cities/{{city_id}}/capabilities step=start city_id={}", city_id)
     _validate_city_id(city_id)
-    # Not _require_city: capabilities resolve for any city in EITHER registry
-    # (the 2-row `cities` seed or the 524-row `global_cities` table), so a
-    # global city reports its real, mostly-false matrix instead of 404ing.
     capabilities = cities_registry.get_capabilities(city_id)
     if capabilities is None:
         logger.warning("GET /api/cities/{{city_id}}/capabilities step=not_found city_id={}", city_id)
@@ -381,12 +242,7 @@ def forecast(
 )
 def city_chat(city_id: str, req: ChatRequest) -> ChatResponse:
     logger.info("POST /api/cities/{{city_id}}/chat step=start city_id={} session_id={}", city_id, req.session_id)
-    # Broadened existence check (any resolvable city, not registered-only)
-    # -- chat never flatly refuses a real city, only a genuinely nonexistent
-    # one 404s here.
-    if global_geography_service.get_city_profile(city_id) is None:
-        logger.warning("POST /api/cities/{{city_id}}/chat step=city_not_resolvable city_id={}", city_id)
-        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+    _require_city(city_id)
     try:
         res = rag_service.answer_question(question=req.question, session_id=req.session_id, city_id=city_id)
     except Exception as exc:  # noqa: BLE001 -- surfaced as a typed DomainError, never a bare 500
@@ -410,19 +266,8 @@ def city_chat(city_id: str, req: ChatRequest) -> ChatResponse:
     description="Full city profile with identity, capabilities, and data availability.",
 )
 def get_city_profile(city_id: str) -> CityProfileResponse:
-    from backend.registry import global_cities as global_cities_registry
-    from backend.services import tariff_profiles
-
     logger.info("GET /api/cities/{{city_id}}/profile step=start city_id={}", city_id)
-    _validate_city_id(city_id)
-
-    profile = global_cities_registry.get_city(city_id)
-    if not profile:
-        # Try cities registry
-        profile = cities_registry.get_city(city_id)
-    if not profile:
-        logger.warning("GET /api/cities/{{city_id}}/profile step=not_found city_id={}", city_id)
-        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+    profile = _require_city(city_id)
 
     capabilities = cities_registry.capability_matrix(city_id) or {}
     tariff = tariff_profiles.get(city_id)
@@ -440,7 +285,7 @@ def get_city_profile(city_id: str) -> CityProfileResponse:
         tier=profile.get("model_status") or "unknown",
         population=int(round(profile["population"])) if profile.get("population") is not None else None,
         model_status=profile.get("model_status") or "unknown",
-        data_source=profile.get("population_source") or "unknown",
+        data_source=profile.get("data_source") or "unknown",
         geography_type=profile.get("geography_type") or "zone",
         mobility_mode=profile.get("mobility_mode") or "ride_hailing",
         confidence=tariff.confidence if tariff else 0.0,
@@ -480,61 +325,6 @@ def get_city_tariff(city_id: str) -> CityTariffResponse:
     return CityTariffResponse(**data)
 
 
-@router.websocket("/api/cities/{city_id}/tariff/enrich")
-async def websocket_tariff_enrich(websocket: WebSocket, city_id: str):
-    """On-demand tariff enrichment, streamed. A city page opens this when
-    its cached tariff has no `validation_method` yet (never evidence/
-    analytically validated) -- the client sees "agent is analyzing..."
-    status messages in real time instead of a silent wait, then the final
-    profile. See backend/services/tariff_enrichment.py's module docstring
-    for why this is the one deliberate exception to "no LLM call on a
-    request path" in this repo, and why it's safe (serialized per city_id,
-    fires once ever per city, never on the hot fare-lookup path)."""
-    from backend.services import tariff_enrichment, tariff_profiles
-
-    await websocket.accept()
-    logger.info("WS /api/cities/{{city_id}}/tariff/enrich step=accepted city_id={}", city_id)
-    if cities_registry.get_city(city_id) is not None:
-        # nyc/london are the two registered reference cities -- they price
-        # from a real trained fare model (pricing_engine._base_fare), never
-        # a tariff profile (see tariff_profiles.py's module docstring and
-        # find_cities_needing_tariff_validation.py's same exclusion for the
-        # offline path). Without this guard, opening either city's page
-        # fires this WS (TariffCard.tsx's needsEnrichment sees no cached
-        # profile) and writes a bogus, never-used tariff row for it -- found
-        # 2026-08-16 after exactly that happened in Postgres.
-        logger.info("WS /api/cities/{{city_id}}/tariff/enrich step=skipped_reference_city city_id={}", city_id)
-        await websocket.send_json({
-            "type": "error",
-            "message": "this city prices from a trained fare model, not a tariff profile",
-        })
-        await websocket.close()
-        return
-    try:
-        cached = tariff_profiles.get(city_id)
-        if cached is not None and cached.validation_method is not None:
-            from dataclasses import asdict as _asdict
-
-            await websocket.send_json({"type": "result", "profile": _asdict(cached), "cached": True})
-            await websocket.close()
-            return
-
-        await tariff_enrichment.stream_enrichment_over_websocket(websocket, city_id)
-        await websocket.close()
-        logger.info("WS /api/cities/{{city_id}}/tariff/enrich step=done city_id={}", city_id)
-    except WebSocketDisconnect:
-        logger.info("WS /api/cities/{{city_id}}/tariff/enrich step=client_disconnected city_id={}", city_id)
-    except Exception:
-        # Never forward str(exc) to the client -- see chat.py's WS for the
-        # same discipline and the incident that motivated it.
-        logger.exception("WS /api/cities/{{city_id}}/tariff/enrich failed city_id={}", city_id)
-        try:
-            await websocket.send_json({"type": "error", "message": "something went wrong enriching this city's tariff data"})
-            await websocket.close(code=1011)
-        except Exception:
-            pass
-
-
 @router.get(
     "/api/cities/{city_id}/zones",
     response_model=CityZonesResponse,
@@ -543,16 +333,7 @@ async def websocket_tariff_enrich(websocket: WebSocket, city_id: str):
 )
 def get_city_zones(city_id: str) -> CityZonesResponse:
     logger.info("GET /api/cities/{{city_id}}/zones step=start city_id={}", city_id)
-    # Check if city has zones (NYC only currently)
-    city = cities_registry.get_city(city_id)
-    if city is None:
-        # Check global cities
-        from backend.registry import global_cities as global_cities_registry
-        city = global_cities_registry.get_city(city_id)
-
-    if city is None:
-        logger.warning("GET /api/cities/{{city_id}}/zones step=not_found city_id={}", city_id)
-        raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
+    _require_city(city_id)
 
     # Only NYC has zones in our system
     if city_id != "nyc":

@@ -1,32 +1,22 @@
-"""Cached per-city fare-structure profiles (ADR-011).
+"""Cached per-city fare-structure profiles.
 
-For NYC, a fare comes from a trained model (`model_service.predict_fare`).
-For every other city there is no trip-level fare data anywhere in this
-repo -- a `TariffProfile` is this project's honest substitute: a small,
-cached set of linear-fare parameters (base fare, per-km, per-min, minimum
-fare) in the city's *own currency*, generated once offline by an LLM call
-anchored on NYC/London's real measured fares
-(`scripts/generate_tariff_profile.py`), never on a request path (rule 8).
+A `TariffProfile` is a small set of linear-fare parameters (base fare,
+per-km, per-min, minimum fare) in a city's own currency, used where that
+city has no trained fare model. `pricing_engine.py` runs the arithmetic.
 
-`pricing_engine.py` runs the arithmetic; the LLM never computes a price,
-only supplies the parameters -- see ADR-011 for why this keeps rules.md
-rule 1 ("SQL > algorithm > model > LLM call") intact: an LLM here is
-supplying world knowledge (Mumbai's typical base fare) that no dataset in
-this repo has, not aggregating, ranking, or guessing a number.
+Since ADR-011 only NYC and London are served, and both have real measured
+fares behind them: NYC prices from a trained model
+(`model_service.predict_fare`), and both cities' cached profiles are
+calibrated against real fare data (`scripts/calibrate_tariff_nyc.py`),
+not generated. The offline LLM-anchored generation path that produced the
+other ~515 profiles was removed with the global layer -- see ADR-011 for
+why those profiles were not trustworthy enough to keep.
 
-Storage (2026-08-16 migration, see scripts/migrate_tariff_profiles_to_postgres.py):
-this table now lives in the same RDS Postgres instance as `prediction_log.py`/
-`rag/session_store.py` (ADR-009), reached through the same shared SQLAlchemy
-engine -- not DuckDB. Reason: a recurring Claude Code cloud routine
-re-validates stale/new-city profiles (`scripts/find_cities_needing_tariff_validation.py`
-+ `scripts/validate_tariff_city.py`) from an isolated sandbox that only has a
-git checkout, never the local DuckDB warehouse file. Postgres is now the
-SOLE SOURCE OF TRUTH for `city_tariff_profiles` -- DuckDB's copy of this one
-table is a stale mirror, frozen at the 517-row migration snapshot, kept only
-because `scripts/backfill_tariff_extras.py` (a one-time, already-completed
-2026-08-13/14 backfill) still reads it directly; nothing writes to the
-DuckDB copy anymore. Every other table in this repo's DuckDB warehouse is
-still authoritative as before -- this change is scoped to this one table.
+Storage (2026-08-16 migration): this table lives in the same RDS Postgres
+instance as `prediction_log.py` / `rag/session_store.py` (ADR-009), reached
+through the same shared SQLAlchemy engine -- not DuckDB. Postgres is the
+SOLE SOURCE OF TRUTH for `city_tariff_profiles`; every other table in this
+repo's DuckDB warehouse is still authoritative as before.
 """
 from __future__ import annotations
 

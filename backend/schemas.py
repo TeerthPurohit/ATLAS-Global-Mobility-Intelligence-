@@ -542,10 +542,7 @@ class CityTariffResponse(BaseModel):
     notes: str | None = None
     generated_at: str | None = None
     model_id: str | None = None
-    # None means "never evidence/analytically validated" -- the frontend uses
-    # this to decide whether to open WS /api/cities/{city_id}/tariff/enrich
-    # (see tariff_enrichment.py's needs_enrichment()), not just whether a
-    # profile row exists at all (every row has one, even the stale pre-2026-08-16 ones).
+    # None means "never evidence/analytically validated".
     validation_method: str | None = None
     evidence_sources: str | None = None
     validated_at: str | None = None

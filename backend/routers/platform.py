@@ -64,6 +64,14 @@ def mart_zone_hourly_demand() -> list[dict]:
     return result
 
 
+@router.get("/marts/zone_demand_totals")
+def mart_zone_demand_totals() -> list[dict]:
+    logger.info("GET /marts/zone_demand_totals step=start")
+    result = platform_service.get_zone_demand_totals()
+    logger.info("GET /marts/zone_demand_totals step=done count={}", len(result))
+    return result
+
+
 @router.get("/algorithms/benchmarks")
 def algorithm_benchmarks() -> dict:
     logger.info("GET /algorithms/benchmarks step=start")

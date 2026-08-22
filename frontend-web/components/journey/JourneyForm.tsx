@@ -49,7 +49,6 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
   // unresolvable; every /api/mobility/* card degrades honestly on that,
   // it never guesses "nyc".
   const [resolvedCityId, setResolvedCityId] = useState<string | null>("nyc");
-  const [cityResolving, setCityResolving] = useState(false);
 
   const {
     register,
@@ -139,11 +138,7 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
             setValue("pickup_lat", place.lat);
             setValue("pickup_lon", place.lon);
             setCoordError(null);
-            setResolvedCityId(null);
-            setCityResolving(true);
-            resolveCityId(place.lat, place.lon, place.city, place.countryCode)
-              .then(setResolvedCityId)
-              .finally(() => setCityResolving(false));
+            setResolvedCityId(resolveCityId(place.lat, place.lon));
           }}
         />
 
@@ -182,12 +177,10 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
 
         <div className="text-xs text-ink-muted">
           <span className="uppercase tracking-wider">Detected city: </span>
-          {cityResolving ? (
-            <span className="italic">resolving…</span>
-          ) : resolvedCityId ? (
+          {resolvedCityId ? (
             <span className="font-mono text-brass">{resolvedCityId}</span>
           ) : (
-            <span className="text-oxide">not resolvable — pick a pickup location from the suggestions</span>
+            <span className="text-oxide">outside NYC and London coverage</span>
           )}
         </div>
 

@@ -1,7 +1,7 @@
 """Backend Context Orchestrator Service (Phase 4).
 
-Dynamically orchestrates environmental, urban, temporal, and capability context
-for any globally resolved city (NYC, London, Mumbai, Jaipur, Dubai, Cape Town, Tokyo, etc.).
+Orchestrates environmental, urban, temporal, and capability context for a
+registered city (NYC, London -- see ADR-011).
 
 Strict Truth Model Enforcement:
 Every context source returns a standardized envelope:
@@ -31,7 +31,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.services import estimation_service, global_geography_service, model_service, transit_service  # noqa: E402
+from backend.services import model_service, transit_service  # noqa: E402
 
 
 def _now_iso() -> str:
@@ -41,7 +41,7 @@ def _now_iso() -> str:
 def get_city_context(city_id: str) -> dict:
     """Orchestrate all available context sources for a city/place."""
     logger.info("context_orchestrator.get_city_context step=start city_id={}", city_id)
-    profile = global_geography_service.get_city_profile(city_id)
+    profile = cities_registry.get_city_profile(city_id)
     if not profile:
         logger.warning("context_orchestrator.get_city_context step=profile_unresolvable city_id={}", city_id)
         return {
@@ -52,7 +52,7 @@ def get_city_context(city_id: str) -> dict:
                 "geography": {
                     "status": "unavailable",
                     "data": None,
-                    "source": "global_geography_registry",
+                    "source": "city_registry",
                     "timestamp": _now_iso(),
                     "reason": f"unknown or unresolvable city_id={city_id!r}",
                 }
@@ -79,10 +79,10 @@ def get_city_context(city_id: str) -> dict:
             "population": population,
             "place_type": profile["geographic_classification"]["place_type"],
         },
-        "source": "global_geography_registry",
+        "source": "city_registry",
         "timestamp": _now_iso(),
         "freshness": "live",
-        "coverage": "global",
+        "coverage": "registered_city",
     }
 
     # 2. Weather Context
@@ -107,14 +107,14 @@ def get_city_context(city_id: str) -> dict:
                     "data": None,
                     "source": weather_res.source,
                     "timestamp": _now_iso(),
-                    "reason": weather_res.reason or "OPENWEATHER_API_KEY unset",
+                    "reason": weather_res.reason or "weather unavailable for this location",
                 }
         except Exception as exc:  # noqa: BLE001
             logger.warning("context_orchestrator.get_city_context step=weather failed city_id={} reason={}", city_id, exc)
             context_map["weather"] = {
                 "status": "unavailable",
                 "data": None,
-                "source": "weather_openweather",
+                "source": "weather_openmeteo",
                 "timestamp": _now_iso(),
                 "reason": str(exc),
             }
@@ -122,7 +122,7 @@ def get_city_context(city_id: str) -> dict:
         context_map["weather"] = {
             "status": "unavailable",
             "data": None,
-            "source": "weather_openweather",
+            "source": "weather_openmeteo",
             "timestamp": _now_iso(),
             "reason": "latitude/longitude unresolvable",
         }
@@ -165,9 +165,7 @@ def get_city_context(city_id: str) -> dict:
     # 4. Urban Density Context
     if population:
         # Real land_area_km2 from the cities seed (Census/ONS-sourced, see
-        # dbt_project/seeds/cities.csv) when this is a registered city;
-        # unregistered cities honestly get no density figure rather than a
-        # hardcoded 2-city lookup masquerading as general coverage.
+        # dbt_project/seeds/cities.csv).
         registered_city = cities_registry.get_city(city_id)
         land_area_km2 = (registered_city or {}).get("land_area_km2")
         density = round(population / land_area_km2, 1) if land_area_km2 else None
@@ -178,7 +176,7 @@ def get_city_context(city_id: str) -> dict:
                 "land_area_km2": land_area_km2,
                 "density_per_km2": density,
             },
-            "source": "authoritative_census_and_geonames",
+            "source": "authoritative_census",
             "timestamp": _now_iso(),
             "freshness": "decennial_ons_census",
             "coverage": "metro_area",
@@ -220,58 +218,28 @@ def get_city_context(city_id: str) -> dict:
         }
 
     # 6. Mobility Capability Context
-    obs_available = profile["capabilities"]["observed_mobility"]
-    if obs_available:
+    if profile["capabilities"]["observed_mobility"]:
         context_map["mobility_capability"] = {
             "status": "available",
-            "data": {
-                "observed_mobility_available": True,
-                "cross_city_modeling_available": profile["capabilities"]["cross_city_model"],
-                "model_status": "active",
-            },
+            "data": {"observed_mobility_available": True, "model_status": "active"},
             "source": "atlas_model_registry",
             "timestamp": _now_iso(),
             "freshness": "live",
             "coverage": "platform_registry",
         }
     else:
-        # Not an observed-data city -- only claim "estimated" once a real
-        # cross-city estimate actually computes, never as a bare assertion.
-        estimate = (
-            estimation_service.estimate_city_demand(city_id, population, lat=lat, lon=lng, at=datetime.now(timezone.utc))
-            if population else None
-        )
-        if estimate is not None and estimate.basis == "modeled_estimate":
-            context_map["mobility_capability"] = {
-                "status": "available",
-                "data": {
-                    "observed_mobility_available": False,
-                    "cross_city_modeling_available": True,
-                    "model_status": "estimated",
-                    "estimated_daily_demand": estimate.value,
-                    "estimate_reason": estimate.reason,
-                },
-                "source": estimate.source,
-                "timestamp": _now_iso(),
-                "freshness": "live",
-                "coverage": "platform_registry",
-            }
-        else:
-            context_map["mobility_capability"] = {
-                "status": "unavailable",
-                "data": None,
-                "source": "cross_city_estimation",
-                "timestamp": _now_iso(),
-                "reason": (estimate.reason if estimate else "population covariate unresolvable for this location"),
-            }
+        context_map["mobility_capability"] = {
+            "status": "unavailable",
+            "data": None,
+            "source": "atlas_model_registry",
+            "timestamp": _now_iso(),
+            "reason": f"no active demand model registered for city_id={city_id!r}",
+        }
 
-    # 6b. Hourly Demand Shape Context -- real per-city hour-of-day fractions
-    # (SPEC-016's worldmove_city_hourly_shape for a WorldMove-covered city,
-    # or the same real multi-month shape nyc/london already load) via
-    # model_service.hourly_shape_fraction(). This is what lets a context-only
-    # tier city (chat's LLM narrator, _CONTEXT_ONLY_SYSTEM_PROMPT) answer a
-    # "what's the best time to travel" question with a real busiest/quietest
-    # hour instead of having no demand-timing data at all to work from.
+    # 6b. Hourly Demand Shape Context -- the city's own real multi-month
+    # hour-of-day fractions via model_service.hourly_shape_fraction(), which
+    # is what lets chat's LLM narrator answer a "what's the best time to
+    # travel" question with a real busiest/quietest hour.
     day_of_week = datetime.now(timezone.utc).weekday()
     hourly = [
         (hour, model_service.hourly_shape_fraction(hour, day_of_week, city_id=city_id))
@@ -289,7 +257,7 @@ def get_city_context(city_id: str) -> dict:
                 "quietest_hour_of_day": quietest_hour,
                 "quietest_hour_pct_of_daily_trips": round(quietest_frac * 100, 1),
             },
-            "source": "worldmove_city_hourly_shape" if city_id not in ("nyc", "london") else "zone_hourly_demand",
+            "source": "zone_hourly_demand",
             "timestamp": _now_iso(),
             "freshness": "live",
             "coverage": "city_wide_hour_of_day",

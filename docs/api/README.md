@@ -13,10 +13,9 @@ Base URL (local dev): `http://localhost:8000`.
 - Legacy routers (`/predict`, `/zones`, `/chat`, `/journey`, platform routes)
   return FastAPI's default `{"detail": "..."}` on error, status 400/404 --
   unchanged, for backward compatibility (SPEC-013 verified this by test).
-- The Geography Discovery router (`/api/geography/*`) and the Global
-  Mobility Domain Model routers (`/api/countries/*`, `/api/cities/*`) both
-  use a structured `{"error": {"code": ..., "message": ...}}` envelope
-  instead -- see [Errors](#errors).
+- The city routers (`/api/cities/*`) use a structured
+  `{"error": {"code": ..., "message": ...}}` envelope instead -- see
+  [Errors](#errors).
 
 ---
 
@@ -108,30 +107,18 @@ unchanged.
 
 ---
 
-## Geography Discovery (`/api/geography/*`, unchanged)
+## Cities (`/api/cities/*`)
 
-World -> country -> city search -> place hierarchy, backed by GeoNames with
-a Google Places fallback. `mobility_support` on a result reflects real
-platform coverage, not GeoNames coverage. See the router docstring
-(`backend/routers/geography.py`) for the full route list; unchanged by
-SPEC-013 except that `_mobility_support()` now checks the real
-`backend/registry/cities.py` registry instead of a local hardcoded map.
-
----
-
-## Global Mobility Domain Model (`/api/countries/*`, `/api/cities/*`, SPEC-013)
-
-New this phase. Country -> City -> Area/Metric/Prediction discovery, backed
-by `dbt_project/seeds/{countries,cities,model_registry}.csv` and
-`backend/registry/*.py`. NYC is the one real city; every capability
-returned is computed from what's actually wired (a real `model_registry`
-row, a real `canonical_areas` row), never hand-authored true/true/true.
+City -> Area/Metric/Prediction discovery, backed by
+`dbt_project/seeds/{cities,model_registry}.csv` and
+`backend/registry/*.py`. Two real cities, NYC and London (ADR-011); every
+capability returned is computed from what's actually wired (a real
+`model_registry` row, a real `canonical_areas` row), never hand-authored
+true/true/true. An unregistered `city_id` is a 404, not a degraded estimate.
 
 | Route | Method | Returns | Errors |
 |---|---|---|---|
-| `/api/countries` | GET | `{countries: [Country]}` | -- |
-| `/api/countries/{code}` | GET | `Country` | `COUNTRY_NOT_SUPPORTED` (404) |
-| `/api/countries/{code}/cities` | GET | `[City]` | `COUNTRY_NOT_SUPPORTED` (404) |
+| `/api/cities` | GET | `CitySearchResponse` (registered cities; optional `q`/`country` filters) | -- |
 | `/api/cities/{city_id}` | GET | `City` | `CITY_NOT_FOUND` (404) |
 | `/api/cities/{city_id}/capabilities` | GET | `Capabilities` (demand/fare/journey/chat/area_analysis booleans) | `CITY_NOT_FOUND` (404) |
 | `/api/cities/{city_id}/areas` | GET | `[Area]` | `CITY_NOT_FOUND` (404) |
@@ -171,10 +158,9 @@ never a fabricated prediction.
 | `INVALID_TIME_RANGE` | 400 | `/forecast`'s `hours` out of range |
 | `PREDICTION_FAILED` | 400 | A well-formed request the underlying model genuinely can't answer (e.g. unknown area_id) |
 | `CHAT_FAILED` | 500 | The RAG pipeline itself raised |
-| `GEONAMES_UNAVAILABLE` / `GEONAMES_AUTH_FAILED` / `GEONAMES_RATE_LIMITED` | 503 | Geography Discovery upstream failure |
 | `PLACE_NOT_FOUND` | 404 | Unknown GeoNames place id |
 | `INVALID_COORDINATES` | 400 | `lat`/`lng` outside valid range |
 
-Credentials (`GEONAMES_USERNAME`, `OPENAI_API_KEY`, etc.) are backend-only
+Credentials (`OPENAI_API_KEY`, etc.) are backend-only
 env vars (`.env`, gitignored) -- never read by the frontend, never echoed in
 a response, log, or error message.

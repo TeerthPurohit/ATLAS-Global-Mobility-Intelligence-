@@ -39,17 +39,6 @@ adapter-pattern rationale; this page is the honest per-source status.
   today. Corrected to fetch the real year's holiday list and check
   membership.
 
-## World Bank PPP (cost-of-living) — `backend/adapters/cost_of_living_worldbank.py`
-
-- **What's real:** each country's real PPP conversion factor (indicator
-  `PA.NUS.PPP`), used to scale NYC's real fare-per-mile rate into an honest
-  order-of-magnitude fare estimate for any other city.
-- **Known reliability gap:** `api.worldbank.org` has been observed to be
-  slow/unreachable in some environments (read timeouts even at 20s, while
-  the base `worldbank.org` domain resolves quickly). `fetch()` degrades to
-  `basis="unavailable"` on any failure — a fare estimate that comes back
-  `unavailable` is this adapter being honest, not a bug.
-
 ## GTFS transit — `backend/registry/transit.py`, `scripts/ingest_gtfs_feeds.py`
 
 - **What's real:** stop locations from an agency's actual GTFS static feed
@@ -62,22 +51,3 @@ adapter-pattern rationale; this page is the honest per-source status.
   until it's replaced with a real, checked URL. `transit_coverage` honestly
   reports `false` until a feed is both configured *and* ingested.
 
-## Cross-city estimation — `models/cross_city_estimation/estimate.py`
-
-- **What's real:** an N=2 calibration (NYC ride-hailing vs. London
-  bike-share, the only two cities with real per-capita mobility data),
-  scaled by a target city's real population (and, when available, real
-  weather/holiday signals — see below). Always `basis="modeled_estimate"`,
-  the `reason` always states the real low/high range implied by the two
-  reference rates.
-- **Weather/holiday elasticity:** measured, not guessed — real wet-hour and
-  holiday demand ratios computed directly against each city's actual
-  warehouse. NYC and London *disagree* on the direction of the rain effect
-  (ride-hailing demand rises in rain; bike-share demand falls) — a real
-  finding, reported honestly via a tightly-clamped near-neutral multiplier
-  rather than asserting a direction from two disagreeing points. Both
-  cities agree on the holiday effect (demand down), so that multiplier is
-  used with more confidence.
-- **Explicit gap:** events/concerts as a covariate were considered and cut —
-  no verified free, global, $0-budget events data source exists. Not a
-  placeholder, not silently dropped — documented in the module itself.

@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from loguru import logger
 
-load_dotenv()  # OPENWEATHER_API_KEY etc. must be set before adapters read os.environ at import time
+load_dotenv()  # API keys must be set before adapters read os.environ at import time
 
 # Structured logging (SPEC-013 FR-14 + logging rule: every API logs the steps
 # it goes through and which step it fails). loguru's default sink already
@@ -24,13 +24,10 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 
 from backend.errors import DomainError  # noqa: E402
-from backend.errors_geography import GeographyError  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
-from backend.registry import countries as countries_registry  # noqa: E402
-from backend.registry import global_cities as global_cities_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.routers import chat, cities, countries, context, geography, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
+from backend.routers import chat, cities, context, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
 from backend.services import journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
 
@@ -43,11 +40,9 @@ _STARTUP_LOADERS = (
     ("tariff_profiles", tariff_profiles.load),
     ("platform_service", platform_service.load),
     ("journey_service", journey_service.load),
-    ("countries_registry", countries_registry.load),
     ("models_registry", models_registry.load),
     ("transit_registry", transit_registry.load),
     ("cities_registry", cities_registry.load),
-    ("global_cities_registry", global_cities_registry.load),
 )
 
 
@@ -112,8 +107,6 @@ app.include_router(zones.router)
 app.include_router(chat.router)
 app.include_router(platform.router)
 app.include_router(journey.router)
-app.include_router(geography.router)
-app.include_router(countries.router)
 app.include_router(cities.router)
 app.include_router(mobility.router)
 app.include_router(context.router)
@@ -156,11 +149,6 @@ def openapi_explorer_docs() -> str:
 <body>
 <openapi-explorer spec-url="/openapi.json"></openapi-explorer>
 </body></html>"""
-
-
-@app.exception_handler(GeographyError)
-async def geography_error_handler(request, exc: GeographyError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code.value, "message": exc.message}})
 
 
 @app.exception_handler(DomainError)

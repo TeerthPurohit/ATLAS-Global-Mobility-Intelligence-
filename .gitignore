@@ -86,3 +86,6 @@ pnpm-debug.log*
 *.iml
 .ropeproject/
 
+
+# CDK synth output -- build artifact, never source
+infra/cdk/cdk.out/

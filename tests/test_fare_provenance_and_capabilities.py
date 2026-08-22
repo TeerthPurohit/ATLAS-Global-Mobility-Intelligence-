@@ -188,19 +188,15 @@ def test_all_modeled_city_scores_lower_than_all_computed_city():
     assert journey_predictors.predict_confidence(modeled).value < journey_predictors.predict_confidence(computed).value
 
 
-def test_capability_matrix_never_assumes_transfer_implies_fare():
+def test_capability_matrix_returns_none_for_an_unregistered_city():
     assert cities_registry.capability_matrix("nyc")["fare"] is True
-    # Use a city not in any registry - should return None
     assert cities_registry.capability_matrix("ZZ_NOT_A_CITY") is None
-    # All cities with real profiles should have fare=True
-    for city_id in _REAL_PROFILES:
-        assert cities_registry.capability_matrix(city_id)["fare"] is True
 
 
-def test_capability_summary_counts_come_from_the_registries():
+def test_capability_summary_counts_come_from_the_registry():
+    """ADR-011: the denominator is the registered cities, nothing wider."""
     summary = platform_service.get_capability_summary()
-    assert summary["total_cities"] > 500  # the real global_cities registry, not a stub
+    registered = {c["id"] for c in cities_registry.list_cities()}
+    assert summary["total_cities"] == len(registered)
     fare = summary["capabilities"]["fare"]
     assert fare["supported"] + fare["unsupported"] == summary["total_cities"]
-    # NYC's trained model plus exactly the cities that really have a profile.
-    assert fare["supported"] == len({"nyc", *_REAL_PROFILES})

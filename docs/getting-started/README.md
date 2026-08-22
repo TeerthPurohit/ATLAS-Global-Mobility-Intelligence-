@@ -10,10 +10,9 @@ platform. See [`docs/architecture/`](../architecture/) for system design,
 - `pip install -r requirements.txt` (training/dbt/notebook deps) or
   `pip install -r requirements-backend.txt` (serving-only, matches
   `backend/Dockerfile`)
-- Copy `.env.example` -> `.env` and fill in `OPENAI_API_KEY` (chat/RAG),
-  `GEONAMES_USERNAME` (geography discovery), `OPENWEATHER_API_KEY`
-  (optional -- journey weather adapter degrades honestly to
-  `basis="unavailable"` without it)
+- Copy `.env.example` -> `.env` and fill in `OPENAI_API_KEY` (chat/RAG).
+  Weather needs no key -- the Open-Meteo adapter is keyless, and degrades
+  honestly to `basis="unavailable"` if unreachable.
 
 ## Build the warehouse
 

@@ -12,14 +12,12 @@ import { BestDepartureCard } from "@/components/journey/cards/BestDepartureCard"
 import { ContextCard } from "@/components/journey/cards/ContextCard";
 import { AICard } from "@/components/journey/cards/AICard";
 import { useCapability } from "@/components/capability/CapabilityGate";
-import { TierNotice } from "@/components/capability/TierBadge";
 import { ProvenanceSummary } from "@/components/ui/ProvenanceTooltip";
 import { type JourneyRequest, type PredictionRequest } from "@/lib/api";
 import { useMemo } from "react";
 
 interface JourneyResultsProps {
   request: JourneyRequest;
-  cityTier: string;
 }
 
 function JourneyContextSection({ request, cityId }: { request: PredictionRequest; cityId: string }) {
@@ -69,38 +67,25 @@ function AICardSection({
   );
 }
 
-function JourneyProvenanceSummary({ cityTier }: { cityTier: string }) {
-  // This will show aggregate provenance. In a full implementation, each card
-  // would contribute its predictions to a context. For now, show tier notice.
+function JourneyProvenanceSummary() {
   return (
     <Card className="border-surface-border bg-surface-1">
       <h4 className="font-display text-sm tracking-wide text-ink-secondary mb-3">
         Provenance Summary
       </h4>
-      <TierNotice tier={cityTier} />
-      <div className="mt-3 space-y-2 text-sm">
-        <p className="text-ink-muted">
-          <strong>Basis Legend:</strong> Solid brass = computed from local model/tariff. Dashed verdigris = modeled estimate (WorldMove transfer). Open oxide = unavailable.
-        </p>
-        <p className="text-ink-muted">
-          <strong>City Tier:</strong> {cityTier === "OBSERVED" && "Trained on local trip data"}
-          {cityTier === "TRANSFER" && "WorldMove population-scaled priors"}
-          {cityTier === "NONE" && "No model — OSRM routing + context only"}
-        </p>
-      </div>
+      <p className="text-sm text-ink-muted">
+        <strong>Basis Legend:</strong> Solid brass = computed from this city&rsquo;s
+        trained model or measured tariff. Open oxide = unavailable.
+      </p>
       <ProvenanceSummary predictions={{}} />
     </Card>
   );
 }
 
-export function JourneyResults({ request, cityTier }: JourneyResultsProps) {
-  // JourneyForm now resolves the real city_id itself (bbox for NYC/London,
-  // resolveCityId()'s registry lookup for everywhere else) before it ever
-  // calls onSubmit -- this used to default blindly to "nyc" whenever
-  // city_id was missing/"undefined", which is why every non-NYC/London
-  // journey's cards silently queried NYC's data. A still-missing city_id
-  // here means resolution genuinely failed (e.g. a coordinate with no
-  // WorldMove coverage), not "assume NYC".
+export function JourneyResults({ request }: JourneyResultsProps) {
+  // JourneyForm resolves the real city_id itself (NYC/London bbox) before it
+  // ever calls onSubmit -- never default blindly to "nyc". A missing city_id
+  // here means the pickup fell outside both cities' coverage.
   const cityId = request.city_id && request.city_id !== "undefined" ? request.city_id : null;
 
   if (!cityId) {
@@ -147,9 +132,6 @@ export function JourneyResults({ request, cityTier }: JourneyResultsProps) {
 
   return (
     <div className="space-y-4">
-      {/* Tier notice at top */}
-      <TierNotice tier={cityTier} />
-
       {/* Core journey cards - always shown (route is fastest) */}
       <RouteCard request={routeRequest} />
 
@@ -174,7 +156,7 @@ export function JourneyResults({ request, cityTier }: JourneyResultsProps) {
       )}
 
       {/* Provenance summary at bottom */}
-      <JourneyProvenanceSummary cityTier={cityTier} />
+      <JourneyProvenanceSummary />
     </div>
   );
 }

@@ -45,7 +45,7 @@ export function NavBar() {
               ATLAS
             </span>
             <span className="hidden sm:block font-label-sm text-ink-muted">
-              Global Mobility Analysis
+              NYC Ride Intelligence
             </span>
             <span className="sm:hidden font-section-md text-ink-primary tracking-wide">
               ATLAS
@@ -59,7 +59,7 @@ export function NavBar() {
           {navLinks.map((link) => {
             const isActive =
               link.href === "/"
-                ? pathname === "/" || pathname.startsWith("/country") || pathname.startsWith("/city")
+                ? pathname === "/" || pathname.startsWith("/city")
                 : pathname.startsWith(link.href);
 
             return (

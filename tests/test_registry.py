@@ -51,28 +51,13 @@ def _route_paths(client) -> set[str]:
     return paths
 
 
-def test_list_countries_includes_us(client):
-    resp = client.get("/api/countries")
+def test_list_cities_returns_only_registered_cities(client):
+    """ADR-011: this platform serves the cities it has real trip data for.
+    A city_id that isn't registered must not appear here."""
+    resp = client.get("/api/cities")
     assert resp.status_code == 200
-    countries = resp.json()["countries"]
-    us = next((c for c in countries if c["iso_code"] == "US"), None)
-    assert us is not None
-    assert us["supported"] is True
-    assert us["supported_city_count"] >= 1
-
-
-def test_list_country_cities_nyc(client):
-    resp = client.get("/api/countries/US/cities")
-    assert resp.status_code == 200
-    cities = resp.json()
-    assert any(c["id"] == "nyc" for c in cities)
-
-
-def test_unsupported_country_returns_documented_error_not_fake_data(client):
-    resp = client.get("/api/countries/ZZ")
-    assert resp.status_code == 404
-    body = resp.json()
-    assert body["error"]["code"] == "COUNTRY_NOT_SUPPORTED"
+    ids = {c["id"] for c in resp.json()["results"]}
+    assert ids == {"nyc", "london"}
 
 
 def test_unknown_city_returns_documented_error_not_fake_data(client):
@@ -130,6 +115,4 @@ def test_london_capabilities_reflect_cycle_share_mode(client):
     # flag used to gate on a model_registry row that only ever existed for
     # nyc (a seed-data gap, not a real capability gap: /journey/estimate
     # already worked for London in production, same as every other city).
-    # Fixed via /debug 2026-08-13 alongside extending availability/surge/
-    # best_departure to WorldMove-covered cities.
     assert capabilities["journey"] is True

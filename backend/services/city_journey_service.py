@@ -20,7 +20,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from backend.errors import DomainError  # noqa: E402
 from backend.predictors.base import PredictionResult  # noqa: E402
 from backend.schemas import CityJourneyEstimate, ErrorCode, PredictionOut  # noqa: E402
-from backend.services import global_geography_service, journey_service  # noqa: E402
+from backend.registry import cities as cities_registry  # noqa: E402
+from backend.services import journey_service  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def _to_out(pr: PredictionResult) -> PredictionOut:
 def estimate(
     city_id: str, pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float, departure_time: datetime,
 ) -> CityJourneyEstimate:
-    if global_geography_service.get_city_profile(city_id) is None:
+    if cities_registry.get_city_profile(city_id) is None:
         raise DomainError(ErrorCode.CITY_NOT_FOUND, f"unknown city_id={city_id!r}", 404)
 
     components = journey_service.estimate(
