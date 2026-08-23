@@ -1,8 +1,0 @@
-{
-  "base_fare_usd": 3.13,
-  "per_mile_usd": 3.12,
-  "per_min_usd": 0.75,
-  "median_fare_usd": 22.96,
-  "min_fare_usd": 8.7,
-  "n_sampled": 199930
-}
