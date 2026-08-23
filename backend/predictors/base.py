@@ -26,7 +26,7 @@ class PredictionResult:
     source: str
     reason: str | None = None
     # Real min/max date the underlying mart covers (model_service.data_vintage),
-    # set only on fields backed by a trained NYC/London model -- so nothing
+    # set only on fields backed by a trained model -- so nothing
     # from a 2024/2026-dated warehouse ever claims to be more current than it is.
     data_vintage: str | None = None
     # Per-component provenance, both optional and last in the field order so

@@ -17,7 +17,6 @@ from backend.services import model_service  # noqa: E402
 
 _CITY_WAREHOUSES = {
     "nyc": REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb",
-    "london": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
 }
 
 

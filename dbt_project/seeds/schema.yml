@@ -41,10 +41,10 @@ seeds:
 
   - name: cities
     description: >
-      City registry: one row per city this platform actually serves. Two
-      today, `nyc` and `london`, both backed by real trip data (ADR-011) --
-      a third joins by adding a row here plus matching `model_registry`
-      rows, with zero code changes to backend/registry/*.py.
+      City registry: one row per city this platform actually serves. One
+      today, `nyc` (ADR-012) -- a second joins by adding a row here plus
+      matching `model_registry` rows, with zero code changes to
+      backend/registry/*.py.
       `capabilities`/`metrics`
       are deliberately NOT columns here (they'd drift from reality) --
       backend/registry/cities.py computes them from `model_registry` and the
@@ -90,21 +90,6 @@ seeds:
           - accepted_values:
               arguments:
                 values: ["active", "unavailable"]
-
-  - name: london_stations
-    description: >
-      Santander Cycle Hire docking-station locations (SPEC-015), a direct
-      snapshot of TfL's live BikePoint API (https://api.tfl.gov.uk/BikePoint)
-      written by scripts/ingest_tfl_cycle_hire.py. station_id is BikePoint's
-      TerminalName, the same zero-padded id used in the journey extracts'
-      "Start/End station number" columns. Also mirrored, unchanged, to
-      data/lookup/london_station_centroids.csv for algorithms/spatial's
-      KD-tree (same role zone_centroids.csv plays for NYC).
-    columns:
-      - name: station_id
-        tests: [not_null, unique]
-      - name: name
-        tests: [not_null]
 
   - name: zone_centroids
     description: >

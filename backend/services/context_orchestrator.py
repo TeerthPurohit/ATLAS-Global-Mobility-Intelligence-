@@ -1,7 +1,7 @@
 """Backend Context Orchestrator Service (Phase 4).
 
 Orchestrates environmental, urban, temporal, and capability context for a
-registered city (NYC, London -- see ADR-011).
+registered city (NYC -- see ADR-012).
 
 Strict Truth Model Enforcement:
 Every context source returns a standardized envelope:

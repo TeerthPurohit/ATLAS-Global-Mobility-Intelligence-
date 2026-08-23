@@ -2,7 +2,7 @@
 every date each city's warehouse actually has, via Open-Meteo's free,
 keyless historical archive API. Writes dbt_project/seeds/weather_hourly.csv,
 loaded as a normal dbt seed and joined into zone_hourly_demand /
-london_station_hourly_demand at (date, hour) grain -- city-level, never
+zone_hourly_demand at (date, hour) grain -- city-level, never
 per-zone/per-station, since weather doesn't meaningfully vary within one city.
 
 This is what actually lifts ADR-008's "weather can never be a retrainable
@@ -46,13 +46,6 @@ _CITY_WAREHOUSES = {
         "date_col": "pickup_date",
         "lat": 40.7128,
         "lon": -74.0060,
-    },
-    "london": {
-        "path": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
-        "table": "london_station_hourly_demand",
-        "date_col": "trip_date",
-        "lat": 51.5074,
-        "lon": -0.1278,
     },
 }
 

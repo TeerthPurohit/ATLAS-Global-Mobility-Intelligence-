@@ -1,3 +1,2 @@
 city_id,agency_name,feed_url,format,last_verified
 nyc,MTA,VERIFY_BEFORE_USE,zip,
-london,TfL,VERIFY_BEFORE_USE,zip,

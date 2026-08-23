@@ -1,9 +1,11 @@
-"""Service layer wrapping RAG pipeline and conversation session history
-(FR-6, FR-8) -- now the actual chat-tier dispatch point (SPEC-013 FR-11):
-`full_rag` (NYC, real SQL + vector-retrieval synthesis) and `sql_only`
-(a city with its own warehouse but no insight-doc corpus -- real SQL, honest
-refusal for anything needing prose). The `context_only` tier went away with
-the global layer (ADR-011): every city this repo serves now has a warehouse.
+"""Service layer wrapping the RAG pipeline and conversation session history
+(FR-6, FR-8), and the chat-tier dispatch point.
+
+NYC is `full_rag`: real SQL plus vector-retrieval synthesis. It is the only
+city served (ADR-012), and it has both a warehouse and an insight corpus, so
+the other tiers are currently unreachable -- `get_chat_tier` still computes
+them from real infrastructure facts, so a future city routes correctly the
+moment it is registered.
 """
 from __future__ import annotations
 
@@ -19,16 +21,17 @@ if str(RAG_DIR) not in sys.path:
 
 import rag_pipeline  # noqa: E402
 import session_store  # noqa: E402
-from nl_to_sql.london_schema import LONDON_SCHEMA  # noqa: E402
 from nl_to_sql.nyc_schema import NYC_SCHEMA  # noqa: E402
 
 from backend.registry import cities as cities_registry  # noqa: E402
 
-_CITY_DB_PATH = {"london": Path(__file__).resolve().parents[2] / "data" / "warehouse" / "london_cycles.duckdb"}
-_CITY_SCHEMA = {"london": LONDON_SCHEMA}
-# nyc omitted -- rag_pipeline.answer()/answer_stream() default to the nyc
-# collection (embeddings.build_vector_store.COLLECTION) when not overridden.
-_CITY_INSIGHT_COLLECTION = {"london": "insight_docs_london"}
+# Per-city overrides. Empty: nyc is the default everywhere --
+# rag_pipeline.answer()/answer_stream() fall back to the nyc warehouse,
+# NYC_SCHEMA, and the nyc collection (embeddings.build_vector_store.COLLECTION)
+# when a city has no entry here. A second city adds one row to each.
+_CITY_DB_PATH: dict[str, Path] = {}
+_CITY_SCHEMA: dict[str, object] = {}
+_CITY_INSIGHT_COLLECTION: dict[str, str] = {}
 
 _PUBLIC_ROUTES = frozenset({"numeric", "explanatory"})
 
@@ -63,12 +66,13 @@ def stream_answer(question: str, session_id: str | None = None, city_id: str = "
     """
     tier = cities_registry.get_chat_tier(city_id)
     if tier == "sql_only":
-        # London has no insight-doc corpus, so answer_stream's explanatory
-        # branch would never emit a "done" frame -- stream the same
+        # A warehouse but no insight corpus: answer_stream's explanatory
+        # branch would never emit a "done" frame, so stream the same
         # SQL-grounded answer POST /chat returns instead.
         res = rag_pipeline.answer(
             question=question, session_id=session_id,
-            db_path=_CITY_DB_PATH[city_id], schema=_CITY_SCHEMA[city_id],
+            db_path=_CITY_DB_PATH.get(city_id, rag_pipeline.DEFAULT_DB_PATH),
+            schema=_CITY_SCHEMA.get(city_id, NYC_SCHEMA),
             allow_explanatory=False,
         )
         res["route"] = _public_route(res["route"])

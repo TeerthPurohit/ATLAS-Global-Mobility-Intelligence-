@@ -22,8 +22,6 @@ sys.path.insert(0, str(REPO_ROOT / "models"))
 from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
 from data_prep.build_features import FEATURE_COLUMNS as NYC_FEATURE_COLUMNS  # noqa: E402
 from data_prep.build_features import build_features as nyc_build_features  # noqa: E402
-from london_demand.build_features import FEATURE_COLUMNS as LONDON_FEATURE_COLUMNS  # noqa: E402
-from london_demand.build_features import build_features as london_build_features  # noqa: E402
 
 FARE_MODEL_PATH = REPO_ROOT / "models" / "fare_prediction" / "fare_xgb_model.json"
 
@@ -40,9 +38,8 @@ EWMA_FALLBACK_NAME = "ewma_fallback_v1"
 FARE_MODEL_NAME = "xgboost_fare_v1"
 FARE_DEFAULT_DAY_OF_WEEK = 2  # Wednesday; see module docstring ponytail note
 
-# Per-city demand-model artifacts. Fare stays NYC-only below (no other city
-# has a trained fare model) rather than genericizing a dict for one populated
-# key -- see model_registry.csv, which has no london/fare row.
+# Per-city demand-model artifacts. Fare stays NYC-only below rather than
+# genericizing a dict for one populated key -- see model_registry.csv.
 _CITY_ARTIFACTS: dict[str, dict] = {
     "nyc": {
         "demand_model_path": REPO_ROOT / "models" / "xgboost_model" / "xgb_model.json",
@@ -51,15 +48,6 @@ _CITY_ARTIFACTS: dict[str, dict] = {
         "feature_columns": NYC_FEATURE_COLUMNS,
         "area_column": "pickup_location_id",
         "demand_model_name": "xgboost_demand_v1",
-        "ewma_fallback_name": EWMA_FALLBACK_NAME,
-    },
-    "london": {
-        "demand_model_path": REPO_ROOT / "models" / "london_demand" / "xgb_model.json",
-        "warehouse_path": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
-        "build_features": london_build_features,
-        "feature_columns": LONDON_FEATURE_COLUMNS,
-        "area_column": "station_id",
-        "demand_model_name": "xgboost_london_demand_v1",
         "ewma_fallback_name": EWMA_FALLBACK_NAME,
     },
 }

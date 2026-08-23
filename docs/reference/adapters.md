@@ -23,7 +23,7 @@ adapter-pattern rationale; this page is the honest per-source status.
   key, unlike the OpenWeatherMap adapter this replaced.
 - **Historical backfill:** `scripts/backfill_weather_openmeteo.py` pulls
   real hourly weather for every date each city's warehouse actually has,
-  joined into `zone_hourly_demand`/`london_station_hourly_demand` and used
+  joined into `zone_hourly_demand` and used
   as a real training feature (see [ADR-008's 2026-08-09 update](../adr/ADR-008-adapter-pattern-zero-budget.md#update-2026-08-09)).
 - **Severity score:** a documented, hand-picked formula (precipitation-rate
   dominant, plus a freezing/extreme-heat bump) — not a measured elasticity,
@@ -45,7 +45,7 @@ adapter-pattern rationale; this page is the honest per-source status.
   (a `.zip` of CSVs — stdlib `zipfile`/`csv`, no new dependency), ingested
   once per feed (bulk reference data, not a request-time fetch).
 - **Explicitly unverified today:** `dbt_project/seeds/gtfs_feeds.csv` ships
-  with `feed_url=VERIFY_BEFORE_USE` for both nyc/london — neither has been
+  with `feed_url=VERIFY_BEFORE_USE` for nyc — it has not been
   live-verified against MTA's/TfL's current developer pages this pass. The
   ingestion script hard-asserts against that placeholder and refuses to run
   until it's replaced with a real, checked URL. `transit_coverage` honestly

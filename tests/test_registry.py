@@ -57,7 +57,7 @@ def test_list_cities_returns_only_registered_cities(client):
     resp = client.get("/api/cities")
     assert resp.status_code == 200
     ids = {c["id"] for c in resp.json()["results"]}
-    assert ids == {"nyc", "london"}
+    assert ids == {"nyc"}
 
 
 def test_unknown_city_returns_documented_error_not_fake_data(client):
@@ -101,18 +101,3 @@ def test_metrics_list_is_subset_of_capabilities(client):
         assert capabilities[m] is True
 
 
-def test_london_capabilities_reflect_cycle_share_mode(client):
-    resp = client.get("/api/cities/london/capabilities")
-    assert resp.status_code == 200
-    capabilities = resp.json()
-    assert capabilities["mobility_mode"] == "cycle_share"
-    assert capabilities["area_type"] == "cycle_station"
-    assert capabilities["demand"] is True
-    assert capabilities["fare"] is False
-    # journey_predictors.py orchestrates routing/demand/fare/carbon/congestion/
-    # availability/surge/best_departure with honest per-component degradation
-    # for ANY city -- it was never actually London-specific. This capability
-    # flag used to gate on a model_registry row that only ever existed for
-    # nyc (a seed-data gap, not a real capability gap: /journey/estimate
-    # already worked for London in production, same as every other city).
-    assert capabilities["journey"] is True

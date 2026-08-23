@@ -6,7 +6,7 @@ same five canonical concepts (demand/fare/flow value columns, plus
 area/hour/day_of_week/date_range filters), and clearly fictional area labels
 (no real city's zone/borough names, and no NYC boroughs renamed). None of
 these are ever connected to a real database or presented as a real city's
-schema -- the real (separately-built) London pipeline has its own real
+schema -- a real second city's pipeline would have its own real
 schema and is not related to these. To avoid any chance of that conflation,
 these are deliberately named generically (alpha/beta/gamma/delta) rather
 than after any real or fictional-but-plausible city.

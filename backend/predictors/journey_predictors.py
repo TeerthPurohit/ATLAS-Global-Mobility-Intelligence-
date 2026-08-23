@@ -16,7 +16,7 @@ from backend.predictors.base import (
 )
 from backend.services import model_service
 
-_ZONE_MODEL_CITIES = ("nyc", "london")
+_ZONE_MODEL_CITIES = ("nyc",)
 
 
 def predict_demand(ctx: JourneyContext, features: JourneyFeatures) -> PredictionResult:

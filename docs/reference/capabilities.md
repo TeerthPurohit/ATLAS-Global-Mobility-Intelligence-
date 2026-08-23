@@ -18,7 +18,7 @@ time (`backend/predictors/base.py`), not just a naming convention — see
 | `basis` | Meaning | Example |
 |---|---|---|
 | `computed` | A real trained model or deterministic algorithm ran against real observed data. | NYC's XGBoost demand prediction; OSRM route distance for any city. |
-| `modeled_estimate` | A transparent, bounded formula derived from real reference data, applied to a city with no observed history of its own. Never presented as measured fact — always carries a `reason` explaining the calibration and its limits. | Mumbai's demand estimate (NYC/London per-capita scaling); any city's fare estimate (World Bank PPP-adjusted NYC rate). |
+| `modeled_estimate` | A transparent, bounded formula derived from real reference data rather than a direct measurement. Never presented as measured fact — always carries a `reason` explaining the calibration and its limits. | A tariff-profile fare (linear base/per-km/per-min) where no trained fare model covers the request. |
 | `unavailable` | No real data source exists for this field right now. `value` is `null`, `reason` says why. | A demand model for a city with no resolvable population; weather when Open-Meteo is unreachable. |
 
 `unavailable` is not an error — it's the honest answer to "we don't have
@@ -36,13 +36,15 @@ not curated — from two real infrastructure facts per city (see
 |---|---|---|
 | `full_rag` | A registered warehouse **and** a generated insight-doc corpus | Real SQL for numeric questions, LLM-synthesized narrative (grounded only in retrieved doc text) for explanatory questions. |
 | `sql_only` | A registered warehouse, no insight docs | Real SQL against that city's own warehouse for numeric questions; explanatory questions get an honest "no insight documents exist for this city yet" instead of borrowing another city's prose. |
-| `context_only` | Neither (any other resolvable city) | Never a flat refusal — an LLM narrates an answer using only the real JSON from the context/estimate services (geography, weather, holidays, transit, modeled demand/fare). Declines only the specific sub-question that has no real basis (e.g. a historical trend), not the whole conversation. |
 
-Today: `nyc` is `full_rag`, `london` is `sql_only`, every other resolvable
-city is `context_only`. Adding a third city's chat capability means
-registering its warehouse (needed for predictions/journey anyway) and,
-optionally, generating insight docs for it — never a chat-specific code
-change. See [Adding a City](../guides/adding-a-city.md).
+Today `nyc` is `full_rag` — the only registered city (ADR-012), and it has
+both a warehouse and an insight corpus. `sql_only` is computed the same way
+and would apply to a second city registered without insight docs; an
+unregistered `city_id` never reaches the tier logic at all, because the
+routers 404 it first. Adding a city's chat capability means registering its
+warehouse (needed for predictions/journey anyway) and, optionally,
+generating insight docs — never a chat-specific code change.
+See [Adding a City](../guides/adding-a-city.md).
 
 ## What `get_capabilities()` actually checks
 

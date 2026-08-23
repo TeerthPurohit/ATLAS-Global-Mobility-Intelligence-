@@ -95,9 +95,9 @@ def _answer_numeric(question: str, db_path: Path = DEFAULT_DB_PATH, schema: City
 
 
 def _hit_label(h: dict) -> str:
-    """NYC hits carry zone_name/borough; London hits carry station_name only
-    (bike-share stations have no borough field in the mart) -- one location
-    label either way, not a city-specific formatter per caller."""
+    """NYC hits carry zone_name/borough; a station-based city would carry
+    station_name only -- one location label either way, not a city-specific
+    formatter per caller."""
     if h.get("zone_name"):
         return f"{h['zone_name']}, {h.get('borough', '')}".rstrip(", ")
     return h.get("station_name", "unknown location")

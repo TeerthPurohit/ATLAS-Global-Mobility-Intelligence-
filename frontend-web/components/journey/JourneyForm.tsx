@@ -44,7 +44,7 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
   // Resolved from the pickup address's own coordinates/city name -- real
   // registry lookup (resolveCityId), not user free-text. Previously a
   // disconnected manual "City" input existed here that nothing populated,
-  // so every non-NYC/London journey silently queried "nyc" downstream
+  // so every out-of-coverage journey silently queried "nyc" downstream
   // (JourneyResults.tsx's old fallback). null = still resolving or
   // unresolvable; every /api/mobility/* card degrades honestly on that,
   // it never guesses "nyc".
@@ -147,7 +147,7 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
           label="Dropoff location"
           color="verdigris"
           defaultValue={dropoff.name}
-          placeholder="e.g. Heathrow Airport, London Bridge…"
+          placeholder="e.g. JFK Airport, Brooklyn Bridge…"
           onSelect={(place) => {
             setDropoff(place);
             setValue("dropoff_lat", place.lat);
@@ -180,7 +180,7 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
           {resolvedCityId ? (
             <span className="font-mono text-brass">{resolvedCityId}</span>
           ) : (
-            <span className="text-oxide">outside NYC and London coverage</span>
+            <span className="text-oxide">outside NYC coverage</span>
           )}
         </div>
 

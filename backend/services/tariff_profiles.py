@@ -4,8 +4,8 @@ A `TariffProfile` is a small set of linear-fare parameters (base fare,
 per-km, per-min, minimum fare) in a city's own currency, used where that
 city has no trained fare model. `pricing_engine.py` runs the arithmetic.
 
-Since ADR-011 only NYC and London are served, and both have real measured
-fares behind them: NYC prices from a trained model
+Since ADR-012 only NYC is served, and it has real measured fares behind
+it: NYC prices from a trained model
 (`model_service.predict_fare`), and both cities' cached profiles are
 calibrated against real fare data (`scripts/calibrate_tariff_nyc.py`),
 not generated. The offline LLM-anchored generation path that produced the

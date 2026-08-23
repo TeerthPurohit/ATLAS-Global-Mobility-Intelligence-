@@ -9,10 +9,9 @@ tool beats a new one). One extra collection, `rag_answer_cache`, storing the
 question's embedding + the full result payload as the point.
 
 Cache partitions live in a `namespace` payload field (filtered on read, not a
-separate collection per namespace) -- callers pass `collection` for the NYC/
-London explanatory path and `f"context_only:{city_id}"` for the context-only
-tier, so a cached JFK answer for NYC never leaks into London's cache or a
-different city's.
+separate collection per namespace) -- callers pass `collection` for the
+explanatory path, so a cached answer for one city never leaks into
+another's.
 
 0.97 cosine threshold: measured against text-embedding-3-small directly
 (see demo() below) -- true restatements of the same question (case/
@@ -162,7 +161,7 @@ def demo() -> None:
     assert paraphrase["cache_hit"] is True
     print(f"paraphrase match: cache_hit={paraphrase['cache_hit']} similarity={paraphrase['cache_similarity']:.4f}")
 
-    different = get("what is the weather like in London today", ns)
+    different = get("what is the weather like in Chicago today", ns)
     assert different is None, "unrelated question must miss"
     print("unrelated question: miss (None), as expected")
 

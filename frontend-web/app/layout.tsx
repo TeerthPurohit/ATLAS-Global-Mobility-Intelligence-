@@ -8,7 +8,7 @@ import { SmoothScrollProvider } from "@/components/layout/SmoothScrollProvider";
 
 export const metadata: Metadata = {
   title: "ATLAS | NYC Ride Intelligence",
-  description: "Urban mobility intelligence built on real trip records. Demand, fares, and journey estimates for New York City and London.",
+  description: "Urban mobility intelligence built on real NYC TLC trip records. Demand, fares, and journey estimates for New York City.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

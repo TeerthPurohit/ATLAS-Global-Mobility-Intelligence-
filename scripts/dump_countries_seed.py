@@ -3,7 +3,7 @@
 global_geography_service.py already uses for per-country currency lookups
 (ADR-008 pattern). Offline, one-shot; never called from a request path.
 
-The seed used to be hand-maintained at 2 rows (nyc/london's own countries,
+The seed used to be hand-maintained at 2 rows (the registered cities' own countries,
 US/GB) from when this repo had exactly 2 onboarded cities. Once SPEC-016's
 519-city global_cities registry landed (spanning 45 countries), that 2-row
 table silently made every other real, resolvable country report

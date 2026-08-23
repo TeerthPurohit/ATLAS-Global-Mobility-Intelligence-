@@ -249,11 +249,9 @@ def _demand_adjustment(ctx: JourneyContext, base_fare: PredictionResult, feature
             value=None, unit=None, basis="unavailable", source="demand_adjustment",
             reason=f"base fare unavailable or pickup location outside {ctx.city_id}'s zone coverage",
         )
-    # Same real momentum signal journey_predictors.predict_availability/
-    # predict_surge_risk already use (nyc/london zone momentum, or WorldMove
-    # per-cell occupancy for any other covered city) -- reused rather than
-    # re-deriving a second, only-nyc/london-aware pressure formula here
-    # (found duplicated via /debug 2026-08-13).
+    # Same real zone-momentum signal journey_predictors.predict_availability/
+    # predict_surge_risk already use -- reused rather than re-deriving a
+    # second pressure formula here.
     pressure = _demand_pressure(ctx)
     if pressure is None:
         return PredictionResult(

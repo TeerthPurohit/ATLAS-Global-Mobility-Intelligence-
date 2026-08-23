@@ -6,7 +6,7 @@ train_fare_xgb.py` could drop its own duplicate copy of this logic and call
 the shared functions directly. This module is kept so existing
 `from data_prep.train_test_split import ...` / `from models.data_prep.
 train_test_split import ...` call sites (ewma_baseline, linear_baseline,
-xgboost_model, lstm_model, evaluation, london_demand) keep working
+xgboost_model, lstm_model, evaluation) keep working
 unchanged.
 """
 

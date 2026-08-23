@@ -83,7 +83,7 @@ function JourneyProvenanceSummary() {
 }
 
 export function JourneyResults({ request }: JourneyResultsProps) {
-  // JourneyForm resolves the real city_id itself (NYC/London bbox) before it
+  // JourneyForm resolves the real city_id itself (NYC bbox) before it
   // ever calls onSubmit -- never default blindly to "nyc". A missing city_id
   // here means the pickup fell outside both cities' coverage.
   const cityId = request.city_id && request.city_id !== "undefined" ? request.city_id : null;

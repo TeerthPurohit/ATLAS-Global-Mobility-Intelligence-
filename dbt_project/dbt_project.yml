@@ -20,13 +20,6 @@ seeds:
         Borough: varchar
         Zone: varchar
         service_zone: varchar
-    london_stations:
-      +database: london_cycles
-      +column_types:
-        station_id: varchar
-        name: varchar
-        latitude: double
-        longitude: double
     weather_hourly:
       +column_types:
         city_id: varchar

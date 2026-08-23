@@ -63,7 +63,7 @@ def test_summary_derives_cities_dates_and_top(client, monkeypatch):
     rows = [
         _row(10, "nyc", 32.5, 8.0),
         _row(20, "nyc", 41.0, 12.0),
-        _row(30, "london", 18.0, 5.0),
+        _row(30, "unresolved", 18.0, 5.0),
     ]
     monkeypatch.setattr(prediction_log, "get_recent_predictions", lambda limit=50: rows)
     resp = client.get("/api/analytics/summary")

@@ -70,7 +70,7 @@ export interface JourneyRequest {
   departure_time: string; // ISO 8601
   vehicle_type: string;
   // Explicit city (registered id, GeoNames id, or free-text place name).
-  // Optional only for NYC/London -- auto-detected from pickup coordinates;
+  // Optional for NYC -- auto-detected from pickup coordinates;
   // every other city must be named explicitly or every city-scoped field
   // (fare, demand, surge, availability) degrades to "unavailable".
   city_id?: string;
@@ -525,26 +525,24 @@ export async function listCities(params: CitySearchParams = {}): Promise<CitySea
   return fetchJson<CitySearchResponse>(`/api/cities?${searchParams.toString()}`);
 }
 
-// NYC/London's real zone/station bbox coverage -- mirrors backend/services/
-// geography_service.py's _NYC_BBOX/_LONDON_BBOX exactly, so a pickup inside
-// either city resolves the same way client-side (avoiding a network round
-// trip for the two cities that don't need one) as it would server-side.
+// NYC's real zone bbox coverage -- mirrors backend/services/
+// geography_service.py's _NYC_BBOX exactly, so a pickup inside the city
+// resolves the same way client-side (avoiding a network round trip) as it
+// would server-side.
 const NYC_BBOX = { minLat: 40.49, minLon: -74.26, maxLat: 40.92, maxLon: -73.68 };
-const LONDON_BBOX = { minLat: 51.28, minLon: -0.51, maxLat: 51.70, maxLon: 0.33 };
 
-function detectRegisteredCity(lat: number, lon: number): "nyc" | "london" | null {
+function detectRegisteredCity(lat: number, lon: number): "nyc" | null {
   if (lat >= NYC_BBOX.minLat && lat <= NYC_BBOX.maxLat && lon >= NYC_BBOX.minLon && lon <= NYC_BBOX.maxLon) return "nyc";
-  if (lat >= LONDON_BBOX.minLat && lat <= LONDON_BBOX.maxLat && lon >= LONDON_BBOX.minLon && lon <= LONDON_BBOX.maxLon) return "london";
   return null;
 }
 
 /**
  * Resolves a picked address to the backend city_id every /api/mobility/*
  * call needs. This platform serves the cities it has real trip data for
- * (ADR-011), so a point outside NYC/London resolves to null and callers
+ * (ADR-012), so a point outside NYC resolves to null and callers
  * must treat that as "unavailable" -- never silently fall back to nyc.
  */
-export function resolveCityId(lat: number, lon: number): "nyc" | "london" | null {
+export function resolveCityId(lat: number, lon: number): "nyc" | null {
   return detectRegisteredCity(lat, lon);
 }
 

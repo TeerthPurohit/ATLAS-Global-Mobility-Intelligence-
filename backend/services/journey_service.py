@@ -82,8 +82,8 @@ def _resolve_distance_duration(
     duration = routing_osrm.fetch_duration(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
 
     # zone_pair_flows/_zone_names are NYC-only (built from NYC's
-    # zone_centroids.csv) -- a London/other-city zone/station id is a small
-    # int too and could otherwise collide with an unrelated NYC zone id.
+    # zone_centroids.csv) -- another city's area id is a small int too and
+    # could otherwise collide with an unrelated NYC zone id.
     hist_duration, hist_speed = (None, None)
     if city_id == "nyc" and pickup_zone_id is not None and dropoff_zone_id is not None:
         hist_duration, hist_speed = _historical_pair(pickup_zone_id, dropoff_zone_id)
@@ -122,8 +122,8 @@ _UNRESOLVED_CITY = "unresolved"
 
 def _resolve_city_id(pickup_lat: float, pickup_lon: float, city_id: str | None) -> str:
     """Explicit `city_id` wins (normalized through the city registry).
-    Otherwise NYC/London bbox auto-detection -- same behavior every caller
-    had before city_id existed. Anywhere else, a bare lat/lon pair alone
+    Otherwise NYC bbox auto-detection -- same behavior every caller had
+    before city_id existed. Anywhere else, a bare lat/lon pair alone
     doesn't identify a city this repo has data for -- resolves to a sentinel
     that carries no zone/tariff coverage, so every city-scoped field honestly
     degrades to `unavailable` (same "degrade honestly, never fabricate"

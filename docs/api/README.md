@@ -111,7 +111,7 @@ unchanged.
 
 City -> Area/Metric/Prediction discovery, backed by
 `dbt_project/seeds/{cities,model_registry}.csv` and
-`backend/registry/*.py`. Two real cities, NYC and London (ADR-011); every
+`backend/registry/*.py`. One real city, NYC (ADR-012); every
 capability returned is computed from what's actually wired (a real
 `model_registry` row, a real `canonical_areas` row), never hand-authored
 true/true/true. An unregistered `city_id` is a 404, not a degraded estimate.

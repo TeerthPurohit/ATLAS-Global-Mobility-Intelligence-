@@ -30,7 +30,6 @@ RAW_DIR = REPO_ROOT / "data" / "raw" / "gtfs"
 
 _CITY_WAREHOUSES = {
     "nyc": REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb",
-    "london": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
 }
 
 

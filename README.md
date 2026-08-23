@@ -1,6 +1,6 @@
-# NYC Ride Intelligence — TLC & London Mobility Platform
+# NYC Ride Intelligence — TLC Mobility Platform
 
-An engineer-focused mobility intelligence platform built from the NYC Taxi & Limousine Commission trip records and London's Santander Cycles corpus, enriched with weather, holiday, and tariff data. Every city served has real observed trip data behind it — see [ADR-011](docs/adr/ADR-011-retreat-from-global-coverage.md) for why the previous 519-city global layer was removed. The repo demonstrates a complete analytic lifecycle: raw ingestion → reproducible transforms (dbt) → classical algorithms → model training & evaluation → grounded RAG insight generation → serving via a typed FastAPI.
+An engineer-focused mobility intelligence platform built from the NYC Taxi & Limousine Commission trip records — 113M+ rows — enriched with weather, holiday, and tariff data. Scope is deliberately one city with real observed data: see [ADR-011](docs/adr/ADR-011-retreat-from-global-coverage.md) for why the 519-city global layer was removed and [ADR-012](docs/adr/ADR-012-nyc-only.md) for why London followed. The repo demonstrates a complete analytic lifecycle: raw ingestion → reproducible transforms (dbt) → classical algorithms → model training & evaluation → grounded RAG insight generation → serving via a typed FastAPI.
 
 Snapshot & scale
 
@@ -40,7 +40,7 @@ Mobility data and intelligence are often city-specific and hard to generalize. T
 
 04. Platform at a glance (quick metrics)
 
-- Core dataset: 113M+ trip rows (NYC) + London Santander Cycles
+- Core dataset: 113M+ NYC TLC trip rows
 - Zones: ~265
 - Major tech: DuckDB, dbt, XGBoost, PyTorch (LSTM), OpenAI embeddings, Qdrant, FastAPI
 
@@ -51,17 +51,13 @@ NYC TLC
 - Ingestion: `scripts/load_raw_to_duckdb.py` loads/parses Parquet into `data/warehouse/nyc_rides.duckdb`.
 - Final marts: produced by `dbt_project/` (notably `zone_hourly_demand`, `zone_pair_flows`, `zone_fare_stats`).
 
-London
-- Source: TfL Santander Cycle Hire journey records. Ingested by `scripts/ingest_tfl_cycle_hire.py` into `data/warehouse/london_cycles.duckdb`.
-- Final mart: `london_station_hourly_demand`.
-
 06. Data sources
 
 - Detailed provenance and download instructions are in `docs/data/` and in script headers under `scripts/`. Every seed file and lookup has source and generation metadata.
 
 07. Geographic coverage
 
-Two cities, both with real observed trip data: **NYC** (265 TLC zones, high-volume for-hire records) and **London** (Santander Cycles docking stations, see `dbt_project/models/marts/london_station_hourly_demand.sql`). A city is added only when it brings its own corpus — there is no prior-based coverage.
+One city with real observed trip data: **NYC** — 265 TLC zones, high-volume for-hire records. A city is added only when it brings its own corpus; there is no prior-based coverage.
 
 08. City capability model
 

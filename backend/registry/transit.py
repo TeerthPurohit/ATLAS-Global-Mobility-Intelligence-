@@ -29,7 +29,6 @@ def load() -> None:
 
 _CITY_WAREHOUSES = {
     "nyc": WAREHOUSE_PATH,
-    "london": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
 }
 
 

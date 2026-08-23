@@ -1,14 +1,13 @@
-"""City registry (SPEC-013 FR-4) -- thin query module over the seeded
-`cities` dbt table, loaded once at startup (rule 8: one real row today).
+"""City registry -- thin query module over the seeded `cities` dbt table,
+loaded once at startup (rule 8). One real row today, `nyc` (ADR-012).
 
 `capabilities` and `metrics` are deliberately NOT seed columns (they'd drift
 from reality) -- computed here from what's actually wired: `backend.registry
 .models` (real model_registry rows) for demand/fare/journey,
 `backend.services.geography_service` (real canonical_areas rows) for
 area_analysis. `model_status` is likewise recomputed from live model_registry
-rows rather than trusted verbatim from the seed, so a future city (e.g.
-London, SPEC-015) flips to "active" automatically once its models actually
-land -- zero code change here.
+rows rather than trusted verbatim from the seed, so a future city flips to
+"active" automatically once its models actually land -- zero code change here.
 """
 from __future__ import annotations
 
@@ -30,23 +29,20 @@ logger = logging.getLogger(__name__)
 # Chat tier is a pure function of two real infrastructure facts, not a
 # curated allowlist: does this city have a registered, queryable warehouse
 # (needed for any SQL-grounded answer at all), and does it have a generated
-# insight-doc corpus for vector RAG. London's station-level corpus was
-# generated 2026-08-14 (rag/insight_generation/generate_london_insight_docs.py,
-# embedded into the "insight_docs_london" Qdrant collection -- see
-# backend/services/rag_service.py's _CITY_INSIGHT_COLLECTION). Adding a
-# further city's real chat capability means registering its warehouse path
-# (infrastructure it needs anyway for predictions/journey) and, optionally,
-# generating its insight docs -- never a chat-specific code change here.
+# insight-doc corpus for vector RAG. A future city gets real chat by
+# registering its warehouse path (infrastructure it needs anyway for
+# predictions/journey) and, optionally, generating its insight docs --
+# never a chat-specific code change here.
 _CITY_WAREHOUSE_PATHS = {
     "nyc": REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb",
-    "london": REPO_ROOT / "data" / "warehouse" / "london_cycles.duckdb",
 }
-_CITY_HAS_INSIGHT_DOCS = {"nyc", "london"}
+_CITY_HAS_INSIGHT_DOCS = {"nyc"}
 
 
 def get_chat_tier(city_id: str) -> str:
-    if city_id not in _CITY_WAREHOUSE_PATHS:
-        return "context_only"
+    """`full_rag` when the city has both a warehouse and an insight corpus,
+    `sql_only` with a warehouse alone. An unregistered city never reaches
+    here -- the routers 404 it first (ADR-011)."""
     return "full_rag" if city_id in _CITY_HAS_INSIGHT_DOCS else "sql_only"
 
 _CITY_COLUMNS = (
@@ -131,7 +127,6 @@ def get_capabilities(city_id: str) -> dict | None:
     if matrix is None:
         return None
     city = _cities.get(city_id, {})
-    registered = city_id in _cities
     has_demand = models_registry.resolve_model(city_id, "demand") is not None
     has_fare = matrix["fare"]
     capabilities = {
@@ -141,27 +136,13 @@ def get_capabilities(city_id: str) -> dict | None:
         "fare": has_fare,
         # journey_predictors.py orchestrates routing/demand/fare/carbon/
         # congestion/availability/surge/best_departure with per-component
-        # honest degradation (never a hard failure) -- POST /journey/estimate
-        # already returns 200 for any resolvable city (verified live for
-        # nyc/Marseille/Tokyo/Liverpool, /debug 2026-08-13). The
-        # model_registry lookup this used to gate on only ever had one row,
-        # for nyc, which made this flag False for every other city even
-        # though the endpoint it describes works the same way everywhere.
+        # honest degradation, never a hard failure -- so the endpoint works
+        # for any registered city regardless of which models it has.
         "journey": True,
-        # Every resolvable city gets SOME chat tier (context_only is a real,
-        # working answer path -- _answer_context_only() narrates over real
-        # geography/weather/demand-shape context, grounded and non-fabricating,
-        # see rag_service.py's _CONTEXT_ONLY_SYSTEM_PROMPT). This used to read
-        # `!= "context_only"`, which reported every non-nyc/london city as
-        # chat-incapable even though it could genuinely answer questions --
-        # confusing "not the best tier" with "no chat at all" (found via
-        # /debug 2026-08-13).
+        # Every registered city has a warehouse, so every one can answer a
+        # SQL-grounded question -- the tier says how well, not whether.
         "chat": True,
         "chat_tier": get_chat_tier(city_id),
-        # canonical_areas now has real WorldMove grid_cell rows for every
-        # covered city (SPEC-016), not just nyc/london zones/stations -- the
-        # `registered and` gate here predates that and made area_analysis
-        # always False for a real, non-empty area count.
         "area_analysis": _area_count(city_id) > 0,
         "forecast": has_demand or has_fare,
         "transit_coverage": transit_registry.has_feed(city_id),

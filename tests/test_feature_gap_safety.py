@@ -2,10 +2,9 @@
 never treat a data-gap boundary (e.g. last row 2024-03-31, next row
 2024-04-30) as consecutive hours.
 
-`_block_features()` in both `models/data_prep/build_features.py` (NYC) and
-`models/london_demand/build_features.py` (London) is only ever called on one
-already-gap-split block at a time (see `load_zone_hourly_blocks()` /
-`load_station_hourly_blocks()`), so `.shift(n)` inside it can structurally
+`_block_features()` in `models/data_prep/build_features.py` is only ever
+called on one already-gap-split block at a time (see
+`load_zone_hourly_blocks()`), so `.shift(n)` inside it can structurally
 never reach into a different block -- there is no shared index to shift
 across. This test proves that in practice with two blocks carrying
 deliberately distinguishable values, so a regression that concatenated
@@ -20,7 +19,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from models.data_prep.build_features import _block_features as nyc_block_features  # noqa: E402
-from models.london_demand.build_features import _block_features as london_block_features  # noqa: E402
 
 
 def _make_gapped_blocks():
@@ -56,11 +54,3 @@ def test_nyc_build_features_gap_safe():
     _assert_no_cross_block_leakage(nyc_block_features)
 
 
-def test_london_build_features_gap_safe():
-    _assert_no_cross_block_leakage(london_block_features)
-
-
-if __name__ == "__main__":
-    test_nyc_build_features_gap_safe()
-    test_london_build_features_gap_safe()
-    print("test_feature_gap_safety OK")

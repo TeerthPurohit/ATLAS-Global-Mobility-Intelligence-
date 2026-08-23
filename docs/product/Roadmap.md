@@ -6,30 +6,28 @@ layers complete; this is the single "how far along are we" view alongside
 checklist *progress*).
 
 - [x] **Layer 0 — Data Foundation.** HVFHV trip rows loaded into DuckDB
-      (`scripts/load_raw_to_duckdb.py`), plus London's Santander Cycles
-      corpus in its own `london_cycles.duckdb`.
+      (`scripts/load_raw_to_duckdb.py`) -- 113M+ rows.
 - [x] **Layer 1 — dbt Transformation.** Staging/intermediate/marts built and
-      tested for both cities: `zone_hourly_demand`, `zone_fare_stats`,
-      `zone_pair_flows`, `london_station_hourly_demand`, `canonical_areas`.
+      tested: `zone_hourly_demand`, `zone_fare_stats`, `zone_pair_flows`,
+      `canonical_areas`.
 - [x] **Layer 2 — Algorithms.** Spatial (KD-tree, geohash), graph (PageRank,
       Dijkstra), time-series (EWMA, seasonal decomposition) — implemented
       from scratch and validated against reference libraries.
 - [x] **Layer 3 — Model Ladder.** Demand ladder (linear, EWMA baseline,
       XGBoost, LSTM) and fare model (XGBoost) all trained, evaluated on
       chronological splits, and compared — see
-      `models/evaluation/metrics_report.md`. London has its own XGBoost
-      demand model.
+      `models/evaluation/metrics_report.md`.
 - [x] **Layer 4 — Hybrid RAG.** Insight generation, embeddings, NL-to-SQL
       with a QueryPlan compiler, router, reranking, and a semantic cache.
-      NYC is `full_rag`; London has its own schema and insight corpus.
+      NYC is `full_rag` -- real SQL plus vector-retrieval synthesis.
 - [x] **Layer 5 — Serving & Presentation.** FastAPI backend (city, journey,
       prediction, mobility, context, analytics routers) and the Next.js
       `frontend-web` app with an NYC zone-map hero.
 
 **Scope note (2026-08-23):** the 519-city global layer that briefly sat on
-top of Layer 5 was removed — see
-[ADR-011](../adr/ADR-011-retreat-from-global-coverage.md). Coverage is now
-NYC + London, and a new city is added only with its own real trip corpus.
+top of Layer 5 was removed ([ADR-011](../adr/ADR-011-retreat-from-global-coverage.md)),
+and London followed ([ADR-012](../adr/ADR-012-nyc-only.md)). Coverage is NYC
+only; a city is added only with its own real trip corpus.
 
 ## Sequencing constraint
 

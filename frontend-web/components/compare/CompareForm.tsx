@@ -114,7 +114,7 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
           label="Dropoff location"
           color="verdigris"
           defaultValue={NYC_DROPOFF.name}
-          placeholder="e.g. Heathrow Airport, London Bridge…"
+          placeholder="e.g. JFK Airport, Brooklyn Bridge…"
           onSelect={(place) => {
             setDropoff(place);
             setValue("dropoff_lat", place.lat);
@@ -147,7 +147,7 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
           {resolvedCityId ? (
             <span className="font-mono text-brass">{resolvedCityId}</span>
           ) : (
-            <span className="text-oxide">outside NYC and London coverage</span>
+            <span className="text-oxide">outside NYC coverage</span>
           )}
         </div>
 

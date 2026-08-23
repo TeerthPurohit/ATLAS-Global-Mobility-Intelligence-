@@ -25,7 +25,7 @@ from backend.services import journey_service  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-_ZONE_ENRICHED_CITIES = ("nyc", "london")
+_ZONE_ENRICHED_CITIES = ("nyc",)
 # Vehicle class used for this endpoint's fare -- "mini" has every
 # base_fare_factor/rate multiplier at 1.0 (dbt_project/seeds/vehicle_profiles.csv),
 # i.e. no adjustment on top of the base fare, matching this endpoint's

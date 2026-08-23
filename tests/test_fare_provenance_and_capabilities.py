@@ -115,18 +115,20 @@ def test_the_tariff_tests_above_are_actually_exercising_something():
     to zero cases -- green, and testing nothing. This fails loudly instead.
 
     The bar used to be ">=2 non-USD currencies", back when 517 LLM-generated
-    profiles spanned many currencies. Post-ADR-011 only nyc and london are
-    served, so GBP is the single non-USD currency available -- the assertion
-    is >=1, and it is the honest ceiling, not a weakened one.
+    profiles spanned many currencies. Post-ADR-012 only nyc is served and it
+    prices in USD from a trained model, so there may be no non-USD currency
+    at all -- the non-USD assertion is skipped rather than failed when the
+    store holds only USD profiles.
     """
     assert _REAL_PROFILES, (
         "no tariff profiles resolved -- the Postgres store is unreachable or empty, "
         "so every tariff test in this file is vacuous. Set DATABASE_URL and re-run."
     )
-    assert _NON_USD, (
-        f"no non-USD tariff currency exercised, got {sorted(p.currency for p in _REAL_PROFILES.values())} "
-        "-- the 'prices in its own currency, never hardcoded USD' path is untested"
-    )
+    if not _NON_USD:
+        pytest.skip(
+            "only USD tariff profiles registered -- the non-USD currency path has "
+            "nothing to exercise until a second city lands (ADR-012)"
+        )
 
 
 def test_city_without_a_tariff_profile_is_unavailable_not_fabricated():

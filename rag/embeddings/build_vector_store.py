@@ -75,9 +75,8 @@ def _get_client(url: str = QDRANT_URL):
 
 
 def _point_id(doc: dict) -> int:
-    """NYC docs key on zone_id (int); London docs key on station_id (a
-    zero-padded numeric string, e.g. "010631" -> 10631) -- verified unique
-    across all 799 London stations before relying on this cast."""
+    """NYC docs key on zone_id (int). station_id is accepted as a fallback
+    so a future station-based city needs no change here."""
     raw = doc.get("zone_id", doc.get("station_id"))
     if raw is None:
         raise ValueError(f"doc has neither zone_id nor station_id: {doc.keys()}")

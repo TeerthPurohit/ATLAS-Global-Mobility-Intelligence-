@@ -72,7 +72,7 @@ class JourneyRequest(BaseModel):
     departure_time: datetime
     vehicle_type: str
     # Explicit city (registered id, GeoNames id, or free-text place name).
-    # Omit only for NYC/London -- auto-detected from pickup coordinates for
+    # Omit for NYC -- auto-detected from pickup coordinates for
     # backward compatibility; every other city must be named explicitly
     # (see journey_service._resolve_city_id).
     city_id: str | None = None
@@ -113,7 +113,7 @@ class CityJourneyRequest(BaseModel):
 class CityJourneyEstimate(BaseModel):
     """Deliberately a 4-field subset of JourneyEstimate: distance/duration
     (real, via OSRM, for any city on Earth) plus demand/fare (computed for
-    NYC/London where a real model exists, modeled_estimate everywhere else).
+    where a real model exists, modeled_estimate otherwise).
     Reusing the full 11-field JourneyEstimate here would force most fields to
     `unavailable` for every non-NYC city -- noisy, not what "any resolvable
     city gets a real answer" means."""

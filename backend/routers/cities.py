@@ -199,7 +199,7 @@ def predict_fare(city_id: str, req: CityFarePredictRequest) -> PredictionEnvelop
     response_model=CityJourneyEstimate,
     summary="City-scoped journey estimate (any resolvable city)",
     description="Real OSRM route distance/duration for any city on Earth GeoNames can resolve, "
-    "plus demand/fare -- computed for nyc/london where a real model exists, an honestly labeled "
+    "plus demand/fare -- computed where a real model exists, an honestly labeled "
     "modeled_estimate everywhere else. Not the full NYC-only /journey/estimate pipeline.",
     responses={404: {"model": ErrorResponse, "description": "City not resolvable"}},
 )
