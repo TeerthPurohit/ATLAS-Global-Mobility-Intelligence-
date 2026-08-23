@@ -26,20 +26,13 @@ seeds:
 
   - name: countries
     description: >
-      Full sovereign-state registry (250 rows, GeoNames countryInfoJSON --
-      same source backend/services/global_geography_service.py already uses
-      for per-country currency, scripts/dump_countries_seed.py) for the
-      Global Mobility Domain Model (SPEC-013). Deliberately every real
-      country, not just the ones with an onboarded city -- until SPEC-016
-      (WorldMove global_cities, 519 rows across 45 countries) this table
-      only had the 2 rows for nyc/london's own countries (US/GB), which made
-      every other real, resolvable country report `supported: false`
-      regardless of global_cities coverage (found 2026-08-16). `supported`
-      is never stored here -- it's derived at query time in
-      backend/registry/countries.py from a UNION of `cities` (the 2-row
-      registered-city table) and `global_cities` (a country is "supported"
-      iff it has >=1 row in either), avoiding a denormalized flag that can
-      drift from either city list.
+      Static ISO sovereign-state reference (250 rows, GeoNames
+      countryInfoJSON via scripts/dump_countries_seed.py). Kept as the FK
+      target for `cities.country_code` -- a real referential-integrity test
+      that a 2-row table would satisfy just as well but describe worse. No
+      API reads this directly any more: the country discovery routes and
+      backend/registry/countries.py were removed with the global layer
+      (ADR-011), so there is no `supported` flag derived from it.
     columns:
       - name: iso_code
         tests: [not_null, unique]
@@ -48,10 +41,11 @@ seeds:
 
   - name: cities
     description: >
-      City registry for the Global Mobility Domain Model (SPEC-013). One
-      real row this phase (`nyc`) -- a second city (e.g. London, SPEC-015)
-      joins by adding a row here plus matching `model_registry` rows, with
-      zero code changes to backend/registry/*.py. `capabilities`/`metrics`
+      City registry: one row per city this platform actually serves. Two
+      today, `nyc` and `london`, both backed by real trip data (ADR-011) --
+      a third joins by adding a row here plus matching `model_registry`
+      rows, with zero code changes to backend/registry/*.py.
+      `capabilities`/`metrics`
       are deliberately NOT columns here (they'd drift from reality) --
       backend/registry/cities.py computes them from `model_registry` and the
       datasource registry instead. `model_status` here is a seed-time

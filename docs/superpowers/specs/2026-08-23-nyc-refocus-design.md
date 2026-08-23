@@ -152,9 +152,15 @@ while a model still depends on it. Everything below is gitignored
 `worldmove_cell_halfhour` (6.1M), `worldmove_area_hourly_momentum` (3.2M),
 `worldmove_city_grid` (154k), `worldmove_city_hourly_shape` (88k),
 `int_worldmove_city_hourly` (12.5k), `worldmove_city` (522),
-`worldmove_city_population` (522), `global_cities` (523), `countries` (250),
+`worldmove_city_population` (522), `global_cities` (523),
 `city_tariff_profiles` (1,192 — stale DuckDB mirror; Postgres is the
 source of truth per `tariff_profiles.py`).
+
+**Correction found during execution:** `countries` (250 rows) must NOT be
+dropped. It is a static ISO reference seed and the FK target for
+`cities.country_code`'s relationships test — `dbt build` correctly
+re-seeds it. Only `backend/registry/countries.py` and the country routes
+go.
 
 **Postgres:** delete all `city_tariff_profiles` rows except `nyc` and
 `london` (517 → 2).

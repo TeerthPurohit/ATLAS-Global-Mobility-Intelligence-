@@ -5,20 +5,31 @@ layers complete; this is the single "how far along are we" view alongside
 `.claude/memory.md` (memory.md is the detailed *state*, this is the
 checklist *progress*).
 
-- [x] **Layer 0 — Data Foundation.** 8-10M HVFHV rows loaded into DuckDB.
-- [ ] **Layer 1 — dbt Transformation.** Staging/intermediate/marts written,
-      `dbt test` not yet confirmed clean (in progress as of 2026-08-05).
-- [ ] **Layer 2 — Algorithms.** Spatial (KD-tree, geohash), graph (PageRank,
-      Dijkstra), time-series (EWMA, decomposition) — all stubbed, none
-      implemented.
+- [x] **Layer 0 — Data Foundation.** HVFHV trip rows loaded into DuckDB
+      (`scripts/load_raw_to_duckdb.py`), plus London's Santander Cycles
+      corpus in its own `london_cycles.duckdb`.
+- [x] **Layer 1 — dbt Transformation.** Staging/intermediate/marts built and
+      tested for both cities: `zone_hourly_demand`, `zone_fare_stats`,
+      `zone_pair_flows`, `london_station_hourly_demand`, `canonical_areas`.
+- [x] **Layer 2 — Algorithms.** Spatial (KD-tree, geohash), graph (PageRank,
+      Dijkstra), time-series (EWMA, seasonal decomposition) — implemented
+      from scratch and validated against reference libraries.
 - [x] **Layer 3 — Model Ladder.** Demand ladder (linear, EWMA baseline,
       XGBoost, LSTM) and fare model (XGBoost) all trained, evaluated on
       chronological splits, and compared — see
-      `models/evaluation/metrics_report.md`.
-- [ ] **Layer 4 — Hybrid RAG.** Insight generation, embeddings, NL-to-SQL,
-      router — all stubbed.
-- [ ] **Layer 5 — Serving & Presentation.** FastAPI backend, React frontend,
-      deployment — file scaffolding exists, no implementation.
+      `models/evaluation/metrics_report.md`. London has its own XGBoost
+      demand model.
+- [x] **Layer 4 — Hybrid RAG.** Insight generation, embeddings, NL-to-SQL
+      with a QueryPlan compiler, router, reranking, and a semantic cache.
+      NYC is `full_rag`; London has its own schema and insight corpus.
+- [x] **Layer 5 — Serving & Presentation.** FastAPI backend (city, journey,
+      prediction, mobility, context, analytics routers) and the Next.js
+      `frontend-web` app with an NYC zone-map hero.
+
+**Scope note (2026-08-23):** the 519-city global layer that briefly sat on
+top of Layer 5 was removed — see
+[ADR-011](../adr/ADR-011-retreat-from-global-coverage.md). Coverage is now
+NYC + London, and a new city is added only with its own real trip corpus.
 
 ## Sequencing constraint
 
@@ -29,6 +40,7 @@ it can run ahead of its dependency.
 
 ## Timeline
 
-Guide, not contract, per `project_plan.md`'s closing notes: roughly 2 weeks
-per layer at ~12hrs/week, 9 weeks total. Let the spec acceptance criteria,
-not the calendar, decide when a layer is done.
+The original guide was roughly 2 weeks per layer at ~12hrs/week, 9 weeks
+total. All six layers are now done; `project_plan.md` is historical record
+rather than a live schedule. Let the spec acceptance criteria, not the
+calendar, decide when work is done.

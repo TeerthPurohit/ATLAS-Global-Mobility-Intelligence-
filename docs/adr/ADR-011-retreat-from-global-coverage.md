@@ -51,8 +51,10 @@ Serve only cities with real observed trip data. Today that is NYC and
 London.
 
 **Removed:** the `global_cities` registry (523 rows), the `countries`
-registry, `global_geography_service`, the GeoNames and Google Places
-adapters, `tariff_enrichment` (on-demand LLM tariff generation),
+*registry module* (`backend/registry/countries.py` — the `countries` dbt
+seed stays as a static ISO reference and FK target for
+`cities.country_code`), `global_geography_service`, the GeoNames and Google
+Places adapters, `tariff_enrichment` (on-demand LLM tariff generation),
 `estimation_service` (population-scaled demand and PPP-scaled fares), the
 five WorldMove dbt models, `models/global_transfer/`,
 `models/cross_city_estimation/`, the `/api/countries/*` and
