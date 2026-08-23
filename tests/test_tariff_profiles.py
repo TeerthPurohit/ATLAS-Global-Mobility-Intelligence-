@@ -69,19 +69,19 @@ def test_missing_profile_is_unavailable_not_fabricated(monkeypatch):
     assert "no tariff profile" in result.reason
 
 
-def test_fx_unavailable_does_not_break_local_currency_fare(monkeypatch):
-    """FX is never on the fare path -- forcing it to fail must not change
-    the result at all."""
+def test_fare_stays_in_the_profiles_own_currency_never_converted(monkeypatch):
+    """A tariff fare is denominated in the city's own currency and is never
+    FX-converted to USD.
+
+    This used to prove the point by breaking `backend/adapters/fx_rates.py`
+    and checking nothing changed. That module was deleted with the global
+    layer (ADR-011) -- it had no callers -- so the invariant is now
+    structural: there is no FX code left to accidentally wire in. What still
+    needs asserting is the visible half: the unit follows the profile."""
     monkeypatch.setattr(tariff_profiles, "get", lambda city_id: _FAKE_PROFILE)
-    from backend.adapters import fx_rates
-
-    def _broken(*a, **kw):
-        raise RuntimeError("fx unreachable")
-
-    monkeypatch.setattr(fx_rates, "get_rate", _broken)
     result = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(5.0))
     assert result.value is not None
-    assert result.unit == "INR"
+    assert result.unit == "INR" == _FAKE_PROFILE.currency
 
 
 def demo() -> None:

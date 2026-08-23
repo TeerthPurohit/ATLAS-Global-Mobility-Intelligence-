@@ -108,8 +108,25 @@ def test_city_with_a_real_tariff_profile_prices_in_its_own_currency(city_id):
     assert result.value >= profile.min_fare
 
 
-def test_at_least_two_distinct_non_usd_currencies_are_exercised():
-    assert len(_NON_USD) >= 2, f"expected >=2 non-USD tariff currencies, got {sorted(_NON_USD)}"
+def test_the_tariff_tests_above_are_actually_exercising_something():
+    """Canary. `tariff_profiles.load()` swallows a connection failure and
+    leaves the store empty (ADR-009: unreachable outside the VPC is expected,
+    not exceptional), which would silently reduce the parametrized tests above
+    to zero cases -- green, and testing nothing. This fails loudly instead.
+
+    The bar used to be ">=2 non-USD currencies", back when 517 LLM-generated
+    profiles spanned many currencies. Post-ADR-011 only nyc and london are
+    served, so GBP is the single non-USD currency available -- the assertion
+    is >=1, and it is the honest ceiling, not a weakened one.
+    """
+    assert _REAL_PROFILES, (
+        "no tariff profiles resolved -- the Postgres store is unreachable or empty, "
+        "so every tariff test in this file is vacuous. Set DATABASE_URL and re-run."
+    )
+    assert _NON_USD, (
+        f"no non-USD tariff currency exercised, got {sorted(p.currency for p in _REAL_PROFILES.values())} "
+        "-- the 'prices in its own currency, never hardcoded USD' path is untested"
+    )
 
 
 def test_city_without_a_tariff_profile_is_unavailable_not_fabricated():
