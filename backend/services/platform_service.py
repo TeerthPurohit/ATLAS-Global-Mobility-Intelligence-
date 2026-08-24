@@ -271,24 +271,21 @@ def check_health() -> dict:
 
 
 def get_capability_summary() -> dict:
-    """Real coverage report over every registered city, counted by actually
-    evaluating each city's capability matrix -- no hardcoded totals."""
+    """Real coverage report, counted by actually evaluating the capability
+    matrix -- no hardcoded totals. One city (ADR-013), so every count here is
+    0 or 1; the shape is kept so the report still reads the same way if a
+    second city ever lands."""
     from backend.registry import cities as cities_registry  # noqa: PLC0415
 
-    city_ids = {c["id"] for c in cities_registry.list_cities()}
-
-    supported = dict.fromkeys(cities_registry.JOURNEY_CAPABILITIES, 0)
-    for city_id in city_ids:
-        matrix = cities_registry.capability_matrix(city_id) or {}
-        for name, ok in matrix.items():
-            if ok:
-                supported[name] += 1
-
-    total = len(city_ids)
+    matrix = cities_registry.capability_matrix() or {}
+    total = 1 if cities_registry.get_city() else 0
     return {
         "total_cities": total,
         "capabilities": {
-            name: {"supported": count, "unsupported": total - count}
-            for name, count in supported.items()
+            name: {
+                "supported": 1 if matrix.get(name) else 0,
+                "unsupported": total - (1 if matrix.get(name) else 0),
+            }
+            for name in cities_registry.JOURNEY_CAPABILITIES
         },
     }

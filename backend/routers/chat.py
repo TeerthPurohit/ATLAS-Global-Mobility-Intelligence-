@@ -6,6 +6,7 @@ import json
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from loguru import logger
 
+from backend.registry import CITY_ID
 from backend.schemas import ChatMessage, ChatRequest, ChatResponse
 from backend.services import rag_service
 
@@ -24,22 +25,16 @@ def _normalize_route(route: str | None) -> str:
 @router.post(
     "",
     response_model=ChatResponse,
-    summary="Ask the hybrid RAG chat (canonical, city_id optional in body)",
+    summary="Ask the hybrid RAG chat",
     description="Numeric questions compile to real SQL via a QueryPlan (no LLM-authored SQL "
-    "text, SPEC-013 FR-10); explanatory questions retrieve grounded insight docs. "
-    "`city_id` defaults to nyc if omitted. `/api/cities/{city_id}/chat` calls this identical "
-    "rag_service path with city_id required in the URL and a 404 if that city doesn't "
-    "resolve -- not a separate implementation.",
+    "text, SPEC-013 FR-10); explanatory questions retrieve grounded insight docs.",
 )
 def post_chat(req: ChatRequest) -> ChatResponse:
-    # city_id now actually routes (SPEC-013 FR-11) -- old clients that never
-    # send it default to "nyc"/full_rag, identical behavior to before.
-    routed_city_id = req.city_id or "nyc"
-    logger.info("POST /chat step=start city_id={} session_id={} question={!r}", routed_city_id, req.session_id, req.question)
+    logger.info("POST /chat step=start session_id={} question={!r}", req.session_id, req.question)
     try:
-        res = rag_service.answer_question(question=req.question, session_id=req.session_id, city_id=routed_city_id)
+        res = rag_service.answer_question(question=req.question, session_id=req.session_id)
     except Exception:
-        logger.exception("POST /chat step=rag_service.answer_question failed city_id={}", routed_city_id)
+        logger.exception("POST /chat step=rag_service.answer_question failed")
         raise
     logger.info("POST /chat step=done route={} session_id={}", res.get("route"), res.get("session_id"))
     return ChatResponse(
@@ -47,7 +42,7 @@ def post_chat(req: ChatRequest) -> ChatResponse:
         route=_normalize_route(res["route"]),
         sql=res.get("sql"),
         session_id=res["session_id"],
-        city_id=routed_city_id,
+        city_id=CITY_ID,
         area_id=req.area_id,
     )
 
@@ -87,15 +82,12 @@ async def websocket_chat_stream(websocket: WebSocket):
             return
 
         session_id = data.get("session_id")
-        # city_id/area_id route the stream exactly like POST /chat (FR-11);
-        # city_id defaults to "nyc" for callers that predate it.
-        city_id = data.get("city_id") or "nyc"
         area_id = data.get("area_id")
-        logger.info("WS /chat/stream step=streaming city_id={} session_id={}", city_id, session_id)
-        for chunk_item in rag_service.stream_answer(question=question, session_id=session_id, city_id=city_id):
+        logger.info("WS /chat/stream step=streaming session_id={}", session_id)
+        for chunk_item in rag_service.stream_answer(question=question, session_id=session_id):
             if chunk_item.get("type") == "done":
                 payload = dict(chunk_item.get("payload") or {})
-                payload["city_id"] = city_id
+                payload["city_id"] = CITY_ID
                 payload["area_id"] = area_id
                 payload["route"] = _normalize_route(payload.get("route"))
                 chunk_item = {**chunk_item, "payload": payload}

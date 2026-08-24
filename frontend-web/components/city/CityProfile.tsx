@@ -3,9 +3,9 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   getCityProfile,
-  getCityCapabilities,
-  getCityTariff,
-  getCityZones,
+  getCapabilities,
+  getTariff,
+  getZones,
   type CityTariffResponse,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
@@ -17,32 +17,28 @@ import { ModelStatus } from "./ModelStatus";
 import { QuickActions } from "./QuickActions";
 import { Search } from "lucide-react";
 
-export function CityProfile({ cityId }: { cityId: string }) {
+export function CityProfile() {
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
-    queryKey: queryKeys.cityProfile(cityId),
-    queryFn: () => getCityProfile(cityId),
-    enabled: !!cityId,
+    queryKey: queryKeys.cityProfile(),
+    queryFn: () => getCityProfile(),
     placeholderData: keepPreviousData,
   });
 
   const { data: capabilities } = useQuery({
-    queryKey: queryKeys.cityCapabilities(cityId),
-    queryFn: () => getCityCapabilities(cityId),
-    enabled: !!cityId,
+    queryKey: queryKeys.cityCapabilities(),
+    queryFn: () => getCapabilities(),
     placeholderData: keepPreviousData,
   });
 
   const { data: tariff } = useQuery({
-    queryKey: queryKeys.cityTariff(cityId),
-    queryFn: () => getCityTariff(cityId),
-    enabled: !!cityId,
+    queryKey: queryKeys.cityTariff(),
+    queryFn: () => getTariff(),
     placeholderData: keepPreviousData,
   });
 
   const { data: zones } = useQuery({
-    queryKey: queryKeys.cityZones(cityId),
-    queryFn: () => getCityZones(cityId),
-    enabled: cityId === "nyc",
+    queryKey: queryKeys.zones(),
+    queryFn: () => getZones(),
   });
 
   if (profileLoading) {
@@ -61,7 +57,7 @@ export function CityProfile({ cityId }: { cityId: string }) {
     return (
       <Card className="border-dashed border-oxide/40 bg-oxide/5 p-8 text-center text-oxide">
         <p className="font-display text-base font-semibold">City Profile Not Found</p>
-        <p className="mt-1 text-xs text-ink-muted">Unable to load profile data for city ID: {cityId}</p>
+        <p className="mt-1 text-xs text-ink-muted">Unable to load the city profile.</p>
       </Card>
     );
   }
@@ -89,7 +85,7 @@ export function CityProfile({ cityId }: { cityId: string }) {
 
   const defaultTariff: CityTariffResponse = {
     available: false,
-    city_id: cityId,
+    city_id: profile?.id ?? "",
     reason: "Tariff profile not loaded",
     currency: null,
     base_fare: null,
@@ -125,8 +121,8 @@ export function CityProfile({ cityId }: { cityId: string }) {
           <CapabilityMatrix capabilities={capabilities || defaultCaps} />
           <TariffCard tariff={tariff || defaultTariff} />
 
-          {/* Zones list (NYC Specialization) */}
-          {zones?.available && zones.zones && (
+          {/* Zones list */}
+          {zones && zones.length > 0 && (
             <Card className="p-6">
               <div className="flex items-center justify-between border-b border-surface-border pb-3">
                 <div className="flex items-center gap-2">
@@ -136,12 +132,12 @@ export function CityProfile({ cityId }: { cityId: string }) {
                   </CardTitle>
                 </div>
                 <span className="font-mono text-xs font-semibold text-brass">
-                  {zones.zones.length} ZONES
+                  {zones.length} ZONES
                 </span>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 max-h-60 overflow-y-auto pr-1">
-                {zones.zones.map((zone) => (
+                {zones.map((zone) => (
                   <span
                     key={zone.zone_id}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-1 text-xs font-mono text-ink-secondary border border-surface-border"
@@ -156,7 +152,7 @@ export function CityProfile({ cityId }: { cityId: string }) {
         </div>
 
         <div className="flex flex-col gap-6">
-          <QuickActions cityId={cityId} hasCapabilities={hasCapabilities} />
+          <QuickActions hasCapabilities={hasCapabilities} />
           <ModelStatus profile={profile} />
         </div>
       </div>

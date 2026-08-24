@@ -24,14 +24,14 @@ def ds() -> NYCTLCDataSource:
 
 
 def test_get_datasource_registry():
-    assert isinstance(get_datasource("nyc"), NYCTLCDataSource)
-    assert get_datasource("atlantis") is None
+    assert isinstance(get_datasource(), NYCTLCDataSource)
 
 
 def test_get_areas_real_rows(ds):
     areas = ds.get_areas()
     assert len(areas) == 265
-    assert {"area_id", "city_id", "name", "area_type", "latitude", "longitude"} <= areas[0].keys()
+    assert {"area_id", "name", "area_type", "latitude", "longitude"} <= areas[0].keys()
+    assert "city_id" not in areas[0]  # dropped in ADR-013
 
 
 def test_get_demand_real_rows(ds):

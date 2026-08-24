@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { CityProfile } from "@/components/city/CityProfile";
@@ -11,18 +10,15 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useAppContext } from "@/context/AppContext";
 
 export default function CityPage() {
-  const params = useParams();
-  const cityId = params.city_id as string;
   const { setSelectedCity } = useAppContext();
 
   const { data: profile } = useQuery({
-    queryKey: queryKeys.cityProfile(cityId),
-    queryFn: () => getCityProfile(cityId),
+    queryKey: queryKeys.cityProfile(),
+    queryFn: () => getCityProfile(),
   });
 
-  // The Ask page (a nav tab with no city_id in its own URL) reads
-  // selectedCity to scope chat questions to the right city_id -- without
-  // this, chat silently defaults every question to NYC's schema.
+  // The Ask page reads selectedCity to label which city it is answering
+  // about. Chat itself is no longer city-scoped (ADR-013).
   useEffect(() => {
     if (profile) setSelectedCity({ ...profile, model_status: profile.model_status as City["model_status"] });
   }, [profile, setSelectedCity]);
@@ -44,12 +40,12 @@ export default function CityPage() {
           </Link>
           <span>/</span>
           <span className="font-semibold text-brass truncate max-w-[160px]">
-            {profile ? profile.name : cityId}
+            {profile ? profile.name : "Loading..."}
           </span>
         </nav>
       </div>
 
-      <CityProfile cityId={cityId} />
+      <CityProfile />
     </div>
   );
 }

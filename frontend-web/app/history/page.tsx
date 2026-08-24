@@ -79,7 +79,6 @@ export default function HistoryPage() {
 
   const request: JourneyRequest | null = openEntry
     ? {
-        city_id: openEntry.city_id || "nyc",
         pickup_lat: openEntry.pickup_lat,
         pickup_lon: openEntry.pickup_lon,
         dropoff_lat: openEntry.dropoff_lat,

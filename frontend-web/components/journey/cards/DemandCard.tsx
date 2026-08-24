@@ -63,11 +63,10 @@ export function DemandCard({ request }: DemandCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.demand(request),
     queryFn: () => getDemand(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="demand" cityId={request.city_id} fallback={<DemandCardSkeleton />}>
+    <CapabilityGate capability="demand" fallback={<DemandCardSkeleton />}>
       {isLoading ? <DemandCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

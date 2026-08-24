@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardTitle } from "@/components/ui/Card";
-import { VEHICLE_CLASSES, resolveCityId, type VehicleClass } from "@/lib/api";
+import { VEHICLE_CLASSES, isInCoverage, type VehicleClass } from "@/lib/api";
 import { AddressSearch } from "@/components/journey/AddressSearch";
 
 const schema = z.object({
@@ -25,7 +25,6 @@ const NYC_DROPOFF = { lat: 40.7061, lon: -74.0088, name: "Financial District, Ne
 
 export interface CompareRequest extends FormValues {
   vehicles: VehicleClass[];
-  city_id?: string;
 }
 
 interface CompareFormProps {
@@ -39,7 +38,7 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
   const [coordError, setCoordError] = useState<string | null>(null);
   // See JourneyForm.tsx's identical field for why this replaced a
   // disconnected manual "City" text input.
-  const [resolvedCityId, setResolvedCityId] = useState<string | null>("nyc");
+  const [inCoverage, setInCoverage] = useState(true);  // the defaults below are in-coverage
 
   const {
     register,
@@ -85,7 +84,6 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
       dropoff_lat: dropoff.lat,
       dropoff_lon: dropoff.lon,
       departure_time: new Date(parsed.data.departure_time).toISOString(),
-      city_id: resolvedCityId ?? undefined,
       vehicles,
     });
   });
@@ -106,7 +104,7 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
             setValue("pickup_lat", place.lat);
             setValue("pickup_lon", place.lon);
             setCoordError(null);
-            setResolvedCityId(resolveCityId(place.lat, place.lon));
+            setInCoverage(isInCoverage(place.lat, place.lon));
           }}
         />
 
@@ -143,11 +141,11 @@ export function CompareForm({ onSubmit, isPending }: CompareFormProps) {
         </div>
 
         <div className="text-xs text-ink-muted">
-          <span className="uppercase tracking-wider">Detected city: </span>
-          {resolvedCityId ? (
-            <span className="font-mono text-brass">{resolvedCityId}</span>
+          <span className="uppercase tracking-wider">Coverage: </span>
+          {inCoverage ? (
+            <span className="font-mono text-brass">in service area</span>
           ) : (
-            <span className="text-oxide">outside NYC coverage</span>
+            <span className="text-oxide">outside coverage</span>
           )}
         </div>
 

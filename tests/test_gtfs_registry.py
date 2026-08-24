@@ -23,14 +23,13 @@ pytestmark = pytest.mark.skipif(not WAREHOUSE_PATH.exists(), reason="warehouse n
 
 def test_unverified_placeholder_feed_reports_no_coverage():
     transit_registry.load()
-    # Both seeded rows ship with the VERIFY_BEFORE_USE placeholder until a
+    # The seeded row ships with the VERIFY_BEFORE_USE placeholder until a
     # real feed URL is confirmed and scripts/ingest_gtfs_feeds.py is run.
-    assert transit_registry.has_feed("nyc") is False
-    assert transit_registry.has_feed("mumbai") is False  # never registered at all
+    assert transit_registry.has_feed() is False
 
 
 def test_count_stops_near_returns_none_without_gtfs_stops_table():
-    result = transit_service.count_stops_near("nyc", 40.7580, -73.9855)
+    result = transit_service.count_stops_near(40.7580, -73.9855)
     assert result is None
 
 
@@ -49,7 +48,7 @@ def test_count_stops_near_with_synthetic_stops():
     finally:
         con.close()
     try:
-        count = transit_service.count_stops_near("nyc", 40.7580, -73.9855, radius_km=5.0)
+        count = transit_service.count_stops_near(40.7580, -73.9855, radius_km=5.0)
         assert count == 1  # only the nearby stop, not the far-away one
     finally:
         con = duckdb.connect(str(WAREHOUSE_PATH))

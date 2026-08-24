@@ -1,16 +1,14 @@
--- The NYC zone dimension in the (area_id, city_id, name, area_type,
--- parent_area_id, latitude, longitude) shape the city-scoped APIs read.
+-- The NYC zone dimension in the (area_id, name, area_type,
+-- parent_area_id, latitude, longitude) shape the area APIs read.
 -- Reads from the staging zone model plus the zone_centroids seed -- never
 -- from a mart -- to respect rule 6 ("marts don't read marts").
 -- Grain: one row per NYC TLC zone.
 --
--- `city_id` is retained as a constant column (ADR-012): the API and the
--- marts still key on it, and a future city would add rows here rather than
--- change this table's shape.
+-- The constant `city_id` column ADR-012 kept is gone (ADR-013): with one
+-- city it carried no information, and nothing above this reads it.
 
 SELECT
     z.location_id AS area_id,
-    'nyc'          AS city_id,
     z.zone_name    AS name,
     'zone'         AS area_type,
     z.borough      AS parent_area_id,

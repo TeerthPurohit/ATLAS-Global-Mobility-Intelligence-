@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
+from backend.registry import CITY_ID
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
 from backend.services import model_service, transit_service  # noqa: E402
@@ -38,15 +39,15 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_city_context(city_id: str) -> dict:
-    """Orchestrate all available context sources for a city/place."""
-    logger.info("context_orchestrator.get_city_context step=start city_id={}", city_id)
-    profile = cities_registry.get_city_profile(city_id)
+def get_city_context() -> dict:
+    """Orchestrate all available context sources for the served city."""
+    logger.info("context_orchestrator.get_city_context step=start")
+    profile = cities_registry.get_city_profile()
     if not profile:
-        logger.warning("context_orchestrator.get_city_context step=profile_unresolvable city_id={}", city_id)
+        logger.warning("context_orchestrator.get_city_context step=profile_unresolvable")
         return {
-            "city_id": city_id,
-            "city_name": city_id,
+            "city_id": CITY_ID,
+            "city_name": CITY_ID,
             "generated_at": _now_iso(),
             "context": {
                 "geography": {
@@ -54,7 +55,7 @@ def get_city_context(city_id: str) -> dict:
                     "data": None,
                     "source": "city_registry",
                     "timestamp": _now_iso(),
-                    "reason": f"unknown or unresolvable city_id={city_id!r}",
+                    "reason": "no registered city row",
                 }
             },
         }
@@ -110,7 +111,7 @@ def get_city_context(city_id: str) -> dict:
                     "reason": weather_res.reason or "weather unavailable for this location",
                 }
         except Exception as exc:  # noqa: BLE001
-            logger.warning("context_orchestrator.get_city_context step=weather failed city_id={} reason={}", city_id, exc)
+            logger.warning("context_orchestrator.get_city_context step=weather failed reason={}", exc)
             context_map["weather"] = {
                 "status": "unavailable",
                 "data": None,
@@ -145,7 +146,7 @@ def get_city_context(city_id: str) -> dict:
                 "reason": holiday_res.reason if holiday_res.basis != "computed" else None,
             }
         except Exception as exc:  # noqa: BLE001
-            logger.warning("context_orchestrator.get_city_context step=calendar failed city_id={} reason={}", city_id, exc)
+            logger.warning("context_orchestrator.get_city_context step=calendar failed reason={}", exc)
             context_map["calendar"] = {
                 "status": "unavailable",
                 "data": None,
@@ -166,7 +167,7 @@ def get_city_context(city_id: str) -> dict:
     if population:
         # Real land_area_km2 from the cities seed (Census/ONS-sourced, see
         # dbt_project/seeds/cities.csv).
-        registered_city = cities_registry.get_city(city_id)
+        registered_city = cities_registry.get_city()
         land_area_km2 = (registered_city or {}).get("land_area_km2")
         density = round(population / land_area_km2, 1) if land_area_km2 else None
         context_map["urban_density"] = {
@@ -208,7 +209,7 @@ def get_city_context(city_id: str) -> dict:
             "reason": route_check.reason if route_check.basis != "computed" else None,
         }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("context_orchestrator.get_city_context step=routing failed city_id={} reason={}", city_id, exc)
+        logger.warning("context_orchestrator.get_city_context step=routing failed reason={}", exc)
         context_map["routing"] = {
             "status": "unavailable",
             "data": None,
@@ -233,7 +234,7 @@ def get_city_context(city_id: str) -> dict:
             "data": None,
             "source": "atlas_model_registry",
             "timestamp": _now_iso(),
-            "reason": f"no active demand model registered for city_id={city_id!r}",
+            "reason": "no active demand model registered",
         }
 
     # 6b. Hourly Demand Shape Context -- the city's own real multi-month
@@ -242,7 +243,7 @@ def get_city_context(city_id: str) -> dict:
     # travel" question with a real busiest/quietest hour.
     day_of_week = datetime.now(timezone.utc).weekday()
     hourly = [
-        (hour, model_service.hourly_shape_fraction(hour, day_of_week, city_id=city_id))
+        (hour, model_service.hourly_shape_fraction(hour, day_of_week))
         for hour in range(24)
     ]
     hourly = [(hour, frac) for hour, frac in hourly if frac is not None]
@@ -268,21 +269,21 @@ def get_city_context(city_id: str) -> dict:
             "data": None,
             "source": "model_service.hourly_shape_fraction",
             "timestamp": _now_iso(),
-            "reason": "no per-hour demand shape loaded for this city",
+            "reason": "no per-hour demand shape loaded",
         }
 
     # 7. Transit Coverage Context
-    feed = transit_registry.get_feed(city_id)
-    if feed is None or not transit_registry.has_feed(city_id):
+    feed = transit_registry.get_feed()
+    if feed is None or not transit_registry.has_feed():
         context_map["transit_coverage"] = {
             "status": "unavailable",
             "data": None,
             "source": "gtfs_feeds_registry",
             "timestamp": _now_iso(),
-            "reason": f"no ingested GTFS feed for city_id={city_id!r}",
+            "reason": "no ingested GTFS feed",
         }
     elif lat is not None and lng is not None:
-        stop_count = transit_service.count_stops_near(city_id, lat, lng, radius_km=5.0)
+        stop_count = transit_service.count_stops_near(lat, lng, radius_km=5.0)
         context_map["transit_coverage"] = {
             "status": "available" if stop_count is not None else "unavailable",
             "data": {"agency_name": feed["agency_name"], "stop_count": stop_count, "radius_km": 5.0} if stop_count is not None else None,
@@ -290,7 +291,7 @@ def get_city_context(city_id: str) -> dict:
             "timestamp": _now_iso(),
             "freshness": "static_reference_data",
             "coverage": "point_radius",
-            "reason": None if stop_count is not None else "no gtfs_stops rows loaded for this city yet",
+            "reason": None if stop_count is not None else "no gtfs_stops rows loaded yet",
         }
     else:
         context_map["transit_coverage"] = {
@@ -301,7 +302,7 @@ def get_city_context(city_id: str) -> dict:
             "reason": "latitude/longitude unresolvable",
         }
 
-    logger.info("context_orchestrator.get_city_context step=done city_id={} sources={}", city_id, list(context_map))
+    logger.info("context_orchestrator.get_city_context step=done sources={}", list(context_map))
     return {
         "city_id": profile["city_id"],
         "city_name": profile["city"],

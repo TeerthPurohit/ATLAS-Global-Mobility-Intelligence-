@@ -5,10 +5,10 @@ export const queryKeys = {
   // Countries & Cities
   cities: (params?: Record<string, unknown>) => ["cities", params] as const,
   zoneDemandTotals: () => ["zone-demand-totals"] as const,
-  cityProfile: (cityId: string) => ["city", "profile", cityId] as const,
-  cityCapabilities: (cityId: string) => ["city", "capabilities", cityId] as const,
-  cityTariff: (cityId: string) => ["city", "tariff", cityId] as const,
-  cityZones: (cityId: string) => ["city", "zones", cityId] as const,
+  zones: () => ["zones"] as const,
+  cityProfile: () => ["city", "profile"] as const,
+  cityCapabilities: () => ["city", "capabilities"] as const,
+  cityTariff: () => ["city", "tariff"] as const,
 
   // Journey
   journeyEstimate: (req: unknown) => ["journey", "estimate", req] as const,
@@ -25,9 +25,9 @@ export const queryKeys = {
   bestDeparture: (req: unknown) => ["mobility", "bestDeparture", req] as const,
 
   // Context
-  weather: (cityId: string, params?: Record<string, unknown>) => ["context", "weather", cityId, params] as const,
-  holiday: (cityId: string, params?: Record<string, unknown>) => ["context", "holiday", cityId, params] as const,
-  traffic: (cityId: string, params?: Record<string, unknown>) => ["context", "traffic", cityId, params] as const,
+  weather: (params?: Record<string, unknown>) => ["context", "weather", params] as const,
+  holiday: (params?: Record<string, unknown>) => ["context", "holiday", params] as const,
+  traffic: (params?: Record<string, unknown>) => ["context", "traffic", params] as const,
 
   // Chat
   chatHistory: (sessionId: string) => ["chat", "history", sessionId] as const,

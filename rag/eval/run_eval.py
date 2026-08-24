@@ -71,9 +71,8 @@ def run_one(entry: dict) -> tuple[bool, str]:
     """Returns (passed, human-readable actual-vs-expected detail)."""
     from backend.services import rag_service
 
-    city_id = entry.get("city_id", "nyc")
     try:
-        result = rag_service.answer_question(question=entry["question"], city_id=city_id)
+        result = rag_service.answer_question(question=entry["question"])
     except Exception as exc:  # noqa: BLE001 -- a real crash is a real FAIL, not a harness bug
         return False, f"ERROR calling answer_question: {exc!r}"
 
@@ -98,7 +97,7 @@ def run_eval(path: Path = GOLDEN_PATH) -> bool:
         passed, detail = run_one(entry)
         n_passed += passed
         status = "PASS" if passed else "FAIL"
-        print(f"[{status}] {entry['id']}: {entry['question']!r} (city={entry.get('city_id', 'nyc')})")
+        print(f"[{status}] {entry['id']}: {entry['question']!r}")
         print(f"       {detail}")
 
     print(f"\n{n_passed}/{len(entries)} passed")

@@ -63,11 +63,10 @@ export function SurgeCard({ request }: SurgeCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.surge(request),
     queryFn: () => getSurge(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="surge" cityId={request.city_id} fallback={<SurgeCardSkeleton />}>
+    <CapabilityGate capability="surge" fallback={<SurgeCardSkeleton />}>
       {isLoading ? <SurgeCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

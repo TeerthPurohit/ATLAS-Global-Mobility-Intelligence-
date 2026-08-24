@@ -1,7 +1,7 @@
 """Correctness tests for prediction_service.py (SPEC-013 FR-7):
 capability-gated prediction for a supported metric matches direct
-model_service output; an unsupported metric/city returns
-CAPABILITY_UNAVAILABLE / raises CITY_NOT_FOUND, never a fabricated number.
+model_service output; an unsupported metric returns CAPABILITY_UNAVAILABLE
+and a missing registry row raises CITY_NOT_FOUND, never a fabricated number.
 """
 import sys
 from pathlib import Path
@@ -32,7 +32,7 @@ def _load_registries():
 
 def test_predict_demand_matches_model_service_directly():
     expected_value, expected_model = model_service.predict_demand(132, 8, 1)
-    envelope = prediction_service.predict_demand("nyc", 132, 8, 1)
+    envelope = prediction_service.predict_demand(132, 8, 1)
     assert isinstance(envelope, PredictionEnvelope)
     assert envelope.prediction == expected_value
     assert envelope.model == expected_model
@@ -42,30 +42,31 @@ def test_predict_demand_matches_model_service_directly():
 
 def test_predict_fare_matches_model_service_directly():
     expected_value, expected_model = model_service.predict_fare(132, 230, 8)
-    envelope = prediction_service.predict_fare("nyc", 132, 230, 8)
+    envelope = prediction_service.predict_fare(132, 230, 8)
     assert isinstance(envelope, PredictionEnvelope)
     assert envelope.prediction == expected_value
     assert envelope.model == expected_model
     assert envelope.dropoff_area_id == 230
 
 
-def test_predict_demand_unknown_city_raises_city_not_found():
-    # "atlantis" alone is a real place (a town in South Africa) and now
-    # correctly resolves via global_geography_service's broadened city
-    # resolution -- only a genuinely unresolvable string 404s.
+def test_missing_registry_row_raises_city_not_found(monkeypatch):
+    """No caller passes a city any more (ADR-013), so the only way this guard
+    fires is a `cities` seed with no row -- a deployment fault, surfaced
+    rather than served as a fabricated profile."""
+    monkeypatch.setattr(cities_registry, "get_city_profile", lambda: None)
     with pytest.raises(DomainError) as exc_info:
-        prediction_service.predict_demand("atlantis-nonexistent-city-xyz", 132, 8, 1)
+        prediction_service.predict_demand(132, 8, 1)
     assert exc_info.value.code == ErrorCode.CITY_NOT_FOUND
 
 
 def test_predict_demand_unknown_area_returns_prediction_failed():
     with pytest.raises(DomainError) as exc_info:
-        prediction_service.predict_demand("nyc", 999999, 8, 1)
+        prediction_service.predict_demand(999999, 8, 1)
     assert exc_info.value.code == ErrorCode.PREDICTION_FAILED
 
 
 def test_forecast_unsupported_metric_returns_capability_unavailable_not_fake_data():
-    result = prediction_service.forecast("nyc", "weather")
+    result = prediction_service.forecast("weather")
     assert isinstance(result, CapabilityUnavailable)
     assert result.available is False
     assert result.capability == "weather"
@@ -73,5 +74,5 @@ def test_forecast_unsupported_metric_returns_capability_unavailable_not_fake_dat
 
 def test_forecast_invalid_hours_raises_invalid_time_range():
     with pytest.raises(DomainError) as exc_info:
-        prediction_service.forecast("nyc", "demand", hours=999)
+        prediction_service.forecast("demand", hours=999)
     assert exc_info.value.code == ErrorCode.INVALID_TIME_RANGE

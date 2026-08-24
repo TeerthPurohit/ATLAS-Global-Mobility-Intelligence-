@@ -4,7 +4,7 @@ so an uncommitted retrain (e.g. NYC XGBoost's `xgb_metadata.json`) never
 leaves the registry describing a stale date range.
 
 Preserves the existing CSV schema and every other column (model_id,
-city_id, artifact_path, status, ...) exactly -- those aren't derivable from
+artifact_path, status, ...) exactly -- those aren't derivable from
 metadata JSON alone (it doesn't carry model_id/status for most models), so
 this script refreshes dates, not registration. Rows whose `metrics_ref`
 isn't a metadata JSON with a `date_range` (e.g. the rule-based journey
@@ -84,9 +84,9 @@ def demo() -> None:
         }}))
         csv_path = tmp / "model_registry.csv"
         csv_path.write_text(
-            "model_id,city_id,metric,model_type,version,artifact_path,training_period,status,metrics_ref\n"
-            "fake_v1,nyc,demand,xgboost,v1,x,STALE,active,models/fake_model/fake_metadata.json\n"
-            "no_meta_v1,nyc,journey,rule_based,v1,x,2024-01,active,docs/some.md\n"
+            "model_id,metric,model_type,version,artifact_path,training_period,status,metrics_ref\n"
+            "fake_v1,demand,xgboost,v1,x,STALE,active,models/fake_model/fake_metadata.json\n"
+            "no_meta_v1,journey,rule_based,v1,x,2024-01,active,docs/some.md\n"
         )
         global REPO_ROOT
         old_root = REPO_ROOT

@@ -1,12 +1,13 @@
 """City registry -- thin query module over the seeded `cities` dbt table,
-loaded once at startup (rule 8). One real row today, `nyc` (ADR-012).
+loaded once at startup (rule 8). One real row, `nyc` (ADR-012), and as of
+ADR-013 nothing above this module passes a city id at all.
 
 `capabilities` and `metrics` are deliberately NOT seed columns (they'd drift
 from reality) -- computed here from what's actually wired: `backend.registry
 .models` (real model_registry rows) for demand/fare/journey,
 `backend.services.geography_service` (real canonical_areas rows) for
 area_analysis. `model_status` is likewise recomputed from live model_registry
-rows rather than trusted verbatim from the seed, so a future city flips to
+rows rather than trusted verbatim from the seed, so the city flips to
 "active" automatically once its models actually land -- zero code change here.
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 
 import duckdb
 
+from backend.registry import CITY_ID
 from backend.registry import models as models_registry
 from backend.registry import transit as transit_registry
 
@@ -26,58 +28,48 @@ WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
 logger = logging.getLogger(__name__)
 
-# Chat tier is a pure function of two real infrastructure facts, not a
-# curated allowlist: does this city have a registered, queryable warehouse
-# (needed for any SQL-grounded answer at all), and does it have a generated
-# insight-doc corpus for vector RAG. A future city gets real chat by
-# registering its warehouse path (infrastructure it needs anyway for
-# predictions/journey) and, optionally, generating its insight docs --
-# never a chat-specific code change here.
-_CITY_WAREHOUSE_PATHS = {
-    "nyc": REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb",
-}
-_CITY_HAS_INSIGHT_DOCS = {"nyc"}
+# Chat tier is a pure function of one real infrastructure fact, not a
+# curated allowlist: does this city have a generated insight-doc corpus for
+# vector RAG on top of its (always present) queryable warehouse.
+_HAS_INSIGHT_DOCS = True
 
 
-def get_chat_tier(city_id: str) -> str:
-    """`full_rag` when the city has both a warehouse and an insight corpus,
-    `sql_only` with a warehouse alone. An unregistered city never reaches
-    here -- the routers 404 it first (ADR-011)."""
-    return "full_rag" if city_id in _CITY_HAS_INSIGHT_DOCS else "sql_only"
-
-_CITY_COLUMNS = (
-    "id", "name", "country_code", "latitude", "longitude", "timezone",
-    "currency", "status", "data_source", "geography_type", "model_status", "last_updated",
-)
+def get_chat_tier() -> str:
+    """`full_rag` with both a warehouse and an insight corpus, `sql_only`
+    with a warehouse alone."""
+    return "full_rag" if _HAS_INSIGHT_DOCS else "sql_only"
 
 
-_cities: dict[str, dict] = {}
+_city: dict | None = None
 
 
 def load() -> None:
+    global _city
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
         df = con.execute("select * from cities").df()
     finally:
         con.close()
-    _cities.clear()
-    for _, row in df.iterrows():
-        city = row.to_dict()
-        city["last_updated"] = str(city["last_updated"])  # duckdb types the seed column as DATE
-        _cities[city["id"]] = city
+    rows = [r.to_dict() for _, r in df.iterrows() if r.to_dict()["id"] == CITY_ID]
+    if not rows:
+        logger.warning("cities seed has no %s row; the registry will read as unconfigured", CITY_ID)
+        _city = None
+        return
+    city = rows[0]
+    city["last_updated"] = str(city["last_updated"])  # duckdb types the seed column as DATE
+    _city = city
 
 
-
-def _effective_model_status(city_id: str, seed_status: str) -> str:
-    if models_registry.has_active_model(city_id):
+def _effective_model_status(seed_status: str) -> str:
+    if models_registry.has_active_model():
         return "active"
     return "unavailable" if seed_status == "active" else seed_status
 
 
-def _area_count(city_id: str) -> int:
+def _area_count() -> int:
     from backend.services import geography_service  # local import: avoids a hard import-order dependency at module load
 
-    return len(geography_service.list_areas(city_id))
+    return len(geography_service.list_areas())
 
 
 JOURNEY_CAPABILITIES: tuple[str, ...] = (
@@ -85,49 +77,47 @@ JOURNEY_CAPABILITIES: tuple[str, ...] = (
 )
 
 
-def capability_matrix(city_id: str) -> dict[str, bool] | None:
-    """Per-journey-field support for a registered city, derived from what's
-    actually wired. A fare needs a trained fare model OR a real tariff profile
-    keyed by this exact city_id, nothing else.
+def capability_matrix() -> dict[str, bool] | None:
+    """Per-journey-field support, derived from what's actually wired. A fare
+    needs a trained fare model OR a real tariff profile, nothing else.
 
-    Returns None for a city_id this registry doesn't know.
+    Returns None when the registry has no city row at all (a broken seed),
+    which callers surface rather than papering over.
     """
     from backend.services import tariff_profiles
 
-    registered = get_city(city_id)
-    if registered is None:
+    if get_city() is None:
         return None
 
     # Zone-level predictors (availability/surge/best_departure/congestion's
-    # traffic leg) all bottom out in model_service's per-city zone marts,
-    # which only exist for a city with an active demand model.
-    has_zone_model = models_registry.resolve_model(city_id, "demand") is not None
-    has_fare_model = models_registry.resolve_model(city_id, "fare") is not None
+    # traffic leg) all bottom out in model_service's zone marts, which only
+    # exist with an active demand model.
+    has_zone_model = models_registry.resolve_model("demand") is not None
+    has_fare_model = models_registry.resolve_model("fare") is not None
 
     return {
         # OSRM (with a haversine fallback) routes between the coordinates the
-        # request itself carries -- no per-city data needed, so this is true
-        # for every resolvable city, same as carbon.
+        # request itself carries -- no stored data needed, same as carbon.
         "routing": True,
         "demand": has_zone_model,
-        "fare": has_fare_model or tariff_profiles.get(city_id) is not None,
-        # predict_congestion fuses a historical-traffic leg (zone-model cities
-        # only) with a weather leg the Open-Meteo adapter serves from the
-        # request's own coordinates -- one leg is enough for a bucket.
+        "fare": has_fare_model or tariff_profiles.get() is not None,
+        # predict_congestion fuses a historical-traffic leg with a weather leg
+        # the Open-Meteo adapter serves from the request's own coordinates --
+        # one leg is enough for a bucket.
         "congestion": True,
         "availability": has_zone_model,
         "surge": has_zone_model,
-        "carbon": True,  # distance x seeded emission factor, city-independent
+        "carbon": True,  # distance x seeded emission factor
         "best_departure": has_zone_model,
     }
 
 
-def get_capabilities(city_id: str) -> dict | None:
-    matrix = capability_matrix(city_id)
+def get_capabilities() -> dict | None:
+    matrix = capability_matrix()
     if matrix is None:
         return None
-    city = _cities.get(city_id, {})
-    has_demand = models_registry.resolve_model(city_id, "demand") is not None
+    city = _city or {}
+    has_demand = models_registry.resolve_model("demand") is not None
     has_fare = matrix["fare"]
     capabilities = {
         "mobility_mode": city.get("mobility_mode", "ride_hailing"),
@@ -136,49 +126,41 @@ def get_capabilities(city_id: str) -> dict | None:
         "fare": has_fare,
         # journey_predictors.py orchestrates routing/demand/fare/carbon/
         # congestion/availability/surge/best_departure with per-component
-        # honest degradation, never a hard failure -- so the endpoint works
-        # for any registered city regardless of which models it has.
+        # honest degradation, never a hard failure.
         "journey": True,
-        # Every registered city has a warehouse, so every one can answer a
-        # SQL-grounded question -- the tier says how well, not whether.
+        # The warehouse is always there, so a SQL-grounded question can always
+        # be answered -- the tier says how well, not whether.
         "chat": True,
-        "chat_tier": get_chat_tier(city_id),
-        "area_analysis": _area_count(city_id) > 0,
+        "chat_tier": get_chat_tier(),
+        "area_analysis": _area_count() > 0,
         "forecast": has_demand or has_fare,
-        "transit_coverage": transit_registry.has_feed(city_id),
+        "transit_coverage": transit_registry.has_feed(),
         **matrix,
     }
-    logger.info("capability check city_id=%s -> %s", city_id, capabilities)
+    logger.info("capability check -> %s", capabilities)
     return capabilities
 
 
-def list_metrics(city_id: str) -> list[str]:
-    capabilities = get_capabilities(city_id) or {}
+def list_metrics() -> list[str]:
+    capabilities = get_capabilities() or {}
     return [metric for metric in ("demand", "fare", "journey") if capabilities.get(metric)]
 
 
 def _with_computed_fields(city: dict) -> dict:
-    return {**city, "model_status": _effective_model_status(city["id"], city["model_status"])}
+    return {**city, "model_status": _effective_model_status(city["model_status"])}
 
 
-def list_cities(country_code: str | None = None) -> list[dict]:
-    rows = _cities.values()
-    if country_code:
-        rows = [c for c in rows if c["country_code"] == country_code.upper()]
-    return [_with_computed_fields(c) for c in rows]
-
-
-def get_city_profile(city_id: str) -> dict | None:
-    """Authoritative geographic facts for a registered city (ADR-011).
+def get_city_profile() -> dict | None:
+    """Authoritative geographic facts for the served city (ADR-011).
 
     Was `global_geography_service.get_city_profile`, whose other two branches
     (the 524-row WorldMove registry and a live GeoNames search) are gone with
-    the global layer. Every city this repo serves is now a row in the `cities`
-    seed with real trip data behind it, so there is nothing left to resolve --
+    the global layer. The city this repo serves is a row in the `cities` seed
+    with real trip data behind it, so there is nothing left to resolve --
     `model_status`/`confidence` are no longer tier estimates but statements
     about a city we actually measured.
     """
-    registered = get_city(city_id)
+    registered = get_city()
     if registered is None:
         return None
     return {
@@ -202,29 +184,24 @@ def get_city_profile(city_id: str) -> dict | None:
             "feature_class": "P",
             "feature_code": "PPL",  # generic "populated place" -- a real per-city GeoNames
                                      # feature code (e.g. PPLC for a capital) was never looked
-                                     # up for these seeded rows, so this doesn't claim one.
+                                     # up for this seeded row, so this doesn't claim one.
             "place_type": "city",
         },
         "capabilities": {
             "geographic": True,
             "context": True,
-            "observed_mobility": (get_capabilities(city_id) or {}).get("demand", False),
+            "observed_mobility": (get_capabilities() or {}).get("demand", False),
         },
         "model_status": "OBSERVED",
         "confidence": 1.0,
     }
 
 
-def get_city(city_id: str) -> dict | None:
-    if not _cities:
+def get_city() -> dict | None:
+    if _city is None:
         # Defensive lazy-load: real traffic always goes through the FastAPI
         # lifespan hook (backend/main.py), which calls load() before serving
         # requests, so this never fires in production. It matters for tests
-        # that exercise this module directly without that startup event --
-        # without it, an empty registry silently reads as "city not found"
-        # and callers (e.g. global_geography_service) fall through to
-        # treating a real, registered city_id as a free-text search query.
+        # that exercise this module directly without that startup event.
         load()
-    city = _cities.get(city_id)
-    logger.info("city resolution city_id=%s -> %s", city_id, "found" if city else "not_found")
-    return _with_computed_fields(city) if city else None
+    return _with_computed_fields(_city) if _city else None

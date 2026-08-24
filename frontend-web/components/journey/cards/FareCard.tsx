@@ -74,11 +74,10 @@ export function FareCard({ request }: FareCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.fare(request),
     queryFn: () => getFare(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="fare" cityId={request.city_id} fallback={<FareCardSkeleton />}>
+    <CapabilityGate capability="fare" fallback={<FareCardSkeleton />}>
       {isLoading ? <FareCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

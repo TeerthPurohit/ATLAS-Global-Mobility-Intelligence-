@@ -75,7 +75,7 @@ export default function AnalystPage() {
     setTurns((prev) => [...prev, { role: "user", content: question }, { role: "assistant", content: "", pending: true }]);
 
     closeRef.current = streamChat(
-      { question, session_id: sessionId, city_id: selectedCity?.id },
+      { question, session_id: sessionId },
       {
         onFrame: (frame) => {
           if ("error" in frame) {

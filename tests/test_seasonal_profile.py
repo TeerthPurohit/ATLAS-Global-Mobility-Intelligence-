@@ -40,14 +40,14 @@ def test_demand_varies_by_month_when_measured():
 
 
 def test_data_vintage_reports_real_range_not_a_single_date():
-    vintage = model_service.data_vintage("nyc")
+    vintage = model_service.data_vintage()
     assert vintage is not None
     assert " to " in vintage
 
 
 def test_hourly_shape_fractions_sum_to_one_per_day_of_week():
     for dow in range(7):
-        total = sum(model_service.hourly_shape_fraction(h, dow, "nyc") or 0.0 for h in range(24))
+        total = sum(model_service.hourly_shape_fraction(h, dow) or 0.0 for h in range(24))
         assert abs(total - 1.0) < 1e-6
 
 

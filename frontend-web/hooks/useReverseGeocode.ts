@@ -94,9 +94,9 @@ export interface GeocodedPlace {
   lon: number;
   displayName: string;
   shortName: string;
-  // Carried through so the caller can resolve a backend city_id without a
-  // second geocoding round-trip -- undefined only if Nominatim's own
-  // address block omitted them for this result.
+  // Carried through for display/labelling -- undefined only if Nominatim's
+  // own address block omitted them for this result. Coverage is decided from
+  // the coordinates (api.ts's isInCoverage), never from this name.
   city?: string;
   countryCode?: string;
 }

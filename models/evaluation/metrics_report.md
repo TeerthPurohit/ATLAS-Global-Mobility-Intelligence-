@@ -65,48 +65,49 @@ alongside the saved model (`fare_xgb_model.json`).
 ## Demand Forecasting (SPEC-006)
 
 **Target:** `zone_hourly_demand.total_trips` (pickup count per zone-hour),
-all 261 zones. **Features** (`models/data_prep/build_features.py`, reusing
+all 262 zones. **Features** (`models/data_prep/build_features.py`, reusing
 `algorithms/timeseries/ewma_smoothing.py`'s block splitter): `hour`,
 `day_of_week`, `is_weekend`, `lag_1h`, `lag_24h`, `lag_168h`, `ewma`
 (EWMA state one step back, α=0.5 — the cross-zone default set in SPEC-005),
-`rolling_7d_avg` (trailing 168h mean). All lag/EWMA/rolling features are
-computed strictly from hours *before* t (`.shift(1)`) so none of them leak
-the row's own target into its own feature — verified in
-`build_features.py`'s `demo()`.
+`rolling_7d_avg` (trailing 168h mean), plus real hourly weather
+`temperature_c` and `precipitation_mm` (city-level, joined at (date, hour)
+grain — backfilled by `scripts/backfill_weather_openmeteo.py`). All
+lag/EWMA/rolling features are computed strictly from hours *before* t
+(`.shift(1)`) so none of them leak the row's own target into its own
+feature — verified in `build_features.py`'s `demo()`.
 
 **Chronological split (ADR-003), block-gap aware — same reasoning as the
-fare model above:** the warehouse only has Jan/Mar/Jun 2024, so a plain
-70/15/15 row-count split would land the test cutoff partway into June. This
-deviates from a naive single-cutoff 70/15/15 deliberately:
-
-- **train + val = January + March**
-- **test = June in full** — the most recent complete block, held out
-  entirely
-- within Jan+Mar, the most recent 15% by timestamp is validation
+fare model above:** the warehouse holds eight disjoint monthly blocks
+(2024-01, 2024-03, 2024-06, 2025-01, 2025-11, 2026-01, 2026-03, 2026-04),
+not one continuous range, so a plain 70/15/15 row-count split would land a
+cutoff partway *into* a block and mix earlier "train" hours with later
+"test" hours from the same block. Instead the cut falls on block
+boundaries, with the most recent complete block (2026-04) held out entirely
+as test.
 
 Implemented once in `models/data_prep/train_test_split.py`
 (`split_demand_blocks`), reused by all four scripts so every model is
 trained/evaluated against the same block boundaries. Split cutoffs are
 snapped to unique-timestamp boundaries (not raw row position) so that every
 zone's row for a shared hour lands in the same split — a plain row-count
-cut would otherwise slice a single hour across train/val, since 261 zones
+cut would otherwise slice a single hour across train/val, since ~262 zones
 share each timestamp.
 
 Leakage guard (`max(train.ts) < min(val.ts) < min(test.ts)`) is asserted in
-every one of the four training/evaluation scripts.
+every one of the four training/evaluation scripts and independently in
+`tests/test_demand_split_no_leakage.py`.
 
 | Split | Date range (tabular features) | Rows |
 |---|---|---|
-| train | 2024-01-08 00:00 → 2024-03-24 18:00 | 252,121 |
-| val   | 2024-03-24 19:00 → 2024-03-31 23:00 | 44,669 |
-| test  | 2024-06-08 00:00 → 2024-06-30 23:00 | 142,993 |
+| train | 2024-01-08 00:00 → 2026-01-31 01:00 | 876,855 |
+| val   | 2026-01-31 02:00 → 2026-03-31 23:00 | 155,542 |
+| test  | 2026-04-08 00:00 → 2026-04-30 23:00 | 143,730 |
 
 (The LSTM's sliding-window rows only need 24h of warmup, not 168h, so its
-raw train/val/test counts are larger — 315,432 / 55,806 / 180,577 — and
-start a week earlier in each block. `compare_models.py` reconciles this by
-scoring every model on the inner join of `(pickup_location_id, ts)` across
-all four representations, 142,993 rows, so "same test set" is literal, not
-just "same test period.")
+raw train/val/test counts differ and start a week earlier in each block.
+`compare_models.py` reconciles this by scoring every model on the inner
+join of `(pickup_location_id, ts)` across all four representations —
+143,730 rows — so "same test set" is literal, not just "same test period.")
 
 **Models:**
 
@@ -114,7 +115,7 @@ just "same test period.")
    training. Forecast for hour *t* is simply S_(t-1), the EWMA state one
    step back (α=0.5).
 2. **Linear regression** (`models/linear_baseline/linear_regression_model.py`)
-   — `sklearn.LinearRegression` on the 8 raw features above, fit on
+   — `sklearn.LinearRegression` on the 10 raw features above, fit on
    train+val.
 3. **XGBoost** (`models/xgboost_model/train_xgboost.py`) — manual 4-point
    grid over `max_depth` ∈ {4,6,8}, `learning_rate` ∈ {0.05,0.1},
@@ -125,15 +126,28 @@ just "same test period.")
    GPU in this environment — see the tradeoff note below), Adam lr=1e-3,
    targets standardized with train-set mean/std.
 
-**Metrics — all measured on the shared 142,993-row June test intersection,
-`models/evaluation/compare_models.py`, 2026-08-06:**
+**Metrics — all measured on the shared 143,730-row 2026-04 test
+intersection, `models/evaluation/compare_models.py`, 2026-08-23:**
 
 | Model | RMSE | MAE | Inference latency (ms/row) |
 |---|---|---|---|
-| EWMA baseline | 7.456 | 4.617 | 0.00124 |
-| Linear regression | 5.418 | 3.529 | 0.01025 |
-| **XGBoost** | **5.089** | **3.259** | 0.03432 |
-| LSTM | 5.634 | 3.656 | 0.03219 |
+| EWMA baseline | 50.310 | 29.068 | 0.00162 |
+| Linear regression | 26.558 | 15.374 | 0.01015 |
+| **XGBoost** | **24.220** | **12.630** | 0.03415 |
+| LSTM | 96.925 | 44.031 | 0.02060 |
+
+**The LSTM number is a stale artifact, not a model result — do not quote
+it as a finding.** `models/lstm_model/lstm_model.pt` was fit on the older
+Jan/Mar/Jun-2024 warehouse, and its saved `target_scaling`
+(mean 13.85, std 16.12) belongs to that much smaller per-zone-hour scale.
+Scoring it against 2026-04 de-normalizes its predictions with the wrong
+constants, which is where the 96.9 comes from. `lstm_metadata.json` still
+records the old run (test RMSE 5.609 on 180,577 old-warehouse rows).
+Retraining it on the current warehouse is the outstanding work; until then
+the ladder's honest comparison is EWMA → linear → XGBoost.
+`models/ewma_baseline/ewma_baseline_metadata.json` is stale for the same
+reason, though EWMA itself has no fitted artifact — its 50.310 above is
+computed live from the current `ewma` feature column and is correct.
 
 **RMSE vs. MAE — which matters more here:** RMSE is reported as the primary
 metric because a handful of badly-underpredicted surge hours (concerts,
@@ -142,13 +156,13 @@ operationally — under-provisioning drivers during a demand spike is more
 costly than a small miss on an ordinary hour, and RMSE's squared-error term
 penalizes those large misses harder than MAE does. MAE is still reported
 alongside it because it's easier to reason about in plain trip-count terms
-("off by ~3-4 trips/hour on average") when explaining the numbers.
+when explaining the numbers.
 
 **What each model captures that the others don't:**
 
 - **EWMA baseline** captures short-term momentum only (last few hours'
   trend) with zero training cost — it's the honest floor the other three
-  have to beat, and its 7.46 RMSE vs. linear's 5.42 shows lag/calendar
+  have to beat, and its 50.31 RMSE vs. linear's 26.56 shows lag/calendar
   features are pulling real weight, not window dressing.
 - **Linear regression** captures the same signal EWMA does *plus* a
   reference frame per hour-of-day and day-of-week, in a single interpretable
@@ -161,40 +175,41 @@ alongside it because it's easier to reason about in plain trip-count terms
 - **LSTM** captures the shape of the 24h trajectory itself (not just three
   fixed lag points) without any hand-picked lag horizons, which matters if
   the demand pattern shifts to a period the fixed 1h/24h/168h lags don't
-  cover — but with only 3 CPU-bound epochs it doesn't yet out-predict
-  XGBoost on this dataset; more epochs (and calendar features it currently
-  lacks) would be the first thing to try before concluding LSTM can't win
-  here.
+  cover — but see the stale-artifact note above: this run's number says
+  nothing about whether the architecture can compete, only that the saved
+  weights are from a different warehouse.
 
 **Linear coefficients vs. XGBoost feature importances:**
 
 | Feature | Linear coefficient | XGBoost importance (gain) |
 |---|---|---|
-| lag_168h | +0.362 | **0.596** (most important) |
-| lag_1h | +0.511 (largest linear effect) | 0.322 |
-| lag_24h | +0.152 | 0.034 |
-| is_weekend | **−0.668** (largest-magnitude linear effect) | 0.000 |
-| day_of_week | +0.171 | 0.010 |
-| ewma | −0.095 | 0.015 |
-| rolling_7d_avg | +0.068 | 0.010 |
-| hour | +0.053 | 0.013 |
+| lag_1h | +0.894 (largest lag effect) | **0.811** (most important) |
+| lag_168h | +0.281 | 0.156 |
+| lag_24h | +0.135 | 0.013 |
+| hour | +0.139 | 0.006 |
+| day_of_week | +0.539 | 0.004 |
+| ewma | −0.369 | 0.004 |
+| precipitation_mm | −0.659 | 0.003 |
+| rolling_7d_avg | +0.055 | 0.002 |
+| temperature_c | −0.054 | 0.002 |
+| is_weekend | **−3.016** (largest-magnitude linear effect) | 0.000 |
 
-Both models agree the lag features dominate, but disagree on *which* lag
-matters most: linear regression weights `lag_1h` (raw persistence) highest,
-while XGBoost's gain-based importance puts `lag_168h` (same hour, one week
-ago) far ahead of everything else — consistent with strong weekly
-seasonality that a single global linear coefficient per feature can't fully
-express (the same `lag_168h` value means something different on a Tuesday
-morning than a Saturday night; XGBoost's trees can split on that, a linear
-term can't). `is_weekend` is the single largest-magnitude linear coefficient
-but XGBoost assigns it zero importance — its information is already fully
-recoverable from `day_of_week` splits in the trees, so the redundant column
-adds nothing once the model can branch on `day_of_week` directly; the linear
-model, which can't interact features, still needs it as its own term to
-express the weekday/weekend gap.
+Both models now agree that `lag_1h` — raw persistence — dominates, with
+`lag_168h` (same hour, one week ago) a distant second; between them they
+account for 97% of XGBoost's gain. `is_weekend` is the single
+largest-magnitude linear coefficient but XGBoost assigns it zero
+importance — its information is already fully recoverable from
+`day_of_week` splits in the trees, so the redundant column adds nothing
+once the model can branch on `day_of_week` directly; the linear model,
+which can't interact features, still needs it as its own term to express
+the weekday/weekend gap. The weather features earn a small but non-zero
+share of gain; `precipitation_mm`'s negative linear coefficient (−0.659 per
+mm) is the expected direction — rain suppresses pickups — while
+`temperature_c`'s effect is near-flat.
 
 **LSTM loss curve** (train/val MSE on the standardized target, 3 epochs,
-`models/lstm_model/lstm_metadata.json` / `loss_curve.png`):
+`models/lstm_model/lstm_metadata.json` / `loss_curve.png`) — from the
+superseded 2024-warehouse run described above:
 
 | Epoch | Train MSE | Val MSE |
 |---|---|---|
@@ -202,21 +217,22 @@ express the weekday/weekend gap.
 | 2 | 0.1356 | 0.1315 |
 | 3 | 0.1287 | 0.1273 |
 
-Loss is still decreasing at epoch 3 — this run is capped at 3 epochs
-specifically because of the CPU-only constraint in this environment (~557k
-training sequences across 261 zones), not because it converged. Noted here
-rather than disguised: more epochs is the first lever to pull if LSTM needs
-to beat XGBoost rather than just be competitive with it.
+Loss was still decreasing at epoch 3 — that run was capped at 3 epochs
+specifically because of the CPU-only constraint in this environment, not
+because it converged. Noted here rather than disguised: more epochs is the
+first lever to pull once the model is refit on the current warehouse.
 
 **Reproducibility (rule 5):** seed=42 for linear/XGBoost/LSTM (EWMA has no
-randomness); date range = Jan+Mar (train+val) / Jun (test) 2024 warehouse
-snapshot; every hyperparameter, split date range, row count, and library
-version (`scikit-learn==1.9.0`, `xgboost==3.3.0`, `torch==2.13.0+cpu`,
-`pandas==3.0.3`, `numpy==2.5.1`) recorded in each model's metadata JSON
-sidecar next to its artifact: `models/linear_baseline/linear_model_metadata.json`,
+randomness); date range = the eight-block warehouse snapshot above, train
+through 2026-01, test 2026-04; every hyperparameter, split date range, row
+count, and library version (`scikit-learn==1.9.0`, `xgboost==3.3.0`,
+`torch==2.13.0+cpu`, `pandas==3.0.3`, `numpy==2.5.1`) recorded in each
+model's metadata JSON sidecar next to its artifact:
+`models/linear_baseline/linear_model_metadata.json`,
 `models/ewma_baseline/ewma_baseline_metadata.json`,
 `models/xgboost_model/xgb_metadata.json`,
-`models/lstm_model/lstm_metadata.json`. Combined comparison numbers in
+`models/lstm_model/lstm_metadata.json` — the last two of which are the
+stale ones flagged above. Combined comparison numbers in
 `models/evaluation/compare_results.json`.
 
 ## Global Transfer Model (Phase 8/9/10)

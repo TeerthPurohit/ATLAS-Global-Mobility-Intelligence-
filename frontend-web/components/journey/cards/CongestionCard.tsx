@@ -63,11 +63,10 @@ export function CongestionCard({ request }: CongestionCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.congestion(request),
     queryFn: () => getCongestion(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="congestion" cityId={request.city_id} fallback={<CongestionCardSkeleton />}>
+    <CapabilityGate capability="congestion" fallback={<CongestionCardSkeleton />}>
       {isLoading ? <CongestionCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

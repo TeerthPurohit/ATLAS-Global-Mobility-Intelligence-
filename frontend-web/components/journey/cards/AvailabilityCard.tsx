@@ -63,11 +63,10 @@ export function AvailabilityCard({ request }: AvailabilityCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.availability(request),
     queryFn: () => getAvailability(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="availability" cityId={request.city_id} fallback={<AvailabilityCardSkeleton />}>
+    <CapabilityGate capability="availability" fallback={<AvailabilityCardSkeleton />}>
       {isLoading ? <AvailabilityCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

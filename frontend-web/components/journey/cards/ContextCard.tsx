@@ -10,7 +10,6 @@ import { CapabilityGate } from "@/components/capability/CapabilityGate";
 import { Sun, Cloud, CloudRain, CloudSnow, Calendar, Car } from "lucide-react";
 
 interface ContextCardProps {
-  cityId: string;
   pickupLat: number;
   pickupLon: number;
   dropoffLat: number;
@@ -129,7 +128,6 @@ function ContextCardContent({
 }
 
 export function ContextCard({
-  cityId,
   pickupLat,
   pickupLon,
   dropoffLat,
@@ -137,30 +135,27 @@ export function ContextCard({
   departureTime
 }: ContextCardProps) {
   const { data: weather, isLoading: weatherLoading } = useQuery({
-    queryKey: queryKeys.weather(cityId, { lat: pickupLat, lon: pickupLon, timestamp: departureTime }),
-    queryFn: () => getWeather(cityId, pickupLat, pickupLon, departureTime),
-    enabled: !!cityId,
+    queryKey: queryKeys.weather({ lat: pickupLat, lon: pickupLon, timestamp: departureTime }),
+    queryFn: () => getWeather(pickupLat, pickupLon, departureTime),
     staleTime: 10 * 60_000,
   });
 
   const { data: holiday, isLoading: holidayLoading } = useQuery({
-    queryKey: queryKeys.holiday(cityId, { lat: pickupLat, lon: pickupLon, date: departureTime.split("T")[0] }),
-    queryFn: () => getHoliday(cityId, pickupLat, pickupLon, departureTime.split("T")[0]),
-    enabled: !!cityId,
+    queryKey: queryKeys.holiday({ lat: pickupLat, lon: pickupLon, date: departureTime.split("T")[0] }),
+    queryFn: () => getHoliday(pickupLat, pickupLon, departureTime.split("T")[0]),
     staleTime: 24 * 60 * 60_000,
   });
 
   const { data: traffic, isLoading: trafficLoading } = useQuery({
-    queryKey: queryKeys.traffic(cityId, { lat: pickupLat, lon: pickupLon }),
-    queryFn: () => getTraffic(cityId, pickupLat, pickupLon),
-    enabled: !!cityId,
+    queryKey: queryKeys.traffic({ lat: pickupLat, lon: pickupLon }),
+    queryFn: () => getTraffic(pickupLat, pickupLon),
     staleTime: 5 * 60_000,
   });
 
   const isLoading = weatherLoading || holidayLoading || trafficLoading;
 
   return (
-    <CapabilityGate capability="routing" cityId={cityId} fallback={<ContextCardSkeleton />}>
+    <CapabilityGate capability="routing" fallback={<ContextCardSkeleton />}>
       {isLoading ? <ContextCardSkeleton /> : (
         <ContextCardContent
           weather={weather ?? null}

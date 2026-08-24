@@ -71,11 +71,6 @@ class JourneyRequest(BaseModel):
     dropoff_lon: float
     departure_time: datetime
     vehicle_type: str
-    # Explicit city (registered id, GeoNames id, or free-text place name).
-    # Omit for NYC -- auto-detected from pickup coordinates for
-    # backward compatibility; every other city must be named explicitly
-    # (see journey_service._resolve_city_id).
-    city_id: str | None = None
 
 
 class JourneyHistoryEntry(BaseModel):
@@ -98,34 +93,6 @@ class JourneyHistoryEntry(BaseModel):
     city_id: str | None = None
 
 
-class CityJourneyRequest(BaseModel):
-    """City-scoped journey estimate request -- deliberately smaller than
-    JourneyRequest (no vehicle_type): this endpoint works for any resolvable
-    city, not just NYC's vehicle-profile-aware pipeline."""
-
-    pickup_lat: float
-    pickup_lon: float
-    dropoff_lat: float
-    dropoff_lon: float
-    departure_time: datetime
-
-
-class CityJourneyEstimate(BaseModel):
-    """Deliberately a 4-field subset of JourneyEstimate: distance/duration
-    (real, via OSRM, for any city on Earth) plus demand/fare (computed for
-    where a real model exists, modeled_estimate otherwise).
-    Reusing the full 11-field JourneyEstimate here would force most fields to
-    `unavailable` for every non-NYC city -- noisy, not what "any resolvable
-    city gets a real answer" means."""
-
-    city_id: str
-    distance: PredictionOut
-    duration: PredictionOut
-    demand: PredictionOut
-    fare: PredictionOut
-    mode: Literal["zone_enriched", "osrm_only"]
-
-
 class JourneyEstimate(BaseModel):
     city_id: str
     distance: PredictionOut
@@ -146,7 +113,6 @@ class JourneyEstimate(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     session_id: str | None = None
-    city_id: str | None = None
     area_id: int | None = None
 
 
@@ -203,22 +169,6 @@ class CountriesResponse(BaseModel):
     countries: list[Country]
 
 
-class City(BaseModel):
-    id: str
-    name: str
-    country_code: str
-    latitude: float | None = 0.0
-    longitude: float | None = 0.0
-    timezone: str | None = "UTC"
-    currency: str | None = "USD"
-    status: str
-    data_source: str
-    geography_type: str
-    mobility_mode: str = "ride_hailing"
-    model_status: str
-    last_updated: str
-
-
 class Capabilities(BaseModel):
     mobility_mode: str = "ride_hailing"
     area_type: str = "tlc_zone"
@@ -243,7 +193,6 @@ class Capabilities(BaseModel):
 
 class Area(BaseModel):
     area_id: int
-    city_id: str
     name: str
     area_type: str
     parent_area_id: str | None = None
@@ -295,18 +244,6 @@ class ForecastEnvelope(BaseModel):
     series: list[ForecastPoint]
 
 
-class CityDemandPredictRequest(BaseModel):
-    area_id: int
-    hour: int
-    day_of_week: int
-
-
-class CityFarePredictRequest(BaseModel):
-    pickup_area_id: int
-    dropoff_area_id: int
-    hour: int
-
-
 # ── Shared Request/Response Schemas for Granular Mobility APIs ─────────────────
 
 
@@ -317,8 +254,7 @@ class Coordinates(BaseModel):
 
 
 class JourneyContextRequest(BaseModel):
-    """Shared context for all mobility predictions - city, coordinates, time, vehicle."""
-    city_id: str
+    """Shared context for all mobility predictions - coordinates, time, vehicle."""
     pickup: Coordinates
     dropoff: Coordinates
     departure_time: datetime
@@ -337,11 +273,6 @@ class PredictionRequest(JourneyContextRequest):
     """
     distance_km: float | None = None
     duration_min: float | None = None
-
-
-class CityRequest(BaseModel):
-    """Minimal city-scoped request."""
-    city_id: str
 
 
 class MobilityResponse(BaseModel):
@@ -472,24 +403,6 @@ class TrafficResponse(BaseModel):
     note: str | None = None
 
 
-class CitySearchRequest(BaseModel):
-    """City search parameters."""
-    q: str | None = None
-    country: str | None = None
-    tier: str | None = None
-    supported: bool | None = None
-    page: int = 1
-    limit: int = 50
-
-
-class CitySearchResponse(BaseModel):
-    """City search response."""
-    results: list[City]
-    total: int
-    page: int
-    limit: int
-
-
 class CityProfileResponse(BaseModel):
     """Complete city profile response."""
     id: str
@@ -508,12 +421,6 @@ class CityProfileResponse(BaseModel):
     mobility_mode: str
     confidence: float
     data_availability: dict[str, bool]
-
-
-class CityCapabilitiesResponse(BaseModel):
-    """City capabilities response."""
-    city_id: str
-    capabilities: dict[str, bool]
 
 
 class CityTariffResponse(BaseModel):
@@ -546,14 +453,6 @@ class CityTariffResponse(BaseModel):
     validation_method: str | None = None
     evidence_sources: str | None = None
     validated_at: str | None = None
-
-
-class CityZonesResponse(BaseModel):
-    """City zones response."""
-    available: bool
-    city_id: str
-    reason: str | None = None
-    zones: list[Zone] | None = None
 
 
 class SystemHealthResponse(BaseModel):

@@ -61,7 +61,7 @@ One city with real observed trip data: **NYC** — 265 TLC zones, high-volume fo
 
 08. City capability model
 
-Every served city is OBSERVED: local trip history plus trained models. Capability is derived per-field from what is actually wired (`backend/registry/cities.py`'s `capability_matrix`) — a fare needs a trained fare model or a real calibrated tariff, never a tier label. An unregistered `city_id` returns 404 rather than a degraded estimate.
+The served city is OBSERVED: local trip history plus trained models. Capability is derived per-field from what is actually wired (`backend/registry/cities.py`'s `capability_matrix`) — a fare needs a trained fare model or a real calibrated tariff, never a tier label. A capability with nothing behind it reports `unavailable` rather than a degraded estimate. Since [ADR-013](docs/adr/ADR-013-collapse-city-id.md) no route takes a `city_id`: the eight city endpoints are mounted bare at `/api/{capabilities,areas,areas/{area_id},metrics,forecast,profile,tariff,context}`.
 
 09. System architecture
 

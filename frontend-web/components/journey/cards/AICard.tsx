@@ -10,7 +10,6 @@ import { Brain, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 interface AICardProps {
-  cityId: string;
   journeyRequest: {
     pickup_lat: number;
     pickup_lon: number;
@@ -78,7 +77,6 @@ function AICardContent({ data, isStreaming }: { data: ChatResponse | null; isStr
 }
 
 export function AICard({
-  cityId,
   journeyRequest,
   fare,
   duration,
@@ -88,14 +86,14 @@ export function AICard({
   const [recommendation, setRecommendation] = useState<ChatResponse | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
 
-  const prompt = `Given a journey from (${journeyRequest.pickup_lat.toFixed(4)}, ${journeyRequest.pickup_lon.toFixed(4)}) to (${journeyRequest.dropoff_lat.toFixed(4)}, ${journeyRequest.dropoff_lon.toFixed(4)}) at ${journeyRequest.departure_time} in city ${cityId}, vehicle: ${journeyRequest.vehicle_type}${fare ? `, fare: ${fare}` : ""}${duration ? `, duration: ${duration}` : ""}${demand ? `, demand: ${demand}` : ""}${surge ? `, surge: ${surge}` : ""}. Provide a 2-sentence recommendation.`;
+  const prompt = `Given a journey from (${journeyRequest.pickup_lat.toFixed(4)}, ${journeyRequest.pickup_lon.toFixed(4)}) to (${journeyRequest.dropoff_lat.toFixed(4)}, ${journeyRequest.dropoff_lon.toFixed(4)}) at ${journeyRequest.departure_time}, vehicle: ${journeyRequest.vehicle_type}${fare ? `, fare: ${fare}` : ""}${duration ? `, duration: ${duration}` : ""}${demand ? `, demand: ${demand}` : ""}${surge ? `, surge: ${surge}` : ""}. Provide a 2-sentence recommendation.`;
 
   const { data: chatData, isLoading, refetch } = useQuery({
-    queryKey: queryKeys.chatHistory(cityId), // Using a stable key, we'll manually trigger
+    queryKey: queryKeys.chatHistory("journey-ai-card"), // stable key; manually triggered
     queryFn: async () => {
       setIsStreaming(true);
       try {
-        const resp = await sendChatMessage({ question: prompt, city_id: cityId });
+        const resp = await sendChatMessage({ question: prompt });
         setRecommendation(resp);
         return resp;
       } finally {
@@ -110,7 +108,7 @@ export function AICard({
   // In a real app, this would be triggered by the parent when all predictions are ready
 
   return (
-    <CapabilityGate capability="chat" cityId={cityId} fallback={<AICardSkeleton />}>
+    <CapabilityGate capability="chat" fallback={<AICardSkeleton />}>
       {isLoading || isStreaming ? <AICardSkeleton /> : recommendation ? (
         <AICardContent data={recommendation} isStreaming={isStreaming} />
       ) : (

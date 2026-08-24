@@ -13,17 +13,16 @@ import { ContextCard } from "@/components/journey/cards/ContextCard";
 import { AICard } from "@/components/journey/cards/AICard";
 import { useCapability } from "@/components/capability/CapabilityGate";
 import { ProvenanceSummary } from "@/components/ui/ProvenanceTooltip";
-import { type JourneyRequest, type PredictionRequest } from "@/lib/api";
+import { isInCoverage, type JourneyRequest, type PredictionRequest } from "@/lib/api";
 import { useMemo } from "react";
 
 interface JourneyResultsProps {
   request: JourneyRequest;
 }
 
-function JourneyContextSection({ request, cityId }: { request: PredictionRequest; cityId: string }) {
+function JourneyContextSection({ request }: { request: PredictionRequest }) {
   return (
     <ContextCard
-      cityId={cityId}
       pickupLat={request.pickup.lat}
       pickupLon={request.pickup.lon}
       dropoffLat={request.dropoff.lat}
@@ -35,14 +34,12 @@ function JourneyContextSection({ request, cityId }: { request: PredictionRequest
 
 function AICardSection({
   request,
-  cityId,
   fare,
   duration,
   demand,
   surge
 }: {
   request: PredictionRequest;
-  cityId: string;
   fare?: string;
   duration?: string;
   demand?: string;
@@ -50,7 +47,6 @@ function AICardSection({
 }) {
   return (
     <AICard
-      cityId={cityId}
       journeyRequest={{
         pickup_lat: request.pickup.lat,
         pickup_lon: request.pickup.lon,
@@ -83,52 +79,50 @@ function JourneyProvenanceSummary() {
 }
 
 export function JourneyResults({ request }: JourneyResultsProps) {
-  // JourneyForm resolves the real city_id itself (NYC bbox) before it
-  // ever calls onSubmit -- never default blindly to "nyc". A missing city_id
-  // here means the pickup fell outside both cities' coverage.
-  const cityId = request.city_id && request.city_id !== "undefined" ? request.city_id : null;
-
-  if (!cityId) {
-    return (
-      <div className="space-y-4">
-        <Card className="border-oxide/40 bg-surface-1">
-          <p className="text-sm text-ink-secondary">
-            Could not resolve a city for this pickup location, so no predictions can be shown.
-            Try picking a location from the address suggestions.
-          </p>
-        </Card>
-      </div>
-    );
-  }
-
   const predictionRequest = useMemo<PredictionRequest>(() => ({
-    city_id: cityId,
     pickup: { lat: request.pickup_lat, lon: request.pickup_lon },
     dropoff: { lat: request.dropoff_lat, lon: request.dropoff_lon },
     departure_time: request.departure_time,
     vehicle_type: request.vehicle_type,
     distance_km: null,
     duration_min: null,
-  }), [request, cityId]);
+  }), [request]);
 
   const routeRequest = useMemo<PredictionRequest>(() => ({
-    city_id: cityId,
     pickup: { lat: request.pickup_lat, lon: request.pickup_lon },
     dropoff: { lat: request.dropoff_lat, lon: request.dropoff_lon },
     departure_time: request.departure_time,
     vehicle_type: request.vehicle_type,
-  }), [request, cityId]);
+  }), [request]);
 
   // Check capabilities for conditional rendering
-  const hasFare = useCapability(cityId, "fare");
-  const hasDemand = useCapability(cityId, "demand");
-  const hasCongestion = useCapability(cityId, "congestion");
-  const hasAvailability = useCapability(cityId, "availability");
-  const hasSurge = useCapability(cityId, "surge");
-  const hasCarbon = useCapability(cityId, "carbon");
-  const hasBestDeparture = useCapability(cityId, "best_departure");
-  const hasChat = useCapability(cityId, "chat");
-  const hasRouting = useCapability(cityId, "routing");
+  const hasFare = useCapability("fare");
+  const hasDemand = useCapability("demand");
+  const hasCongestion = useCapability("congestion");
+  const hasAvailability = useCapability("availability");
+  const hasSurge = useCapability("surge");
+  const hasCarbon = useCapability("carbon");
+  const hasBestDeparture = useCapability("best_departure");
+  const hasChat = useCapability("chat");
+  const hasRouting = useCapability("routing");
+
+  // Every zone-keyed prediction degrades to "unavailable" outside the served
+  // city's coverage, so say that once here instead of rendering ten empty
+  // cards. This check sits *below* the hooks deliberately: it used to return
+  // early above them, which changed the hook count between renders whenever a
+  // pickup moved in or out of coverage.
+  if (!isInCoverage(request.pickup_lat, request.pickup_lon)) {
+    return (
+      <div className="space-y-4">
+        <Card className="border-oxide/40 bg-surface-1">
+          <p className="text-sm text-ink-secondary">
+            This pickup location is outside the served city&apos;s coverage, so no
+            predictions can be shown. Try picking a location from the address suggestions.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -145,14 +139,11 @@ export function JourneyResults({ request }: JourneyResultsProps) {
       {hasBestDeparture && <BestDepartureCard request={predictionRequest} />}
 
       {/* Context section */}
-      {hasRouting && <JourneyContextSection request={predictionRequest} cityId={cityId} />}
+      {hasRouting && <JourneyContextSection request={predictionRequest} />}
 
       {/* AI Recommendation - shown last after other data loads */}
       {hasChat && (
-        <AICardSection
-          request={predictionRequest}
-          cityId={cityId}
-        />
+        <AICardSection request={predictionRequest} />
       )}
 
       {/* Provenance summary at bottom */}

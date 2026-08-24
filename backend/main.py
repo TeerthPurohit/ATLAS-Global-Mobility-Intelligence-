@@ -27,7 +27,7 @@ from backend.errors import DomainError  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.routers import chat, cities, context, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
+from backend.routers import chat, city, context, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
 from backend.services import journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
 
@@ -107,7 +107,7 @@ app.include_router(zones.router)
 app.include_router(chat.router)
 app.include_router(platform.router)
 app.include_router(journey.router)
-app.include_router(cities.router)
+app.include_router(city.router)
 app.include_router(mobility.router)
 app.include_router(context.router)
 app.include_router(analytics.router)

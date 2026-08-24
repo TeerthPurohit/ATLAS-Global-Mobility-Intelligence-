@@ -63,11 +63,10 @@ export function CarbonCard({ request }: CarbonCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.carbon(request),
     queryFn: () => getCarbon(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="carbon" cityId={request.city_id} fallback={<CarbonCardSkeleton />}>
+    <CapabilityGate capability="carbon" fallback={<CarbonCardSkeleton />}>
       {isLoading ? <CarbonCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

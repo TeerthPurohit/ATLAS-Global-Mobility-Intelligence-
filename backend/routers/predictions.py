@@ -16,13 +16,11 @@ router = APIRouter(prefix="/predict", tags=["predictions"])
     "/demand",
     response_model=DemandPrediction,
     summary="Predict pickup demand",
-    description="Deprecated: superseded by `/api/cities/nyc/predict/demand` (identical NYC "
-    "computation, plus it works for every other onboarded city). Kept for existing callers "
-    "of this raw zone_id contract, not used by the frontend. Trained XGBoost demand model, "
-    "honestly falling back to the zone's own EWMA estimate (relabeled in `model`) if the raw "
-    "prediction extrapolates negative.",
+    description="Trained XGBoost demand model over a zone_id/hour/day-of-week, honestly "
+    "falling back to the zone's own EWMA estimate (relabeled in `model`) if the raw "
+    "prediction extrapolates negative. The city-scoped duplicate of this route was "
+    "removed in ADR-013; this is now the only demand-prediction endpoint.",
     responses={400: {"description": "zone_id has no demand history"}},
-    deprecated=True,
 )
 def predict_demand(
     zone_id: int = Query(..., description="TLC LocationID"),
@@ -45,12 +43,10 @@ def predict_demand(
     "/fare",
     response_model=FarePrediction,
     summary="Predict trip fare",
-    description="Deprecated: superseded by `/api/cities/nyc/predict/fare` (identical NYC "
-    "computation, plus it works for every other onboarded city). Kept for existing callers "
-    "of this raw zone_id contract, not used by the frontend. Trained XGBoost fare model over "
-    "a pickup/dropoff zone pair and hour.",
+    description="Trained XGBoost fare model over a pickup/dropoff zone pair and hour. "
+    "The city-scoped duplicate of this route was removed in ADR-013; this is now the "
+    "only fare-prediction endpoint.",
     responses={400: {"description": "pickup_zone or dropoff_zone is unknown"}},
-    deprecated=True,
 )
 def predict_fare(
     pickup_zone: int = Query(..., description="TLC LocationID"),

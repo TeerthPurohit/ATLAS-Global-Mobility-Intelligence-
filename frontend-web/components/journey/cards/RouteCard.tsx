@@ -55,11 +55,10 @@ export function RouteCard({ request }: RouteCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.route(request),
     queryFn: () => getRoute(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="routing" cityId={request.city_id} fallback={<RouteCardSkeleton />}>
+    <CapabilityGate capability="routing" fallback={<RouteCardSkeleton />}>
       {isLoading ? <RouteCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">

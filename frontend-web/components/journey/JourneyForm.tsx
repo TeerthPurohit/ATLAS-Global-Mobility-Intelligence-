@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card, CardTitle } from "@/components/ui/Card";
-import { VEHICLE_CLASSES, resolveCityId, getCityProfile, type JourneyRequest } from "@/lib/api";
+import { VEHICLE_CLASSES, isInCoverage, type JourneyRequest } from "@/lib/api";
 import { AddressSearch } from "./AddressSearch";
 import { type GeocodedPlace } from "@/hooks/useReverseGeocode";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const schema = z.object({
   pickup_lat: z.coerce.number().min(-90).max(90),
@@ -29,26 +29,19 @@ const NYC_DROPOFF = { lat: 40.7061, lon: -74.0088, name: "Financial District, Ne
 interface JourneyFormProps {
   onSubmit: (req: JourneyRequest) => void;
   isPending: boolean;
-  // From the city page's "Plan Journey" quick action (`/journey?city=<id>`).
-  // Previously ignored entirely, so arriving from any non-NYC city page still
-  // silently defaulted the form to NYC's pickup/dropoff/city.
-  initialCityId?: string | null;
 }
 
-export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormProps) {
+export function JourneyForm({ onSubmit, isPending }: JourneyFormProps) {
   // Coordinates are stored as plain state — AddressSearch sets them on selection.
   // The form registers them as hidden inputs for validation.
   const [pickup, setPickup] = useState(NYC_PICKUP);
   const [dropoff, setDropoff] = useState(NYC_DROPOFF);
   const [coordError, setCoordError] = useState<string | null>(null);
-  // Resolved from the pickup address's own coordinates/city name -- real
-  // registry lookup (resolveCityId), not user free-text. Previously a
-  // disconnected manual "City" input existed here that nothing populated,
-  // so every out-of-coverage journey silently queried "nyc" downstream
-  // (JourneyResults.tsx's old fallback). null = still resolving or
-  // unresolvable; every /api/mobility/* card degrades honestly on that,
-  // it never guesses "nyc".
-  const [resolvedCityId, setResolvedCityId] = useState<string | null>("nyc");
+  // Whether the picked pickup point is inside the served city's zone
+  // coverage, from the address's own coordinates -- not user free-text.
+  // False means every zone-keyed card degrades honestly rather than
+  // pretending the point is in the city.
+  const [inCoverage, setInCoverage] = useState(true);  // the defaults below are in-coverage
 
   const {
     register,
@@ -65,33 +58,6 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
       vehicle_type: "sedan",
     },
   });
-
-  // Arrived from a specific city's page: swap the NYC defaults for that
-  // city's own centroid instead of silently keeping Midtown/Financial
-  // District. Dropoff is a small offset from the same centroid -- close
-  // enough to stay within the city, exact enough for the user to override
-  // via the address search below before submitting.
-  useEffect(() => {
-    if (!initialCityId || initialCityId === "nyc") return;
-    let cancelled = false;
-    getCityProfile(initialCityId).then((profile) => {
-      if (cancelled) return;
-      const center = { lat: profile.latitude, lon: profile.longitude, name: `${profile.name} city center` };
-      const nearby = { lat: profile.latitude + 0.02, lon: profile.longitude + 0.02, name: `Near ${profile.name} city center` };
-      setPickup(center);
-      setDropoff(nearby);
-      setValue("pickup_lat", center.lat);
-      setValue("pickup_lon", center.lon);
-      setValue("dropoff_lat", nearby.lat);
-      setValue("dropoff_lon", nearby.lon);
-      setResolvedCityId(initialCityId);
-    }).catch(() => {
-      // City profile lookup failed -- leave the NYC defaults in place rather
-      // than half-apply a city switch.
-    });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the URL's city changes, not on every setValue identity change
-  }, [initialCityId]);
 
   const submit = handleSubmit((values) => {
     const parsed = schema.safeParse(values);
@@ -114,7 +80,6 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
       dropoff_lat: dropoff.lat,
       dropoff_lon: dropoff.lon,
       departure_time: new Date(parsed.data.departure_time).toISOString(),
-      city_id: resolvedCityId ?? undefined,
     });
   });
 
@@ -138,7 +103,7 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
             setValue("pickup_lat", place.lat);
             setValue("pickup_lon", place.lon);
             setCoordError(null);
-            setResolvedCityId(resolveCityId(place.lat, place.lon));
+            setInCoverage(isInCoverage(place.lat, place.lon));
           }}
         />
 
@@ -176,11 +141,11 @@ export function JourneyForm({ onSubmit, isPending, initialCityId }: JourneyFormP
         </div>
 
         <div className="text-xs text-ink-muted">
-          <span className="uppercase tracking-wider">Detected city: </span>
-          {resolvedCityId ? (
-            <span className="font-mono text-brass">{resolvedCityId}</span>
+          <span className="uppercase tracking-wider">Coverage: </span>
+          {inCoverage ? (
+            <span className="font-mono text-brass">in service area</span>
           ) : (
-            <span className="text-oxide">outside NYC coverage</span>
+            <span className="text-oxide">outside coverage</span>
           )}
         </div>
 

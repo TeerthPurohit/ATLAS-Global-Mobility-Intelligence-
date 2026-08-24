@@ -102,7 +102,6 @@ class JourneyContext:
     vehicle_profile: VehicleProfile | None
     weather: PredictionResult
     holiday: PredictionResult
-    city_id: str = "nyc"
 
 
 @dataclass

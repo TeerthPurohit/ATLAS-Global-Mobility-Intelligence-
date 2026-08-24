@@ -5,15 +5,13 @@ One job: `resolve(lat, lon) -> zone_id | None`, a thin wrapper around the
 existing KD-tree zone lookup (`algorithms/spatial/kdtree_zone_lookup.py`).
 `None` means "outside NYC's zone coverage" -- every zone-keyed predictor
 degrades honestly to `basis="unavailable"` for that component rather than
-snapping a non-NYC coordinate to the nearest NYC zone, which would silently
-fabricate a wrong answer for the "global means degrading honestly" design
-principle in the plan.
+snapping an out-of-coverage coordinate to the nearest NYC zone, which would
+silently fabricate a wrong answer.
 
-SPEC-013 FR-5 adds `list_areas(city_id)` / `get_area(city_id, area_id)`,
-backed by the `canonical_areas` mart -- a distinct concern from the
-nearest-neighbor `resolve()` above (listing a city's areas vs. resolving a
-coordinate to one), so it's read straight from DuckDB rather than routed
-through the KD-tree.
+`list_areas()` / `get_area(area_id)` are backed by the `canonical_areas`
+mart -- a distinct concern from the nearest-neighbor `resolve()` above
+(listing areas vs. resolving a coordinate to one), so they read straight
+from DuckDB rather than routing through the KD-tree.
 """
 from __future__ import annotations
 
@@ -34,7 +32,7 @@ _NYC_BBOX = (40.49, -74.26, 40.92, -73.68)  # (min_lat, min_lon, max_lat, max_lo
 
 _tree: KDTree | None = None
 
-_AREA_COLUMNS = ("area_id", "city_id", "name", "area_type", "parent_area_id", "latitude", "longitude")
+_AREA_COLUMNS = ("area_id", "name", "area_type", "parent_area_id", "latitude", "longitude")
 
 
 def _get_tree() -> KDTree:
@@ -56,43 +54,25 @@ def resolve(lat: float, lon: float) -> int | None:
     return point.location_id if point else None
 
 
-def detect_city_from_coords(lat: float, lon: float) -> str | None:
-    """NYC bbox detection for a journey request that didn't specify city_id
-    explicitly -- None means "no zone-enriched city recognizes this point,"
-    and the caller degrades every city-scoped field honestly."""
-    return "nyc" if in_coverage(lat, lon) else None
-
-
-def resolve_for_city(city_id: str, lat: float, lon: float) -> int | None:
-    """Like resolve(), keyed by city. None means "outside this city's
-    coverage" -- never snaps to the nearest point regardless of distance,
-    same honesty discipline as resolve(). A second city adds a branch here
-    plus its own KD-tree loader."""
-    if city_id == "nyc":
-        return resolve(lat, lon)
-    return None
-
-
-def list_areas(city_id: str) -> list[dict]:
-    """Real rows from the `canonical_areas` mart -- a small (~265 for NYC)
-    dimension read, not a table scan (rule 8)."""
+def list_areas() -> list[dict]:
+    """Real rows from the `canonical_areas` mart -- a small (~265) dimension
+    read, not a table scan (rule 8)."""
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
         rows = con.execute(
-            f"select {', '.join(_AREA_COLUMNS)} from canonical_areas where city_id = ? order by area_id",
-            [city_id],
+            f"select {', '.join(_AREA_COLUMNS)} from canonical_areas order by area_id"
         ).fetchall()
     finally:
         con.close()
     return [dict(zip(_AREA_COLUMNS, r)) for r in rows]
 
 
-def get_area(city_id: str, area_id: int) -> dict | None:
+def get_area(area_id: int) -> dict | None:
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
         row = con.execute(
-            f"select {', '.join(_AREA_COLUMNS)} from canonical_areas where city_id = ? and area_id = ?",
-            [city_id, area_id],
+            f"select {', '.join(_AREA_COLUMNS)} from canonical_areas where area_id = ?",
+            [area_id],
         ).fetchone()
     finally:
         con.close()

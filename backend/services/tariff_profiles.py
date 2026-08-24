@@ -31,6 +31,8 @@ from loguru import logger
 from sqlalchemy import Column, DateTime, Double, String, Table, Text, select
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend.registry import CITY_ID
+
 RAG_DIR = Path(__file__).resolve().parents[2] / "rag"
 if str(RAG_DIR) not in sys.path:
     sys.path.insert(0, str(RAG_DIR))
@@ -249,18 +251,22 @@ def load(conninfo: str | None = None, table_name: str = TABLE_NAME) -> None:
     logger.info("tariff_profiles.load step=done count={}", len(_profiles))
 
 
-def get(city_id: str) -> TariffProfile | None:
+def get() -> TariffProfile | None:
+    """The cached profile for the one city this platform serves (ADR-013).
+
+    The Postgres table keeps its `city_id` primary key -- it is a store, not
+    an API surface, and a row there is still identified by city -- but no
+    caller passes one any more.
+    """
     if not _profiles:
         load()  # defensive lazy-load -- see backend/registry/cities.py's get_city() for why
-    return _profiles.get(city_id)
+    return _profiles.get(CITY_ID)
 
 
-def city_ids() -> list[str]:
-    """Every city_id that actually has a cached profile -- the real
-    fare-supported set, read from the loaded table, never assumed from a tier."""
-    if not _profiles:
-        load()
-    return list(_profiles)
+def has_profile() -> bool:
+    """Whether a real cached profile backs the fare estimate -- read from the
+    loaded table, never assumed from a tier."""
+    return get() is not None
 
 
 def upsert(profile: TariffProfile, conninfo: str | None = None, table_name: str = TABLE_NAME) -> None:

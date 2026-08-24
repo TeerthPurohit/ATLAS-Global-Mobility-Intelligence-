@@ -27,13 +27,11 @@ def _rows(sql: str, params: list) -> list[dict]:
 
 
 class NYCTLCDataSource:
-    city_id = "nyc"
-
     def get_areas(self) -> list[dict]:
         return _rows(
-            "select area_id, city_id, name, area_type, parent_area_id, latitude, longitude "
-            "from canonical_areas where city_id = ? order by area_id",
-            [self.city_id],
+            "select area_id, name, area_type, parent_area_id, latitude, longitude "
+            "from canonical_areas order by area_id",
+            [],
         )
 
     def get_demand(

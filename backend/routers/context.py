@@ -1,7 +1,8 @@
 """Context APIs - Weather, Holiday, Traffic (Part 3 of API Decomposition).
 
 Environmental/context information separated from mobility predictions.
-An unresolvable city_id is a client error (400), never a bare 500.
+`lat`/`lon` are optional: omitted, they fall back to the served city's own
+seeded coordinates. A registry with no city row is a 400, never a bare 500.
 """
 from __future__ import annotations
 
@@ -19,41 +20,46 @@ from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # 
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, PredictionResult  # noqa: E402
 from backend.schemas import HolidayResponse, TrafficResponse, WeatherResponse  # noqa: E402
+from backend.registry import CITY_ID  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.services import journey_service  # noqa: E402
 
 router = APIRouter(prefix="/api/context", tags=["Context"])
 
 
-def _resolve_coords(city_id: str) -> tuple[float, float]:
-    """Resolve a city to (lat, lon). Raises 400 -- not a bare 500 -- when the
-    city is unknown or has no coordinates."""
-    profile = cities_registry.get_city_profile(city_id)
+def _city_coords() -> tuple[float, float]:
+    """The served city's seeded (lat, lon). Raises 400 -- not a bare 500 --
+    when the registry has no row or the row carries no coordinates.
+
+    Reads `profile["coordinates"]`, which is where `get_city_profile()`
+    actually nests them; the previous top-level `profile.get("latitude")`
+    always read None, so this fallback never fired before.
+    """
+    profile = cities_registry.get_city_profile()
     if not profile:
-        raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
-    lat = profile.get("latitude")
-    lon = profile.get("longitude")
+        raise HTTPException(status_code=400, detail="Cannot resolve coordinates: no registered city")
+    coords = profile.get("coordinates") or {}
+    lat, lon = coords.get("latitude"), coords.get("longitude")
     if lat is None or lon is None:
-        raise HTTPException(status_code=400, detail=f"City profile missing coordinates for {city_id}")
+        raise HTTPException(status_code=400, detail="City profile is missing coordinates")
     return float(lat), float(lon)
 
 
 @router.get("/weather", response_model=WeatherResponse)
 def weather(
-    city_id: str = Query(..., description="City identifier"),
-    lat: float | None = Query(None, description="Latitude (required if city_id not resolvable)"),
-    lon: float | None = Query(None, description="Longitude (required if city_id not resolvable)"),
+    lat: float | None = Query(None, description="Latitude; defaults to the city centroid"),
+    lon: float | None = Query(None, description="Longitude; defaults to the city centroid"),
     timestamp: str | None = Query(None, description="ISO timestamp, defaults to now"),
 ) -> WeatherResponse:
-    """Get weather for a city at a specific time.
+    """Get weather at a specific time.
 
-    Accepts either city_id or lat/lon coordinates. Reports the adapter's real
-    0-1 weather severity score under `severity`; `temperature` is always None
-    because no adapter here returns one (see WeatherResponse docstring).
+    Reports the adapter's real 0-1 weather severity score under `severity`;
+    `temperature` is always None because no adapter here returns one (see
+    WeatherResponse docstring).
     """
-    logger.info("GET /api/context/weather step=start city_id={} lat={} lon={} timestamp={}", city_id, lat, lon, timestamp)
+    logger.info("GET /api/context/weather step=start lat={} lon={} timestamp={}", lat, lon, timestamp)
     if lat is None or lon is None:
-        lat, lon = _resolve_coords(city_id)
+        lat, lon = _city_coords()
 
     if timestamp:
         try:
@@ -65,7 +71,7 @@ def weather(
         dt = datetime.now()
 
     weather_result = weather_openmeteo.fetch(lat, lon, dt)
-    logger.info("GET /api/context/weather step=done city_id={} source={}", city_id, weather_result.source)
+    logger.info("GET /api/context/weather step=done source={}", weather_result.source)
 
     severity = weather_result.value if weather_result.basis == "computed" else None
     note = None
@@ -83,30 +89,20 @@ def weather(
         severity=severity,
         source=weather_result.source,
         timestamp=dt,
-        city_id=city_id,
+        city_id=CITY_ID,
     )
 
 
 @router.get("/holiday", response_model=HolidayResponse)
 def holiday(
-    city_id: str = Query(..., description="City identifier"),
-    lat: float | None = Query(None, description="Latitude (required if city_id not resolvable)"),
-    lon: float | None = Query(None, description="Longitude (required if city_id not resolvable)"),
+    lat: float | None = Query(None, description="Latitude; defaults to the city centroid"),
+    lon: float | None = Query(None, description="Longitude; defaults to the city centroid"),
     date: str | None = Query(None, description="ISO date (YYYY-MM-DD), defaults to today"),
 ) -> HolidayResponse:
     """Check if a date is a holiday in the city's country."""
-    logger.info("GET /api/context/holiday step=start city_id={} lat={} lon={} date={}", city_id, lat, lon, date)
-    profile = None
+    logger.info("GET /api/context/holiday step=start lat={} lon={} date={}", lat, lon, date)
     if lat is None or lon is None:
-        profile = cities_registry.get_city_profile(city_id)
-        if not profile:
-            logger.warning("GET /api/context/holiday step=city_not_resolvable city_id={}", city_id)
-            raise HTTPException(status_code=400, detail=f"Cannot resolve coordinates for city_id={city_id}")
-        lat = profile.get("latitude")
-        lon = profile.get("longitude")
-        if lat is None or lon is None:
-            logger.warning("GET /api/context/holiday step=missing_coordinates city_id={}", city_id)
-            raise HTTPException(status_code=400, detail=f"City profile missing coordinates for {city_id}")
+        lat, lon = _city_coords()
 
     if date:
         try:
@@ -118,12 +114,12 @@ def holiday(
         dt = datetime.now()
 
     holiday_result = holidays_nager.fetch(lat, lon, dt)
-    logger.info("GET /api/context/holiday step=done city_id={} source={}", city_id, holiday_result.source)
+    logger.info("GET /api/context/holiday step=done source={}", holiday_result.source)
 
     is_holiday = holiday_result.value == 1.0 if holiday_result.value is not None else False
     holiday_name = holiday_result.reason if is_holiday and holiday_result.reason else None
 
-    country = (profile or cities_registry.get_city_profile(city_id) or {}).get("country_code", "XX")
+    country = (cities_registry.get_city_profile() or {}).get("country_code") or "XX"
 
     return HolidayResponse(
         is_holiday=is_holiday,
@@ -136,25 +132,24 @@ def holiday(
 
 @router.get("/traffic", response_model=TrafficResponse)
 def traffic(
-    city_id: str = Query(..., description="City identifier"),
-    lat: float | None = Query(None, description="Latitude (required if city_id not resolvable)"),
-    lon: float | None = Query(None, description="Longitude (required if city_id not resolvable)"),
+    lat: float | None = Query(None, description="Latitude; defaults to the city centroid"),
+    lon: float | None = Query(None, description="Longitude; defaults to the city centroid"),
 ) -> TrafficResponse:
-    """Get traffic/congestion information for a city.
+    """Get traffic/congestion information.
 
-    Returns historical traffic score where available (NYC zone pairs).
-    Does NOT claim real-time traffic - only historical estimates.
+    Returns a historical traffic score where available (zone pairs). Does NOT
+    claim real-time traffic - only historical estimates.
     """
-    logger.info("GET /api/context/traffic step=start city_id={} lat={} lon={}", city_id, lat, lon)
+    logger.info("GET /api/context/traffic step=start lat={} lon={}", lat, lon)
     if lat is None or lon is None:
-        lat, lon = _resolve_coords(city_id)
+        lat, lon = _city_coords()
 
     dt = datetime.now()
-    ctx = journey_service.build_context(lat, lon, lat + 0.01, lon + 0.01, dt, "car", city_id)
+    ctx = journey_service.build_context(lat, lon, lat + 0.01, lon + 0.01, dt, "car")
     features = journey_service.build_features(ctx)
 
     traffic_score = features.historical_traffic_score
-    logger.info("GET /api/context/traffic step=done city_id={} basis={}", city_id, traffic_score.basis)
+    logger.info("GET /api/context/traffic step=done basis={}", traffic_score.basis)
 
     is_live = False
     congestion_level = None
@@ -173,6 +168,6 @@ def traffic(
         source=traffic_score.source,
         is_live=is_live,
         timestamp=dt,
-        city_id=city_id,
+        city_id=CITY_ID,
         note=note,
     )

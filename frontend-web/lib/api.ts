@@ -69,11 +69,6 @@ export interface JourneyRequest {
   dropoff_lon: number;
   departure_time: string; // ISO 8601
   vehicle_type: string;
-  // Explicit city (registered id, GeoNames id, or free-text place name).
-  // Optional for NYC -- auto-detected from pickup coordinates;
-  // every other city must be named explicitly or every city-scoped field
-  // (fare, demand, surge, availability) degrades to "unavailable".
-  city_id?: string;
 }
 
 // A fare's `unit` is its ISO 4217 currency code ("USD", "INR", "JPY", ...).
@@ -133,7 +128,6 @@ export type ChatRoute = "numeric" | "explanatory";
 export interface ChatRequest {
   question: string;
   session_id?: string;
-  city_id?: string;
   area_id?: number;
 }
 
@@ -261,18 +255,6 @@ export interface City {
   mobility_mode: string;
 }
 
-export interface CitySearchParams {
-  q?: string;
-  country?: string;
-}
-
-export interface CitySearchResponse {
-  results: City[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
 export interface Capabilities {
   demand: boolean;
   fare: boolean;
@@ -335,26 +317,10 @@ export interface CityTariffResponse {
   notes: string | null;
   generated_at: string | null;
   model_id: string | null;
-  // null = never evidence/analytically validated -- see WS /api/cities/{city_id}/tariff/enrich.
+  // null = never evidence/analytically validated.
   validation_method: string | null;
   evidence_sources: string | null;
   validated_at: string | null;
-}
-
-export interface CityZone {
-  zone_id: number;
-  zone: string;
-  borough: string;
-  service_zone: string | null;
-  latitude: number;
-  longitude: number;
-}
-
-export interface CityZonesResponse {
-  available: boolean;
-  city_id: string;
-  reason: string | null;
-  zones: CityZone[] | null;
 }
 
 // ============================================================================
@@ -367,7 +333,6 @@ export interface Coordinates {
 }
 
 export interface JourneyContextRequest {
-  city_id: string;
   pickup: Coordinates;
   dropoff: Coordinates;
   departure_time: string;
@@ -518,48 +483,51 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return resp.json();
 }
 
-export async function listCities(params: CitySearchParams = {}): Promise<CitySearchResponse> {
-  const searchParams = new URLSearchParams();
-  if (params.q) searchParams.set("q", params.q);
-  if (params.country) searchParams.set("country", params.country);
-  return fetchJson<CitySearchResponse>(`/api/cities?${searchParams.toString()}`);
-}
-
-// NYC's real zone bbox coverage -- mirrors backend/services/
+// The served city's real zone bbox -- mirrors backend/services/
 // geography_service.py's _NYC_BBOX exactly, so a pickup inside the city
 // resolves the same way client-side (avoiding a network round trip) as it
 // would server-side.
-const NYC_BBOX = { minLat: 40.49, minLon: -74.26, maxLat: 40.92, maxLon: -73.68 };
-
-function detectRegisteredCity(lat: number, lon: number): "nyc" | null {
-  if (lat >= NYC_BBOX.minLat && lat <= NYC_BBOX.maxLat && lon >= NYC_BBOX.minLon && lon <= NYC_BBOX.maxLon) return "nyc";
-  return null;
-}
+const CITY_BBOX = { minLat: 40.49, minLon: -74.26, maxLat: 40.92, maxLon: -73.68 };
 
 /**
- * Resolves a picked address to the backend city_id every /api/mobility/*
- * call needs. This platform serves the cities it has real trip data for
- * (ADR-012), so a point outside NYC resolves to null and callers
- * must treat that as "unavailable" -- never silently fall back to nyc.
+ * Whether a picked point is inside the served city's zone coverage.
+ *
+ * This was `resolveCityId(lat, lon): "nyc" | null` before ADR-013. No call
+ * needs a city id any more, but the *coverage* half of that answer is still
+ * real: outside the bbox, every zone-keyed field (fare, demand, surge,
+ * availability) degrades to "unavailable", and callers must show that rather
+ * than silently pretending the point is in the city.
  */
-export function resolveCityId(lat: number, lon: number): "nyc" | null {
-  return detectRegisteredCity(lat, lon);
+export function isInCoverage(lat: number, lon: number): boolean {
+  return lat >= CITY_BBOX.minLat && lat <= CITY_BBOX.maxLat
+    && lon >= CITY_BBOX.minLon && lon <= CITY_BBOX.maxLon;
 }
 
-export async function getCityProfile(cityId: string): Promise<CityProfileResponse> {
-  return fetchJson<CityProfileResponse>(`/api/cities/${cityId}/profile`);
+export async function getCityProfile(): Promise<CityProfileResponse> {
+  return fetchJson<CityProfileResponse>("/api/profile");
 }
 
-export async function getCityCapabilities(cityId: string): Promise<Capabilities> {
-  return fetchJson<Capabilities>(`/api/cities/${cityId}/capabilities`);
+export async function getCapabilities(): Promise<Capabilities> {
+  return fetchJson<Capabilities>("/api/capabilities");
 }
 
-export async function getCityTariff(cityId: string): Promise<CityTariffResponse> {
-  return fetchJson<CityTariffResponse>(`/api/cities/${cityId}/tariff`);
+export async function getTariff(): Promise<CityTariffResponse> {
+  return fetchJson<CityTariffResponse>("/api/tariff");
 }
 
-export async function getCityZones(cityId: string): Promise<CityZonesResponse> {
-  return fetchJson<CityZonesResponse>(`/api/cities/${cityId}/zones`);
+export interface Zone {
+  zone_id: number;
+  zone: string;
+  borough: string;
+  service_zone: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+// The city-scoped /api/cities/{id}/zones wrapper was deleted in ADR-013 --
+// it only ever re-served this route's rows inside an availability envelope.
+export async function getZones(): Promise<Zone[]> {
+  return fetchJson<Zone[]>("/zones");
 }
 
 // Per-zone measured trip totals backing the landing map's choropleth.
@@ -610,24 +578,24 @@ export async function getBestDeparture(req: PredictionRequest): Promise<Departur
 }
 
 // Context
-export async function getWeather(cityId: string, lat?: number, lon?: number, timestamp?: string): Promise<WeatherResponse> {
-  const params = new URLSearchParams({ city_id: cityId });
+export async function getWeather(lat?: number, lon?: number, timestamp?: string): Promise<WeatherResponse> {
+  const params = new URLSearchParams();
   if (lat !== undefined) params.set("lat", String(lat));
   if (lon !== undefined) params.set("lon", String(lon));
   if (timestamp) params.set("timestamp", timestamp);
   return fetchJson<WeatherResponse>(`/api/context/weather?${params.toString()}`);
 }
 
-export async function getHoliday(cityId: string, lat?: number, lon?: number, date?: string): Promise<HolidayResponse> {
-  const params = new URLSearchParams({ city_id: cityId });
+export async function getHoliday(lat?: number, lon?: number, date?: string): Promise<HolidayResponse> {
+  const params = new URLSearchParams();
   if (lat !== undefined) params.set("lat", String(lat));
   if (lon !== undefined) params.set("lon", String(lon));
   if (date) params.set("date", date);
   return fetchJson<HolidayResponse>(`/api/context/holiday?${params.toString()}`);
 }
 
-export async function getTraffic(cityId: string, lat?: number, lon?: number): Promise<TrafficResponse> {
-  const params = new URLSearchParams({ city_id: cityId });
+export async function getTraffic(lat?: number, lon?: number): Promise<TrafficResponse> {
+  const params = new URLSearchParams();
   if (lat !== undefined) params.set("lat", String(lat));
   if (lon !== undefined) params.set("lon", String(lon));
   return fetchJson<TrafficResponse>(`/api/context/traffic?${params.toString()}`);

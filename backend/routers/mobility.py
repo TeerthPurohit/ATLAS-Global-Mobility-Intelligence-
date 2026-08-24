@@ -78,7 +78,7 @@ def _predict_route(req: RouteRequest) -> tuple[PredictionResult, PredictionResul
     """Shared route prediction - returns (distance, duration)."""
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
     return features.distance_miles, features.duration_min
@@ -91,7 +91,7 @@ def route(req: RouteRequest) -> RouteResponse:
     Uses OSRM with haversine fallback. Returns provenance for both fields.
     """
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/route step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/route step=start request_id={}", request_id)
     distance, duration = _predict_route(req)
     logger.info("POST /api/mobility/route step=done request_id={}", request_id)
 
@@ -107,15 +107,15 @@ def route(req: RouteRequest) -> RouteResponse:
 def fare(req: PredictionRequest) -> FareResponse:
     """Get fare estimate for a journey.
 
-    Uses trained model (NYC) or tariff profile (other cities).
+    Uses the trained fare model.
     Optionally accepts pre-computed route to avoid recomputation.
     """
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/fare step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/fare step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
 
     # Use provided route or compute
@@ -176,11 +176,11 @@ def fare(req: PredictionRequest) -> FareResponse:
 def demand(req: PredictionRequest) -> DemandResponse:
     """Get demand prediction for a pickup location and time."""
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/demand step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/demand step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
 
@@ -198,11 +198,11 @@ def demand(req: PredictionRequest) -> DemandResponse:
 def congestion(req: PredictionRequest) -> CongestionResponse:
     """Get congestion prediction for a journey."""
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/congestion step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/congestion step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
 
@@ -220,11 +220,11 @@ def congestion(req: PredictionRequest) -> CongestionResponse:
 def availability(req: PredictionRequest) -> AvailabilityResponse:
     """Get ride availability prediction."""
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/availability step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/availability step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
 
@@ -246,11 +246,11 @@ def surge(req: PredictionRequest) -> SurgeResponse:
     composed with base fare explicitly.
     """
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/surge step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/surge step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
 
@@ -268,11 +268,11 @@ def surge(req: PredictionRequest) -> SurgeResponse:
 def carbon(req: PredictionRequest) -> CarbonResponse:
     """Get carbon emissions estimate."""
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/carbon step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/carbon step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
 
@@ -290,17 +290,17 @@ def carbon(req: PredictionRequest) -> CarbonResponse:
 def departure_time(req: PredictionRequest) -> DepartureTimeResponse:
     """Get recommended departure time."""
     request_id = str(uuid.uuid4())[:8]
-    logger.info("POST /api/mobility/departure-time step=start request_id={} city_id={}", request_id, req.city_id)
+    logger.info("POST /api/mobility/departure-time step=start request_id={}", request_id)
 
     ctx = journey_service.build_context(
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
-        req.departure_time, req.vehicle_type, req.city_id
+        req.departure_time, req.vehicle_type
     )
     features = journey_service.build_features(ctx)
 
     best = journey_predictors.sweep_best_departure_time(
         ctx.pickup_zone_id, req.departure_time.hour, req.departure_time.weekday(),
-        window_hours=6, city_id=ctx.city_id,
+        window_hours=6,
     )
     logger.info("POST /api/mobility/departure-time step=done request_id={}", request_id)
 

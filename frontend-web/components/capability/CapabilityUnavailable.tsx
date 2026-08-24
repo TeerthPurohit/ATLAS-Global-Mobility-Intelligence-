@@ -4,17 +4,16 @@ import { cn } from "@/lib/utils";
 
 interface CapabilityUnavailableProps {
   capability: string;
-  cityId: string;
   className?: string;
 }
 
-export function CapabilityUnavailable({ capability, cityId, className }: CapabilityUnavailableProps) {
+export function CapabilityUnavailable({ capability, className }: CapabilityUnavailableProps) {
   const capabilityLabels: Record<string, { label: string; reason: string }> = {
-    demand: { label: "Demand Prediction", reason: "No demand model trained for this city" },
+    demand: { label: "Demand Prediction", reason: "No demand model trained" },
     fare: { label: "Fare Estimation", reason: "No fare model or tariff profile available" },
     journey: { label: "Journey Estimates", reason: "Full journey pipeline not available" },
-    chat: { label: "AI Analyst", reason: "Chat not configured for this city" },
-    area_analysis: { label: "Area Analytics", reason: "No area definitions for this city" },
+    chat: { label: "AI Analyst", reason: "Chat not configured" },
+    area_analysis: { label: "Area Analytics", reason: "No area definitions" },
     routing: { label: "Routing", reason: "OSRM routing not available" },
     congestion: { label: "Congestion", reason: "No historical traffic data" },
     availability: { label: "Availability", reason: "No availability model" },
@@ -41,7 +40,6 @@ export function CapabilityUnavailable({ capability, cityId, className }: Capabil
       </svg>
       <p className="font-display text-sm font-semibold text-ink-primary">{info.label}</p>
       <p className="mt-1 text-xs text-ink-muted">{info.reason}</p>
-      <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-ink-muted">CITY: {cityId}</p>
     </div>
   );
 }

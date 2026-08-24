@@ -1,13 +1,13 @@
-"""Per-city mobility data source registry. Each city registers here with its
-own data-source implementation, zero changes to callers of
-`get_datasource()`.
+"""Mobility data source. One implementation, for the one city this platform
+serves (ADR-013) -- `get_datasource()` stays as the single accessor so
+callers keep one seam to swap if a second source ever lands.
 """
 from __future__ import annotations
 
 from backend.datasources.nyc_tlc import NYCTLCDataSource
 
-_DATASOURCES = {"nyc": NYCTLCDataSource()}
+_DATASOURCE = NYCTLCDataSource()
 
 
-def get_datasource(city_id: str):
-    return _DATASOURCES.get(city_id)
+def get_datasource():
+    return _DATASOURCE

@@ -1,28 +1,26 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getCityCapabilities, type Capabilities } from "@/lib/api";
+import { getCapabilities, type Capabilities } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { ReactNode } from "react";
 import { CapabilityUnavailable } from "./CapabilityUnavailable";
 
 interface CapabilityGateProps {
   capability: keyof Capabilities;
-  cityId: string;
   children: ReactNode;
   fallback?: ReactNode;
 }
 
 /**
- * Only renders children if the capability is wired for this city.
- * Shows fallback (or default unavailable message) if capability is false/unavailable.
+ * Only renders children if the capability is actually wired.
+ * Shows fallback (or the default unavailable message) if it is false.
  */
-export function CapabilityGate({ capability, cityId, children, fallback }: CapabilityGateProps) {
+export function CapabilityGate({ capability, children, fallback }: CapabilityGateProps) {
   const { data: capabilities, isLoading } = useQuery({
-    queryKey: queryKeys.cityCapabilities(cityId),
-    queryFn: () => getCityCapabilities(cityId),
+    queryKey: queryKeys.cityCapabilities(),
+    queryFn: () => getCapabilities(),
     staleTime: 5 * 60_000,
-    enabled: !!cityId && cityId !== "undefined",
   });
 
   if (isLoading) {
@@ -32,9 +30,7 @@ export function CapabilityGate({ capability, cityId, children, fallback }: Capab
   const enabled = capabilities?.[capability];
 
   if (!enabled) {
-    return fallback || (
-      <CapabilityUnavailable capability={capability} cityId={cityId} />
-    );
+    return fallback || <CapabilityUnavailable capability={capability} />;
   }
 
   return <>{children}</>;
@@ -43,12 +39,11 @@ export function CapabilityGate({ capability, cityId, children, fallback }: Capab
 /**
  * Hook version for conditional logic
  */
-export function useCapability(cityId: string, capability: keyof Capabilities) {
+export function useCapability(capability: keyof Capabilities) {
   const { data: capabilities } = useQuery({
-    queryKey: queryKeys.cityCapabilities(cityId),
-    queryFn: () => getCityCapabilities(cityId),
+    queryKey: queryKeys.cityCapabilities(),
+    queryFn: () => getCapabilities(),
     staleTime: 5 * 60_000,
-    enabled: !!cityId && cityId !== "undefined",
   });
 
   return capabilities?.[capability] ?? false;

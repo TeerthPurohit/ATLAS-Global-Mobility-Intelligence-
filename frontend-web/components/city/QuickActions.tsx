@@ -6,12 +6,11 @@ import { MapPin, BarChart2, Search, MessageSquare, ArrowRight } from "lucide-rea
 import { cn } from "@/lib/utils";
 
 interface QuickActionsProps {
-  cityId: string;
   hasCapabilities: boolean;
   className?: string;
 }
 
-export function QuickActions({ cityId, hasCapabilities, className }: QuickActionsProps) {
+export function QuickActions({ hasCapabilities, className }: QuickActionsProps) {
   const router = useRouter();
 
   const actions = [
@@ -19,7 +18,7 @@ export function QuickActions({ cityId, hasCapabilities, className }: QuickAction
       label: "Plan Journey",
       desc: "Plot origin & destination",
       icon: MapPin,
-      href: `/journey?city=${cityId}`,
+      href: "/journey",
       disabled: false,
       color: "text-brass border-brass/30 bg-brass/10",
     },
@@ -27,7 +26,7 @@ export function QuickActions({ cityId, hasCapabilities, className }: QuickAction
       label: "Compare Vehicles",
       desc: "Multi-vehicle matrix",
       icon: BarChart2,
-      href: `/compare?city=${cityId}`,
+      href: "/compare",
       disabled: !hasCapabilities,
       color: "text-verdigris border-verdigris/30 bg-verdigris/10",
     },
@@ -35,7 +34,7 @@ export function QuickActions({ cityId, hasCapabilities, className }: QuickAction
       label: "City Insights",
       desc: "Demand & flow analytics",
       icon: Search,
-      href: `/insights?city=${cityId}`,
+      href: "/insights",
       disabled: !hasCapabilities,
       color: "text-brass border-brass/30 bg-brass/10",
     },
@@ -43,7 +42,7 @@ export function QuickActions({ cityId, hasCapabilities, className }: QuickAction
       label: "AI Analyst",
       desc: "Interactive intelligence",
       icon: MessageSquare,
-      href: `/analyst?city=${cityId}`,
+      href: "/analyst",
       disabled: false,
       color: "text-verdigris border-verdigris/30 bg-verdigris/10",
     },

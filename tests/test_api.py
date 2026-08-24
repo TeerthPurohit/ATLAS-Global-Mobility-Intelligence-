@@ -100,115 +100,77 @@ def test_websocket_chat_stream(client):
         assert received[-1]["type"] == "done"
 
 
-# ── City-scoped endpoints -- one happy-path test per endpoint ──
+# ── City capability endpoints -- one happy-path test per endpoint ──
+# ADR-013 dropped the /api/cities/{city_id} prefix and deleted the five
+# duplicates (predict/demand, predict/fare, journey/estimate, chat, zones),
+# whose un-prefixed originals are covered in the backward-compat block below.
 
 
-def test_list_cities_happy_path(client):
-    resp = client.get("/api/cities")
-    assert resp.status_code == 200
-    ids = {c["id"] for c in resp.json()["results"]}
-    assert ids == {"nyc"}
-
-
-def test_get_city_happy_path(client):
-    resp = client.get("/api/cities/nyc")
-    assert resp.status_code == 200
-    assert resp.json()["id"] == "nyc"
-
-
-def test_get_city_capabilities_happy_path(client):
-    resp = client.get("/api/cities/nyc/capabilities")
+def test_get_capabilities_happy_path(client):
+    resp = client.get("/api/capabilities")
     assert resp.status_code == 200
     body = resp.json()
     assert body["demand"] is True and body["fare"] is True
 
 
-def test_list_city_areas_happy_path(client):
-    resp = client.get("/api/cities/nyc/areas")
+def test_list_areas_happy_path(client):
+    resp = client.get("/api/areas")
     assert resp.status_code == 200
     assert len(resp.json()) == 265
 
 
-def test_get_city_area_happy_path(client):
-    resp = client.get("/api/cities/nyc/areas/132")
+def test_get_area_happy_path(client):
+    resp = client.get("/api/areas/132")
     assert resp.status_code == 200
     assert resp.json()["name"] == "JFK Airport"
 
 
-def test_list_city_metrics_happy_path(client):
-    resp = client.get("/api/cities/nyc/metrics")
+def test_list_metrics_happy_path(client):
+    resp = client.get("/api/metrics")
     assert resp.status_code == 200
     assert "demand" in resp.json()
 
 
-def test_city_predict_demand_happy_path(client):
-    resp = client.post("/api/cities/nyc/predict/demand", json={"area_id": 132, "hour": 8, "day_of_week": 1})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["prediction"] >= 0
-    assert body["city_id"] == "nyc"
-
-
-def test_city_predict_fare_happy_path(client):
-    resp = client.post("/api/cities/nyc/predict/fare", json={"pickup_area_id": 132, "dropoff_area_id": 230, "hour": 8})
-    assert resp.status_code == 200
-    assert resp.json()["prediction"] > 0
-
-
-def test_city_forecast_happy_path(client):
-    resp = client.get("/api/cities/nyc/forecast")
+def test_forecast_happy_path(client):
+    resp = client.get("/api/forecast")
     assert resp.status_code == 200
     assert len(resp.json()["series"]) == 24
 
 
-def test_city_chat_happy_path(client):
-    resp = client.post("/api/cities/nyc/chat", json={"question": "What is the average fare for trips picked up in JFK Airport?"})
+def test_profile_happy_path(client):
+    resp = client.get("/api/profile")
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["city_id"] == "nyc"
-    assert body["answer"]
-
-
-def test_unknown_city_id_returns_404_error_response(client):
-    resp = client.get("/api/cities/atlantis")
-    assert resp.status_code == 404
-    assert resp.json()["error"]["code"] == "CITY_NOT_FOUND"
+    assert resp.json()["id"] == "nyc"
 
 
 # ── Phase A backend fixes (QA pass) ──
 
 
-def test_get_city_capabilities_is_bare_capabilities_not_wrapped(client):
+def test_get_capabilities_is_bare_capabilities_not_wrapped(client):
     # The duplicate route returned a bare Capabilities model; the frontend
     # used to expect {city_id, capabilities}. Lock in the real shape.
-    resp = client.get("/api/cities/nyc/capabilities")
+    resp = client.get("/api/capabilities")
     assert resp.status_code == 200
     body = resp.json()
     assert "city_id" not in body and "capabilities" not in body
     assert body["demand"] is True and body["fare"] is True
 
 
-def test_city_tariff_shape(client):
-    resp = client.get("/api/cities/nyc/tariff")
+def test_tariff_shape(client):
+    resp = client.get("/api/tariff")
     assert resp.status_code == 200
     body = resp.json()
     assert body["city_id"] == "nyc"
     assert "available" in body and "base_fare" in body
 
 
-def test_context_weather_unknown_city_is_400(client):
-    resp = client.get("/api/context/weather", params={"city_id": "atlantis"})
-    assert resp.status_code == 400  # client error, not a bare 500
-
-
-def test_context_holiday_unknown_city_is_400(client):
-    resp = client.get("/api/context/holiday", params={"city_id": "atlantis"})
-    assert resp.status_code == 400
-
-
-def test_context_traffic_unknown_city_is_400(client):
-    resp = client.get("/api/context/traffic", params={"city_id": "atlantis"})
-    assert resp.status_code == 400
+def test_context_endpoints_default_to_the_city_centroid(client):
+    """With no city_id parameter left, omitting lat/lon must fall back to the
+    seeded coordinates rather than 400 -- the fallback `_city_coords()` now
+    reads profile["coordinates"], which the old top-level lookup never did."""
+    for path in ("weather", "holiday", "traffic"):
+        resp = client.get(f"/api/context/{path}")
+        assert resp.status_code == 200, (path, resp.text)
 
 
 # ── Backward compatibility (SPEC-013 NFR): every pre-existing endpoint's ──
@@ -236,9 +198,9 @@ def test_backward_compat_zones(client):
 
 
 def test_backward_compat_chat_original_fields_present_and_unchanged(client):
-    # ChatRequest/ChatResponse additively gained optional city_id/area_id
-    # (FR-11) -- the original fields must still be present with the same
-    # meaning; omitting the new fields entirely must still work.
+    # ChatRequest kept its optional area_id (city_id went with ADR-013) --
+    # the original fields must still be present with the same meaning, and
+    # omitting the optional ones entirely must still work.
     resp = client.post("/chat", json={"question": "What is the average fare for trips picked up in JFK Airport?"})
     assert resp.status_code == 200
     body = resp.json()
@@ -320,7 +282,7 @@ def test_post_chat_echoes_city_and_area(client):
         "/chat",
         json={
             "question": "What is the average fare for trips picked up in JFK Airport?",
-            "city_id": "nyc", "area_id": 132,
+            "area_id": 132,
         },
     )
     assert resp.status_code == 200
@@ -334,7 +296,7 @@ def test_websocket_stream_echoes_city_and_area(client):
     with client.websocket_connect("/chat/stream") as websocket:
         websocket.send_json({
             "question": "What is the average fare for trips in JFK Airport?",
-            "city_id": "nyc", "area_id": 132,
+            "area_id": 132,
         })
         done = None
         while True:
@@ -352,25 +314,19 @@ def test_websocket_stream_echoes_city_and_area(client):
 
 
 def test_context_weather_bad_timestamp_is_400(client):
-    resp = client.get("/api/context/weather", params={"city_id": "nyc", "timestamp": "not-a-date"})
+    resp = client.get("/api/context/weather", params={"timestamp": "not-a-date"})
     assert resp.status_code == 400
 
 
 def test_context_holiday_bad_date_is_400(client):
-    resp = client.get("/api/context/holiday", params={"city_id": "nyc", "date": "bogus"})
+    resp = client.get("/api/context/holiday", params={"date": "bogus"})
     assert resp.status_code == 400
-
-
-def test_context_missing_city_id_is_422(client):
-    resp = client.get("/api/context/weather")
-    assert resp.status_code == 422
 
 
 def test_mobility_contract(client):
     # Every mobility endpoint must return the MobilityResponse shape
     # {value, unit, status, method, source, confidence, reason} under its key.
     body = {
-        "city_id": "nyc",
         "pickup": {"lat": 40.758, "lon": -73.985},
         "dropoff": {"lat": 40.6413, "lon": -73.7781},
         "departure_time": "2024-06-15T08:00:00",
@@ -411,13 +367,12 @@ def test_mobility_contract(client):
     assert {"recommended_departure", "reason", "confidence", "status", "request_id", "timestamp"} <= departure.json().keys()
 
 
-def test_mobility_unknown_city_degrades_not_500(client):
+def test_mobility_out_of_coverage_degrades_not_500(client):
     resp = client.post(
         "/api/mobility/demand",
         json={
-            "city_id": "atlantis",
-            "pickup": {"lat": 40.758, "lon": -73.985},
-            "dropoff": {"lat": 40.6413, "lon": -73.7781},
+            "pickup": {"lat": 26.9124, "lon": 75.7873},   # Jaipur, outside coverage
+            "dropoff": {"lat": 26.85, "lon": 75.80},
             "departure_time": "2024-06-15T08:00:00",
             "vehicle_type": "sedan",
         },

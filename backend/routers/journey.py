@@ -37,22 +37,19 @@ def _to_out(pr: PredictionResult) -> PredictionOut:
 @router.post(
     "/estimate",
     response_model=JourneyEstimate,
-    summary="Full journey estimate (canonical, city_id in body)",
-    description="The canonical journey engine -- 11 signals (distance, duration, fare, "
+    summary="Full journey estimate",
+    description="The journey engine -- 11 signals (distance, duration, fare, "
     "fare_range, demand, carbon, congestion, availability, surge, best_departure_time, "
-    "AI recommendation) for any resolvable city. `/api/cities/{city_id}/journey/estimate` "
-    "calls this same engine and returns a deliberately trimmed 4-field summary view "
-    "(distance/duration/demand/fare) -- the two are not divergent implementations, just "
-    "different-sized views of one engine.",
+    "AI recommendation).",
 )
 def estimate(req: JourneyRequest) -> JourneyEstimate:
-    logger.info("POST /journey/estimate step=start city_id={} vehicle_type={}", req.city_id, req.vehicle_type)
+    logger.info("POST /journey/estimate step=start vehicle_type={}", req.vehicle_type)
     components = journey_service.estimate(
         pickup_lat=req.pickup_lat, pickup_lon=req.pickup_lon,
         dropoff_lat=req.dropoff_lat, dropoff_lon=req.dropoff_lon,
-        departure_time=req.departure_time, vehicle_type=req.vehicle_type, city_id=req.city_id,
+        departure_time=req.departure_time, vehicle_type=req.vehicle_type,
     )
-    logger.info("POST /journey/estimate step=components_computed city_id={}", components.get("city_id"))
+    logger.info("POST /journey/estimate step=components_computed")
     text, basis = journey_narrative.generate(components)
     # basis is always "modeled_estimate" (grounded LLM/template prose) or
     # "unavailable" (not enough computed data) -- never "computed", since
@@ -85,14 +82,14 @@ def estimate(req: JourneyRequest) -> JourneyEstimate:
         fare_breakdown=fare_breakdown,
         ai_recommendation=ai_recommendation,
     )
-    logger.info("POST /journey/estimate step=logging_prediction city_id={}", req.city_id)
+    logger.info("POST /journey/estimate step=logging_prediction")
     prediction_log.log_prediction(
         pickup_lat=req.pickup_lat, pickup_lon=req.pickup_lon,
         dropoff_lat=req.dropoff_lat, dropoff_lon=req.dropoff_lon,
         departure_time=req.departure_time.isoformat(), vehicle_type=req.vehicle_type,
         response=result.model_dump(),
     )
-    logger.info("POST /journey/estimate step=done city_id={}", req.city_id)
+    logger.info("POST /journey/estimate step=done")
     return result
 
 

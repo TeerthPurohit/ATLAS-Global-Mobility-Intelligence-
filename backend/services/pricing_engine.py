@@ -67,12 +67,11 @@ _CALIBRATION_NOTE, CALIBRATION_MAPE_PCT = _load_calibration()
 
 
 def _base_fare(ctx: JourneyContext, features: JourneyFeatures) -> PredictionResult:
-    """NYC (a real trained model) or a `TariffProfile` (ADR-011) everywhere
-    else -- one dispatch point, same downstream adjustment terms regardless
-    of which base fare produced the number they're a percentage of."""
-    if ctx.city_id == "nyc":
-        return _base_fare_nyc(ctx)
-    return _base_fare_tariff(ctx, features)
+    """The real trained NYC fare model. `_base_fare_tariff` below is the
+    other base-fare formula -- no longer reachable from a journey (there is
+    only one city, and it has a trained model), but still the path
+    `estimate_tariff_base_fare()` uses for the area-pair contract."""
+    return _base_fare_nyc(ctx)
 
 
 def _base_fare_nyc(ctx: JourneyContext) -> PredictionResult:
@@ -100,17 +99,17 @@ def _base_fare_nyc(ctx: JourneyContext) -> PredictionResult:
         )
     return PredictionResult(
         value=round(value, 2), unit="USD", basis="computed", source=model_name, reason=None,
-        data_vintage=model_service.data_vintage("nyc"),
+        data_vintage=model_service.data_vintage(),
         confidence=1.0, method="trained_fare_model",
     )
 
 
 def _base_fare_tariff(ctx: JourneyContext, features: JourneyFeatures) -> PredictionResult:
-    profile = tariff_profiles.get(ctx.city_id)
+    profile = tariff_profiles.get()
     if profile is None:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="tariff_profile",
-            reason=f"no tariff profile generated yet for city_id={ctx.city_id!r} "
+            reason="no tariff profile generated yet "
             "(see scripts/generate_tariff_profile.py)",
         )
     if features.distance_miles.value is None:
@@ -156,7 +155,7 @@ def _base_fare_tariff(ctx: JourneyContext, features: JourneyFeatures) -> Predict
     version = f" v{profile.version}" if profile.version else ""
     effective = f", effective from {profile.effective_from}" if profile.effective_from else ""
     return PredictionResult(
-        value=round(fare, 2), unit=profile.currency, basis="modeled_estimate", source=f"tariff_profile:{ctx.city_id}",
+        value=round(fare, 2), unit=profile.currency, basis="modeled_estimate", source=f"tariff_profile:{profile.city_id}",
         reason=(
             f"{profile.source_type or profile.source} fare structure{version}{effective} "
             f"(confidence {profile.confidence:.0%}) anchored on NYC's real measured fares, no local trip data "
@@ -168,7 +167,7 @@ def _base_fare_tariff(ctx: JourneyContext, features: JourneyFeatures) -> Predict
     )
 
 
-def estimate_tariff_base_fare(city_id: str, distance_miles: float, hour: int) -> PredictionResult:
+def estimate_tariff_base_fare(distance_miles: float, hour: int) -> PredictionResult:
     """Base-fare-only tariff estimate for callers that have a distance and an
     hour but not a full JourneyContext (weather/holiday/vehicle adapters) --
     prediction_service.predict_fare()'s area_id-pair contract, unlike
@@ -185,7 +184,6 @@ def estimate_tariff_base_fare(city_id: str, distance_miles: float, hour: int) ->
         vehicle_type="car", pickup_zone_id=None, dropoff_zone_id=None, vehicle_profile=None,
         weather=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
         holiday=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
-        city_id=city_id,
     )
     features = JourneyFeatures(
         distance_miles=PredictionResult(value=distance_miles, unit="miles", basis="computed", source="haversine"),
@@ -247,7 +245,7 @@ def _demand_adjustment(ctx: JourneyContext, base_fare: PredictionResult, feature
     if base_fare.value is None or ctx.pickup_zone_id is None:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="demand_adjustment",
-            reason=f"base fare unavailable or pickup location outside {ctx.city_id}'s zone coverage",
+            reason="base fare unavailable or pickup location outside the zone coverage",
         )
     # Same real zone-momentum signal journey_predictors.predict_availability/
     # predict_surge_risk already use -- reused rather than re-deriving a
@@ -267,7 +265,7 @@ def _demand_adjustment(ctx: JourneyContext, base_fare: PredictionResult, feature
 
 
 def compute_fare(ctx: JourneyContext, features: JourneyFeatures) -> dict[str, PredictionResult]:
-    logger.debug("pricing_engine.compute_fare step=start city_id={}", ctx.city_id)
+    logger.debug("pricing_engine.compute_fare step=start")
     base_fare = _base_fare(ctx, features)
     logger.debug("pricing_engine.compute_fare step=base_fare basis={} value={}", base_fare.basis, base_fare.value)
     terms = {

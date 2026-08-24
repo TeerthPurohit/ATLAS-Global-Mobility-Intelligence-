@@ -23,10 +23,6 @@ export default function JourneyPage() {
 
 function JourneyPageContent() {
   const containerRef = useGsapEntrance(".gsap-reveal", { stagger: 0.1, yOffset: 16 });
-  // Set by QuickActions' "Plan Journey" link (`/journey?city=<cityId>`) -- was
-  // previously read nowhere, so the form silently defaulted to NYC no matter
-  // which city's page the user came from.
-  const cityIdParam = useSearchParams().get("city");
   const [route, setRoute] = useState({ pickup: defaultPickup, dropoff: defaultDropoff });
   const [journeyRequest, setJourneyRequest] = useState<JourneyRequest | null>(null);
 
@@ -59,7 +55,7 @@ function JourneyPageContent() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[420px_1fr]">
         {/* Sidebar Form */}
         <div className="gsap-reveal flex flex-col gap-6">
-          <JourneyForm onSubmit={handleSubmit} isPending={false} initialCityId={cityIdParam} />
+          <JourneyForm onSubmit={handleSubmit} isPending={false} />
           <div className="border border-surface-border bg-surface-1 p-6 rounded-sm">
             <JourneyMap pickup={route.pickup} dropoff={route.dropoff} />
           </div>

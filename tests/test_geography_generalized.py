@@ -1,6 +1,10 @@
 """Correctness tests for geography_service.py's SPEC-013 FR-5 additions
-(`list_areas`/`get_area`) and the /api/cities/{city_id}/areas* routes they
-back.
+(`list_areas`/`get_area`) and the /api/areas* routes they back.
+
+The "unknown city is empty / 404s" cases are gone with ADR-013 -- neither
+the service nor the route takes a city id any more, so there is no wrong
+city to ask for. What remains asserted is the part that still has two
+outcomes: a known vs. unknown *area_id*, and resolve()'s coverage boundary.
 """
 import sys
 from pathlib import Path
@@ -25,25 +29,22 @@ def client():
         yield c
 
 
-def test_list_areas_nyc_matches_zone_count():
-    areas = geography_service.list_areas("nyc")
+def test_list_areas_matches_zone_count():
+    areas = geography_service.list_areas()
     assert len(areas) == 265
-    assert all(a["city_id"] == "nyc" and a["area_type"] == "zone" for a in areas)
-
-
-def test_list_areas_unknown_city_is_empty():
-    assert geography_service.list_areas("atlantis") == []
+    assert all(a["area_type"] == "zone" for a in areas)
+    assert "city_id" not in areas[0]  # dropped in ADR-013
 
 
 def test_get_area_known_zone():
-    area = geography_service.get_area("nyc", 132)
+    area = geography_service.get_area(132)
     assert area is not None
     assert area["name"] == "JFK Airport"
     assert area["latitude"] is not None and area["longitude"] is not None
 
 
 def test_get_area_unknown_area_id_is_none():
-    assert geography_service.get_area("nyc", 999999) is None
+    assert geography_service.get_area(999999) is None
 
 
 def test_resolve_still_works_unchanged():
@@ -55,18 +56,12 @@ def test_resolve_still_works_unchanged():
 
 
 def test_api_list_areas_route(client):
-    resp = client.get("/api/cities/nyc/areas")
+    resp = client.get("/api/areas")
     assert resp.status_code == 200
     assert len(resp.json()) == 265
 
 
-def test_api_get_area_route_unknown_city_returns_city_not_found(client):
-    resp = client.get("/api/cities/atlantis/areas/1")
-    assert resp.status_code == 404
-    assert resp.json()["error"]["code"] == "CITY_NOT_FOUND"
-
-
 def test_api_get_area_route_unknown_area_returns_area_not_found(client):
-    resp = client.get("/api/cities/nyc/areas/999999")
+    resp = client.get("/api/areas/999999")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "AREA_NOT_FOUND"

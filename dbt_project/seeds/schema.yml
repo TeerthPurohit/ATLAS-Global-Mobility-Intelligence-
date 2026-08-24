@@ -71,20 +71,13 @@ seeds:
   - name: model_registry
     description: >
       Catalogs prediction-model artifacts that already exist on disk (no
-      retraining) -- one row per (city, metric, model version).
+      retraining) -- one row per (metric, model version).
       backend/registry/models.py validates `artifact_path` exists at
       startup; a missing file demotes `status` to "unavailable" rather than
       crashing or silently serving nothing.
     columns:
       - name: model_id
         tests: [not_null, unique]
-      - name: city_id
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('cities')
-                field: id
       - name: status
         tests:
           - accepted_values:

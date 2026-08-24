@@ -35,35 +35,34 @@ def _features(distance_miles: float | None, duration_min: float = 10.0) -> Journ
     )
 
 
-def _ctx(city_id: str, hour: int = 12) -> JourneyContext:
+def _ctx(hour: int = 12) -> JourneyContext:
     return JourneyContext(
         pickup_lat=0.0, pickup_lon=0.0, dropoff_lat=0.0, dropoff_lon=0.0,
         departure_time=datetime(2026, 8, 9, hour, 0), vehicle_type="mini",
         pickup_zone_id=None, dropoff_zone_id=None, vehicle_profile=None,
         weather=PredictionResult(value=None, unit=None, basis="unavailable", source="weather", reason="n/a"),
         holiday=PredictionResult(value=None, unit=None, basis="unavailable", source="holiday", reason="n/a"),
-        city_id=city_id,
     )
 
 
 def test_fare_monotonic_in_distance(monkeypatch):
-    monkeypatch.setattr(tariff_profiles, "get", lambda city_id: _FAKE_PROFILE)
-    near = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(1.0))
-    far = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(20.0))
+    monkeypatch.setattr(tariff_profiles, "get", lambda: _FAKE_PROFILE)
+    near = pricing_engine._base_fare_tariff(_ctx(), _features(1.0))
+    far = pricing_engine._base_fare_tariff(_ctx(), _features(20.0))
     assert far.value > near.value
     assert near.unit == "INR" and far.unit == "INR"
     assert near.basis == "modeled_estimate"
 
 
 def test_min_fare_floor_holds(monkeypatch):
-    monkeypatch.setattr(tariff_profiles, "get", lambda city_id: _FAKE_PROFILE)
-    tiny_trip = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(0.01, duration_min=0.1))
+    monkeypatch.setattr(tariff_profiles, "get", lambda: _FAKE_PROFILE)
+    tiny_trip = pricing_engine._base_fare_tariff(_ctx(), _features(0.01, duration_min=0.1))
     assert tiny_trip.value == _FAKE_PROFILE.min_fare
 
 
 def test_missing_profile_is_unavailable_not_fabricated(monkeypatch):
-    monkeypatch.setattr(tariff_profiles, "get", lambda city_id: None)
-    result = pricing_engine._base_fare_tariff(_ctx("nowhere"), _features(5.0))
+    monkeypatch.setattr(tariff_profiles, "get", lambda: None)
+    result = pricing_engine._base_fare_tariff(_ctx(), _features(5.0))
     assert result.basis == "unavailable"
     assert result.value is None
     assert "no tariff profile" in result.reason
@@ -78,8 +77,8 @@ def test_fare_stays_in_the_profiles_own_currency_never_converted(monkeypatch):
     layer (ADR-011) -- it had no callers -- so the invariant is now
     structural: there is no FX code left to accidentally wire in. What still
     needs asserting is the visible half: the unit follows the profile."""
-    monkeypatch.setattr(tariff_profiles, "get", lambda city_id: _FAKE_PROFILE)
-    result = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(5.0))
+    monkeypatch.setattr(tariff_profiles, "get", lambda: _FAKE_PROFILE)
+    result = pricing_engine._base_fare_tariff(_ctx(), _features(5.0))
     assert result.value is not None
     assert result.unit == "INR" == _FAKE_PROFILE.currency
 
@@ -90,17 +89,17 @@ def demo() -> None:
             self._orig = tariff_profiles.get
 
         def __enter__(self):
-            tariff_profiles.get = lambda city_id: _FAKE_PROFILE
+            tariff_profiles.get = lambda: _FAKE_PROFILE
             return self
 
         def __exit__(self, *a):
             tariff_profiles.get = self._orig
 
     with _Patch():
-        near = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(1.0))
-        far = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(20.0))
+        near = pricing_engine._base_fare_tariff(_ctx(), _features(1.0))
+        far = pricing_engine._base_fare_tariff(_ctx(), _features(20.0))
         assert far.value > near.value
-        tiny = pricing_engine._base_fare_tariff(_ctx("testcity"), _features(0.01, duration_min=0.1))
+        tiny = pricing_engine._base_fare_tariff(_ctx(), _features(0.01, duration_min=0.1))
         assert tiny.value == _FAKE_PROFILE.min_fare
     print("test_tariff_profiles demo OK")
 

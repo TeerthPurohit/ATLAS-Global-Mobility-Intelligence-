@@ -1,13 +1,18 @@
 """Provenance + capability-truthfulness tests for the extended tariff engine.
 
-Covers what the fare/confidence contract must never break:
-NYC prices from a trained model (`computed`), a city with a real tariff
-profile prices in ITS OWN currency (`modeled_estimate`), a city without one
-gets nothing at all (`unavailable`, confidence 0.0), and no `unavailable`
-component can ever raise the overall confidence figure.
+Covers what the fare/confidence contract must never break: the served city
+prices from a trained model (`computed`); the tariff formula that backs
+`prediction_service.predict_fare()`'s area-pair path prices in the profile's
+own currency (`modeled_estimate`); no profile at all yields nothing rather
+than a fabricated number (`unavailable`, confidence 0.0); and no
+`unavailable` component can ever raise the overall confidence figure.
 
-Currencies are read from the real `city_tariff_profiles` rows, never
-hardcoded -- if the generated profiles change, these tests follow the data.
+Currency is read from the real `city_tariff_profiles` row, never hardcoded --
+if the generated profile changes, these tests follow the data.
+
+Since ADR-013 the journey path (`_base_fare`) always uses the trained model,
+so the tariff assertions below target `_base_fare_tariff` directly -- the
+same function `estimate_tariff_base_fare()` calls, not a test-only branch.
 """
 import sys
 from datetime import datetime
@@ -20,8 +25,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from dotenv import load_dotenv  # noqa: E402
 
-# This module calls tariff_profiles.city_ids() at import time (below), which
-# now needs DATABASE_URL (city_tariff_profiles moved to Postgres, see
+# This module reads tariff_profiles at import time (below), which needs
+# DATABASE_URL (city_tariff_profiles moved to Postgres, see
 # tariff_profiles.py's module docstring) -- unlike test_api.py/test_journey.py,
 # this file imports backend.services directly rather than backend.main, so it
 # never got main.py's load_dotenv() for free.
@@ -36,11 +41,10 @@ from backend.services.tariff_profiles import TariffProfile  # noqa: E402
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 pytestmark = pytest.mark.skipif(not WAREHOUSE_PATH.exists(), reason="warehouse not built")
 
-# Real, currently-generated profiles (SELECT city_id, currency FROM
-# city_tariff_profiles) -- resolved at import so a regenerated table just
-# changes which cities are exercised, never silently skips the assertion.
-_REAL_PROFILES = {cid: tariff_profiles.get(cid) for cid in tariff_profiles.city_ids()}
-_NON_USD = {p.currency: p for p in _REAL_PROFILES.values() if p.currency != "USD"}
+# The real, currently-generated profile (SELECT * FROM city_tariff_profiles
+# WHERE city_id = 'nyc') -- resolved at import so a regenerated table changes
+# what these tests assert against, never silently skips the assertion.
+_REAL_PROFILE = tariff_profiles.get()
 
 
 def _features(distance_miles: float | None = 5.0, duration_min: float = 15.0) -> JourneyFeatures:
@@ -56,26 +60,27 @@ def _features(distance_miles: float | None = 5.0, duration_min: float = 15.0) ->
     )
 
 
-def _ctx(city_id: str, hour: int = 12, pickup_zone_id: int | None = None, dropoff_zone_id: int | None = None) -> JourneyContext:
+def _ctx(hour: int = 12, pickup_zone_id: int | None = None, dropoff_zone_id: int | None = None) -> JourneyContext:
     unavailable = PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="n/a")
     return JourneyContext(
         pickup_lat=0.0, pickup_lon=0.0, dropoff_lat=0.0, dropoff_lon=0.0,
         departure_time=datetime(2026, 6, 15, hour, 0), vehicle_type="sedan",
         pickup_zone_id=pickup_zone_id, dropoff_zone_id=dropoff_zone_id, vehicle_profile=None,
-        weather=unavailable, holiday=unavailable, city_id=city_id,
+        weather=unavailable, holiday=unavailable,
     )
 
 
-def test_nyc_fare_is_computed_by_the_trained_model(monkeypatch):
-    """NYC prices from the trained fare model, never from a tariff profile.
+def test_fare_is_computed_by_the_trained_model(monkeypatch):
+    """The journey path prices from the trained fare model, never from a
+    tariff profile.
 
     The model call itself is stubbed so this asserts the *provenance contract*
     (computed / USD / trained_fare_model / the model's own name) rather than
     re-testing XGBoost -- and so it stays meaningful on a machine whose
     xgboost build can't score the committed artifact (see
-    test_nyc_fare_model_failure_degrades_honestly)."""
+    test_fare_model_failure_degrades_honestly)."""
     monkeypatch.setattr(model_service, "predict_fare", lambda *a, **kw: (42.5, "xgboost_fare_v1"))
-    result = pricing_engine._base_fare(_ctx("nyc", pickup_zone_id=161, dropoff_zone_id=132), _features())
+    result = pricing_engine._base_fare(_ctx(pickup_zone_id=161, dropoff_zone_id=132), _features())
     assert result.basis == "computed"
     assert result.value == 42.5
     assert result.unit == "USD"
@@ -84,70 +89,54 @@ def test_nyc_fare_is_computed_by_the_trained_model(monkeypatch):
     assert result.confidence == 1.0
 
 
-def test_nyc_fare_model_failure_degrades_honestly(monkeypatch):
+def test_fare_model_failure_degrades_honestly(monkeypatch):
     """A model artifact that won't score must never fabricate a fare or blow
     up the request -- it degrades exactly like a missing input."""
     def _boom(*_a, **_kw):
         raise RuntimeError("artifact unreadable")
 
     monkeypatch.setattr(model_service, "predict_fare", _boom)
-    result = pricing_engine._base_fare(_ctx("nyc", pickup_zone_id=161, dropoff_zone_id=132), _features())
+    result = pricing_engine._base_fare(_ctx(pickup_zone_id=161, dropoff_zone_id=132), _features())
     assert result.basis == "unavailable"
     assert result.value is None
     assert result.confidence == 0.0
 
 
-@pytest.mark.parametrize("city_id", sorted(_REAL_PROFILES))
-def test_city_with_a_real_tariff_profile_prices_in_its_own_currency(city_id):
-    profile = _REAL_PROFILES[city_id]
-    result = pricing_engine._base_fare(_ctx(city_id), _features())
-    assert result.basis == "modeled_estimate"
-    assert result.unit == profile.currency  # never hardcoded USD
-    assert result.method == "tariff_profile_linear"
-    assert result.confidence == profile.confidence
-    assert result.value >= profile.min_fare
-
-
-def test_the_tariff_tests_above_are_actually_exercising_something():
+def test_the_tariff_tests_below_are_actually_exercising_something():
     """Canary. `tariff_profiles.load()` swallows a connection failure and
     leaves the store empty (ADR-009: unreachable outside the VPC is expected,
-    not exceptional), which would silently reduce the parametrized tests above
-    to zero cases -- green, and testing nothing. This fails loudly instead.
-
-    The bar used to be ">=2 non-USD currencies", back when 517 LLM-generated
-    profiles spanned many currencies. Post-ADR-012 only nyc is served and it
-    prices in USD from a trained model, so there may be no non-USD currency
-    at all -- the non-USD assertion is skipped rather than failed when the
-    store holds only USD profiles.
-    """
-    assert _REAL_PROFILES, (
-        "no tariff profiles resolved -- the Postgres store is unreachable or empty, "
+    not exceptional), which would leave every tariff assertion below asserting
+    against None. This fails loudly instead."""
+    assert _REAL_PROFILE is not None, (
+        "no tariff profile resolved -- the Postgres store is unreachable or empty, "
         "so every tariff test in this file is vacuous. Set DATABASE_URL and re-run."
     )
-    if not _NON_USD:
-        pytest.skip(
-            "only USD tariff profiles registered -- the non-USD currency path has "
-            "nothing to exercise until a second city lands (ADR-012)"
-        )
 
 
-def test_city_without_a_tariff_profile_is_unavailable_not_fabricated():
-    # Use a city that definitely has no profile - not in either registry
-    city_id = "ZZ_NOT_A_CITY"
-    assert tariff_profiles.get(city_id) is None
-    result = pricing_engine._base_fare(_ctx(city_id), _features())
+@pytest.mark.skipif(_REAL_PROFILE is None, reason="no tariff profile in the store")
+def test_the_tariff_path_prices_in_the_profiles_own_currency():
+    result = pricing_engine._base_fare_tariff(_ctx(), _features())
+    assert result.basis == "modeled_estimate"
+    assert result.unit == _REAL_PROFILE.currency  # never hardcoded USD
+    assert result.method == "tariff_profile_linear"
+    assert result.confidence == _REAL_PROFILE.confidence
+    assert result.value >= _REAL_PROFILE.min_fare
+
+
+def test_no_tariff_profile_is_unavailable_not_fabricated(monkeypatch):
+    monkeypatch.setattr(tariff_profiles, "get", lambda: None)
+    result = pricing_engine._base_fare_tariff(_ctx(), _features())
     assert result.basis == "unavailable"
     assert result.value is None
     assert result.confidence == 0.0
     assert "no tariff profile" in result.reason
 
 
-@pytest.mark.parametrize("city_id", sorted(_REAL_PROFILES))
-def test_minimum_fare_floor_is_enforced(city_id):
-    profile = _REAL_PROFILES[city_id]
-    tiny = pricing_engine._base_fare(_ctx(city_id), _features(distance_miles=0.01, duration_min=0.1))
-    # Min fare is applied after flat fees, so tiny trip may slightly exceed min_fare
-    assert tiny.value >= profile.min_fare
+@pytest.mark.skipif(_REAL_PROFILE is None, reason="no tariff profile in the store")
+def test_minimum_fare_floor_is_enforced():
+    tiny = pricing_engine._base_fare_tariff(_ctx(), _features(distance_miles=0.01, duration_min=0.1))
+    # Min fare is applied after flat fees, so a tiny trip may slightly exceed min_fare
+    assert tiny.value >= _REAL_PROFILE.min_fare
 
 
 def test_optional_components_are_only_applied_when_the_profile_defines_them(monkeypatch):
@@ -156,10 +145,10 @@ def test_optional_components_are_only_applied_when_the_profile_defines_them(monk
         night_multiplier=1.0, airport_surcharge=0.0, source="llm_anchored",
         generated_at="2026-08-10T00:00:00", model_id="test", confidence=0.7, notes="",
     )
-    monkeypatch.setattr(tariff_profiles, "get", lambda _cid: TariffProfile(**base))
-    plain = pricing_engine._base_fare(_ctx("testcity"), _features())
-    monkeypatch.setattr(tariff_profiles, "get", lambda _cid: TariffProfile(**base, booking_fee=2.5))
-    with_fee = pricing_engine._base_fare(_ctx("testcity"), _features())
+    monkeypatch.setattr(tariff_profiles, "get", lambda: TariffProfile(**base))
+    plain = pricing_engine._base_fare_tariff(_ctx(), _features())
+    monkeypatch.setattr(tariff_profiles, "get", lambda: TariffProfile(**base, booking_fee=2.5))
+    with_fee = pricing_engine._base_fare_tariff(_ctx(), _features())
     assert with_fee.value == pytest.approx(plain.value + 2.5)
     assert "booking_fee" not in plain.reason
     assert "booking_fee" in with_fee.reason
@@ -195,7 +184,7 @@ def test_unavailable_component_cannot_increase_confidence():
     assert with_gap.value < without.value
 
 
-def test_all_modeled_city_scores_lower_than_all_computed_city():
+def test_all_modeled_scores_lower_than_all_computed():
     modeled = {
         name: PredictionResult(value=1.0, unit="x", basis="modeled_estimate", source="s", reason="proxy")
         for name in ("fare", "demand", "congestion")
@@ -207,15 +196,20 @@ def test_all_modeled_city_scores_lower_than_all_computed_city():
     assert journey_predictors.predict_confidence(modeled).value < journey_predictors.predict_confidence(computed).value
 
 
-def test_capability_matrix_returns_none_for_an_unregistered_city():
-    assert cities_registry.capability_matrix("nyc")["fare"] is True
-    assert cities_registry.capability_matrix("ZZ_NOT_A_CITY") is None
+def test_capability_matrix_reflects_what_is_wired():
+    assert cities_registry.capability_matrix()["fare"] is True
+
+
+def test_capability_matrix_is_none_without_a_registered_city(monkeypatch):
+    """The only way the matrix is None now is a missing `cities` row -- a
+    broken seed, which callers surface rather than paper over."""
+    monkeypatch.setattr(cities_registry, "get_city", lambda: None)
+    assert cities_registry.capability_matrix() is None
 
 
 def test_capability_summary_counts_come_from_the_registry():
-    """ADR-011: the denominator is the registered cities, nothing wider."""
+    """ADR-011/013: the denominator is the registered city, nothing wider."""
     summary = platform_service.get_capability_summary()
-    registered = {c["id"] for c in cities_registry.list_cities()}
-    assert summary["total_cities"] == len(registered)
+    assert summary["total_cities"] == (1 if cities_registry.get_city() else 0)
     fare = summary["capabilities"]["fare"]
     assert fare["supported"] + fare["unsupported"] == summary["total_cities"]

@@ -38,79 +38,69 @@ EWMA_FALLBACK_NAME = "ewma_fallback_v1"
 FARE_MODEL_NAME = "xgboost_fare_v1"
 FARE_DEFAULT_DAY_OF_WEEK = 2  # Wednesday; see module docstring ponytail note
 
-# Per-city demand-model artifacts. Fare stays NYC-only below rather than
-# genericizing a dict for one populated key -- see model_registry.csv.
-_CITY_ARTIFACTS: dict[str, dict] = {
-    "nyc": {
-        "demand_model_path": REPO_ROOT / "models" / "xgboost_model" / "xgb_model.json",
-        "warehouse_path": WAREHOUSE_PATH,
-        "build_features": nyc_build_features,
-        "feature_columns": NYC_FEATURE_COLUMNS,
-        "area_column": "pickup_location_id",
-        "demand_model_name": "xgboost_demand_v1",
-        "ewma_fallback_name": EWMA_FALLBACK_NAME,
-    },
-}
+# Demand-model artifacts (ADR-013: one city, so these are constants rather
+# than a one-key dict keyed by a value that can only ever be "nyc").
+DEMAND_MODEL_PATH = REPO_ROOT / "models" / "xgboost_model" / "xgb_model.json"
+DEMAND_MODEL_NAME = "xgboost_demand_v1"
+DEMAND_AREA_COLUMN = "pickup_location_id"
+DEMAND_FEATURE_COLUMNS = NYC_FEATURE_COLUMNS
+_build_demand_features = nyc_build_features
 
-_demand_models: dict[str, xgb.XGBRegressor] = {}
+_demand_model: xgb.XGBRegressor | None = None
 _fare_model: xgb.XGBRegressor | None = None
-_zone_momentum: dict[str, dict[int, dict[str, float]]] = {}  # city_id -> area_id -> momentum
+_zone_momentum: dict[int, dict[str, float]] = {}  # area_id -> momentum
 _fare_categories: dict[str, list[int]] = {}
 _zone_centroids: dict[int, tuple[float, float]] = {}
-# (city_id -> {(area_id, hour, day_of_week) -> feature dict}) -- the average
-# historical lag/EWMA/rolling-avg profile for that exact (zone, hour,
-# day-of-week) slot, not a single frozen snapshot. This is what makes
-# predict_demand() actually respond to the requested hour/day rather than
-# reusing 2024-06-30's last-known values for every query (the "stale
-# numbers" bug -- see docs/superpowers/specs/2026-08-09-recovery-plan).
-_zone_seasonal_profile: dict[str, dict[tuple[int, int, int], dict[str, float]]] = {}
-# (city_id -> {(hour, day_of_week) -> fraction of that day-of-week's total
-# volume falling in this hour, real SUM(total_trips) across every zone,
-# sums to 1.0 across the 24 hours of a given day_of_week}).
-_hourly_shape: dict[str, dict[tuple[int, int], float]] = {}
-# (city_id -> {month -> multiplier}), a real SUM(total_trips)-weighted ratio
-# of that month's average hourly volume to the city's overall average,
-# clamped [0.5, 2.0]. Only months actually present in the warehouse get a
-# non-neutral factor (see the Jan/Mar/Jun 2024 data-gap note in
-# .claude/memory.md) -- an unmeasured month honestly falls back to 1.0.
-_month_factor: dict[str, dict[int, float]] = {}
+# {(area_id, hour, day_of_week) -> feature dict} -- the average historical
+# lag/EWMA/rolling-avg profile for that exact (zone, hour, day-of-week) slot,
+# not a single frozen snapshot. This is what makes predict_demand() actually
+# respond to the requested hour/day rather than reusing the last-known values
+# for every query (the "stale numbers" bug -- see
+# docs/superpowers/specs/2026-08-09-recovery-plan).
+_zone_seasonal_profile: dict[tuple[int, int, int], dict[str, float]] = {}
+# {(hour, day_of_week) -> fraction of that day-of-week total volume falling
+# in this hour, real SUM(total_trips) across every zone, sums to 1.0 across
+# the 24 hours of a given day_of_week}.
+_hourly_shape: dict[tuple[int, int], float] = {}
+# {month -> multiplier}, a real SUM(total_trips)-weighted ratio of that
+# month average hourly volume to the overall average, clamped [0.5, 2.0].
+# Only months actually present in the warehouse get a non-neutral factor
+# (see the month-gap note in .claude/memory.md) -- an unmeasured month
+# honestly falls back to 1.0.
+_month_factor: dict[int, float] = {}
 _MONTH_FACTOR_MIN, _MONTH_FACTOR_MAX = 0.5, 2.0
-# (city_id -> "YYYY-MM-DD to YYYY-MM-DD") -- the real min/max date each
-# city's mart covers, surfaced on every computed PredictionOut so nothing
+# "YYYY-MM-DD to YYYY-MM-DD" -- the real min/max date the demand mart
+# actually covers, surfaced on every computed PredictionOut so nothing
 # claims to be more current than it is.
-_data_vintage: dict[str, str] = {}
+_data_vintage: str | None = None
 
 
 def load() -> None:
     """Load all artifacts once. Call this from FastAPI's startup hook."""
-    global _fare_model
+    global _fare_model, _demand_model, _data_vintage
 
-    logger.info("model_service.load step=demand_models_start")
-    _demand_models.clear()
+    logger.info("model_service.load step=demand_model_start")
+    _demand_model = None
     _zone_momentum.clear()
     _zone_seasonal_profile.clear()
     _month_factor.clear()
     _hourly_shape.clear()
-    _data_vintage.clear()
-    for city_id, cfg in _CITY_ARTIFACTS.items():
-        logger.info("model_service.load step=demand_model city_id={}", city_id)
-        try:
-            demand_path = cfg["demand_model_path"]
-            warehouse_path = cfg["warehouse_path"]
-            if demand_path.exists():
-                model = xgb.XGBRegressor()
-                model._estimator_type = "regressor"
-                model.load_model(str(demand_path))
-                _demand_models[city_id] = model
+    _data_vintage = None
+    try:
+        if DEMAND_MODEL_PATH.exists():
+            model = xgb.XGBRegressor()
+            model._estimator_type = "regressor"
+            model.load_model(str(DEMAND_MODEL_PATH))
+            _demand_model = model
 
-            if warehouse_path.exists():
-                con = duckdb.connect(str(warehouse_path), read_only=True)
-                try:
-                    _load_zone_demand_artifacts(con, city_id, cfg)
-                finally:
-                    con.close()
-        except Exception:
-            logger.exception("model_service.load step=demand_model failed city_id={} -- this city's demand predict will report unavailable", city_id)
+        if WAREHOUSE_PATH.exists():
+            con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
+            try:
+                _load_zone_demand_artifacts(con)
+            finally:
+                con.close()
+    except Exception:
+        logger.exception("model_service.load step=demand_model failed -- demand predict will report unavailable")
 
     logger.info("model_service.load step=fare_model_start path={}", FARE_MODEL_PATH)
     _fare_model = xgb.XGBRegressor(enable_categorical=True)
@@ -123,17 +113,18 @@ def load() -> None:
     logger.info("model_service.load step=zone_centroids")
     _load_zone_centroids()
 
-    logger.info("model_service.load step=done demand_models={} fare_model_loaded={}", list(_demand_models), _fare_model is not None)
+    logger.info("model_service.load step=done demand_model_loaded={} fare_model_loaded={}", _demand_model is not None, _fare_model is not None)
 
 
 _PROFILE_FEATURE_COLS = ("lag_1h", "lag_24h", "lag_168h", "ewma", "rolling_7d_avg", "temperature_c", "precipitation_mm")
 
 
-def _load_zone_demand_artifacts(con: duckdb.DuckDBPyConnection, city_id: str, cfg: dict) -> None:
+def _load_zone_demand_artifacts(con: duckdb.DuckDBPyConnection) -> None:
     """One `build_features()` pass feeds three artifacts: momentum snapshot,
     seasonal profiles, and volume multipliers."""
-    df = cfg["build_features"](con)
-    area_column = cfg["area_column"]
+    global _data_vintage
+    df = _build_demand_features(con)
+    area_column = DEMAND_AREA_COLUMN
 
     latest = df.sort_values("ts").groupby(area_column).tail(1)
     momentum: dict[int, dict[str, float]] = {}
@@ -147,7 +138,8 @@ def _load_zone_demand_artifacts(con: duckdb.DuckDBPyConnection, city_id: str, cf
             "temperature_c": float(row.temperature_c) if row.temperature_c == row.temperature_c else None,
             "precipitation_mm": float(row.precipitation_mm) if row.precipitation_mm == row.precipitation_mm else None,
         }
-    _zone_momentum[city_id] = momentum
+    _zone_momentum.clear()
+    _zone_momentum.update(momentum)
 
     profile: dict[tuple[int, int, int], dict[str, float]] = {}
     grouped = df.groupby([area_column, "hour", "day_of_week"])[list(_PROFILE_FEATURE_COLS)].mean()
@@ -155,26 +147,29 @@ def _load_zone_demand_artifacts(con: duckdb.DuckDBPyConnection, city_id: str, cf
         profile[(int(area_id), int(hour), int(dow))] = {
             col: (float(row[col]) if row[col] == row[col] else None) for col in _PROFILE_FEATURE_COLS
         }
-    _zone_seasonal_profile[city_id] = profile
+    _zone_seasonal_profile.clear()
+    _zone_seasonal_profile.update(profile)
 
     df = df.assign(month=df["ts"].dt.month)
     monthly_avg = df.groupby("month")["total_trips"].mean()
     overall_avg = df["total_trips"].mean()
-    _month_factor[city_id] = {
+    _month_factor.clear()
+    _month_factor.update({
         int(month): max(_MONTH_FACTOR_MIN, min(_MONTH_FACTOR_MAX, float(avg) / overall_avg))
         for month, avg in monthly_avg.items()
         if overall_avg > 0
-    }
+    })
 
-    _data_vintage[city_id] = f"{df['ts'].dt.date.min()} to {df['ts'].dt.date.max()}"
+    _data_vintage = f"{df['ts'].dt.date.min()} to {df['ts'].dt.date.max()}"
 
     volume_by_slot = df.groupby(["hour", "day_of_week"])["total_trips"].sum()
     volume_by_dow = df.groupby("day_of_week")["total_trips"].sum()
-    _hourly_shape[city_id] = {
+    _hourly_shape.clear()
+    _hourly_shape.update({
         (int(hour), int(dow)): float(vol) / float(volume_by_dow[dow])
         for (hour, dow), vol in volume_by_slot.items()
         if volume_by_dow.get(dow, 0) > 0
-    }
+    })
 
 
 def _load_fare_categories() -> None:
@@ -212,7 +207,7 @@ def _haversine_miles(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * 3958.8 * math.asin(math.sqrt(h))
 
 
-def get_zone_momentum(zone_id: int, city_id: str = "nyc") -> dict[str, float] | None:
+def get_zone_momentum(zone_id: int) -> dict[str, float] | None:
     """Last-known-row demand-momentum snapshot for a zone, loaded once at
     startup. Used by journey predictors (availability/surge/pricing) as a
     "how does right now compare to this zone's own typical week" proxy --
@@ -220,7 +215,7 @@ def get_zone_momentum(zone_id: int, city_id: str = "nyc") -> dict[str, float] | 
     feed (rule 8: there is no real "now" past the warehouse's max date).
     Not used for predict_demand()'s hour/day-of-week-conditioned prediction
     -- see _zone_seasonal_profile for that."""
-    return _zone_momentum.get(city_id, {}).get(zone_id)
+    return _zone_momentum.get(zone_id)
 
 
 def get_zone_centroid(zone_id: int) -> tuple[float, float] | None:
@@ -231,60 +226,56 @@ def haversine_miles(a: tuple[float, float], b: tuple[float, float]) -> float:
     return _haversine_miles(a, b)
 
 
-def hourly_shape_fraction(hour: int, day_of_week: int, city_id: str = "nyc") -> float | None:
-    """Real fraction of `city_id`'s day_of_week total volume that falls in
-    this hour (sums to 1.0 across a day_of_week's 24 hours). Falls back to a
-    flat 1/24 only if this city has no loaded shape at all (never fabricates
-    a curve for a city with real data but a missing slot)."""
-    shape = _hourly_shape.get(city_id)
-    if not shape:
+def hourly_shape_fraction(hour: int, day_of_week: int) -> float | None:
+    """Real fraction of the day_of_week total volume that falls in this hour
+    (sums to 1.0 across a day_of_week 24 hours). Returns None only if no
+    shape is loaded at all (never fabricates a curve for a slot that has real
+    data behind the rest of its day)."""
+    if not _hourly_shape:
         return None
-    return shape.get((hour, day_of_week), 1.0 / 24.0)
+    return _hourly_shape.get((hour, day_of_week), 1.0 / 24.0)
 
 
-def data_vintage(city_id: str) -> str | None:
-    """Real min/max date range this city's demand mart actually covers --
-    surfaced on every computed PredictionOut so nothing claims to be more
-    current than a 2024/2026-dated warehouse actually is."""
-    return _data_vintage.get(city_id)
+def data_vintage() -> str | None:
+    """Real min/max date range the demand mart actually covers -- surfaced on
+    every computed PredictionOut so nothing claims to be more current than a
+    2024/2026-dated warehouse actually is."""
+    return _data_vintage
 
 
-def predict_demand(zone_id: int, hour: int, day_of_week: int, city_id: str = "nyc", month: int | None = None) -> tuple[float, str]:
-    if city_id not in _demand_models:
-        logger.debug("model_service.predict_demand step=no_model_for_city city_id={}", city_id)
-        raise KeyError(f"no demand model loaded for city_id={city_id!r}")
-    momentum_by_area = _zone_momentum.get(city_id, {})
-    if zone_id not in momentum_by_area:
-        logger.debug("model_service.predict_demand step=no_history city_id={} zone_id={}", city_id, zone_id)
-        raise KeyError(f"no demand history for city_id={city_id!r} zone_id={zone_id}")
-
-    cfg = _CITY_ARTIFACTS[city_id]
+def predict_demand(zone_id: int, hour: int, day_of_week: int, month: int | None = None) -> tuple[float, str]:
+    if _demand_model is None:
+        logger.debug("model_service.predict_demand step=no_model_loaded")
+        raise KeyError("no demand model loaded")
+    if zone_id not in _zone_momentum:
+        logger.debug("model_service.predict_demand step=no_history zone_id={}", zone_id)
+        raise KeyError(f"no demand history for zone_id={zone_id}")
     # The averaged (zone, hour, day_of_week) profile -- this is what makes
     # the requested time actually change the model's input, instead of every
     # query reusing one frozen last-known-row snapshot regardless of the
     # hour/day asked for. Falls back to that snapshot only if this exact
     # slot has zero historical rows (a low-volume zone's block-boundary gap).
-    seasonal_features = _zone_seasonal_profile.get(city_id, {}).get((zone_id, hour, day_of_week))
+    seasonal_features = _zone_seasonal_profile.get((zone_id, hour, day_of_week))
     if seasonal_features is None:
-        seasonal_features = momentum_by_area[zone_id]
+        seasonal_features = _zone_momentum[zone_id]
     row = {
         "hour": hour,
         "day_of_week": day_of_week,
         "is_weekend": int(day_of_week in (5, 6)),
         **seasonal_features,
     }
-    features = pd.DataFrame([row], columns=cfg["feature_columns"])
-    pred = float(_demand_models[city_id].predict(features)[0])
+    features = pd.DataFrame([row], columns=DEMAND_FEATURE_COLUMNS)
+    pred = float(_demand_model.predict(features)[0])
     if pred > 0:
-        model_name = cfg["demand_model_name"]
+        model_name = DEMAND_MODEL_NAME
     else:
         # XGBoost has no non-negativity constraint and can extrapolate
         # negative for low-volume zone/hour slots. A flat 0 reads as broken;
         # fall back to that slot's own EWMA estimate instead -- already
         # computed, already part of the model ladder, honestly labeled via
         # the returned model name rather than passed off as XGBoost.
-        pred, model_name = seasonal_features["ewma"], cfg["ewma_fallback_name"]
-    month_multiplier = _month_factor.get(city_id, {}).get(month, 1.0) if month is not None else 1.0
+        pred, model_name = seasonal_features["ewma"], EWMA_FALLBACK_NAME
+    month_multiplier = _month_factor.get(month, 1.0) if month is not None else 1.0
     return pred * month_multiplier, model_name
 
 

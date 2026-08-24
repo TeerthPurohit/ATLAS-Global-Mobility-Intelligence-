@@ -16,26 +16,24 @@ from backend.predictors.base import (
 )
 from backend.services import model_service
 
-_ZONE_MODEL_CITIES = ("nyc",)
-
 
 def predict_demand(ctx: JourneyContext, features: JourneyFeatures) -> PredictionResult:
-    if ctx.pickup_zone_id is not None and ctx.city_id in _ZONE_MODEL_CITIES:
+    if ctx.pickup_zone_id is not None:
         try:
             value, model_name = model_service.predict_demand(
                 ctx.pickup_zone_id, ctx.departure_time.hour, ctx.departure_time.weekday(),
-                city_id=ctx.city_id, month=ctx.departure_time.month,
+                month=ctx.departure_time.month,
             )
         except KeyError as exc:
             return PredictionResult(value=None, unit=None, basis="unavailable", source="demand", reason=str(exc))
         return PredictionResult(
             value=round(value, 2), unit="trips_per_hour", basis="computed", source=model_name, reason=None,
-            data_vintage=model_service.data_vintage(ctx.city_id),
+            data_vintage=model_service.data_vintage(),
             confidence=1.0, method="zone_demand_model",
         )
     return PredictionResult(
         value=None, unit=None, basis="unavailable", source="demand",
-        reason=f"pickup location outside {ctx.city_id}'s zone coverage",
+        reason="pickup location outside the zone coverage",
     )
 
 
@@ -121,10 +119,10 @@ def predict_congestion(features: JourneyFeatures) -> PredictionResult:
 def _demand_pressure(ctx: JourneyContext) -> float | None:
     """Real momentum-based signal (0-1): how busy this area is right now
     relative to its own typical level -- lag_1h vs. rolling_7d_avg from the
-    city's multi-month zone mart. >1 means busier than usual."""
-    if ctx.pickup_zone_id is None or ctx.city_id not in _ZONE_MODEL_CITIES:
+    multi-month zone mart. >1 means busier than usual."""
+    if ctx.pickup_zone_id is None:
         return None
-    momentum = model_service.get_zone_momentum(ctx.pickup_zone_id, ctx.city_id)
+    momentum = model_service.get_zone_momentum(ctx.pickup_zone_id)
     if momentum is None or momentum["rolling_7d_avg"] <= 0:
         return None
     ratio = momentum["lag_1h"] / momentum["rolling_7d_avg"]
@@ -192,18 +190,18 @@ def predict_surge_risk(ctx: JourneyContext, features: JourneyFeatures) -> Predic
 
 
 def sweep_best_departure_time(
-    pickup_zone_id: int | None, from_hour: int, day_of_week: int, window_hours: int = 6, city_id: str = "nyc",
+    pickup_zone_id: int | None, from_hour: int, day_of_week: int, window_hours: int = 6,
 ) -> PredictionResult:
     if pickup_zone_id is None:
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="best_departure_time",
-            reason=f"pickup location outside {city_id}'s area coverage",
+            reason="pickup location outside the area coverage",
         )
     candidates = []
     for offset in range(window_hours):
         hour = (from_hour + offset) % 24
         try:
-            demand, _ = model_service.predict_demand(pickup_zone_id, hour, day_of_week, city_id=city_id)
+            demand, _ = model_service.predict_demand(pickup_zone_id, hour, day_of_week)
         except KeyError:
             continue
         candidates.append((hour, demand))

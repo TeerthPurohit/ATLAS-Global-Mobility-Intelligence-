@@ -7,6 +7,9 @@ Catalogs artifacts that already exist on disk; never retrains anything.
 a row that claims `status="active"` but whose file is missing is demoted to
 `"unavailable"` here rather than crashing startup or silently serving a
 prediction with no backing artifact (rule 2).
+
+The `city_id` column is gone (ADR-013): every row belongs to the one city
+this platform serves.
 """
 from __future__ import annotations
 
@@ -32,24 +35,23 @@ def load() -> None:
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
         rows = con.execute(
-            "select model_id, city_id, metric, model_type, version, artifact_path, "
+            "select model_id, metric, model_type, version, artifact_path, "
             "training_period, status, metrics_ref from model_registry"
         ).fetchall()
     finally:
         con.close()
 
     _models.clear()
-    for model_id, city_id, metric, model_type, version, artifact_path, training_period, status, metrics_ref in rows:
+    for model_id, metric, model_type, version, artifact_path, training_period, status, metrics_ref in rows:
         resolved_status = status
         if status == "active" and not (REPO_ROOT / artifact_path).exists():
             resolved_status = "unavailable"
             logger.warning(
-                "model_registry row %s (%s/%s) references missing artifact %s; demoting to unavailable",
-                model_id, city_id, metric, artifact_path,
+                "model_registry row %s (%s) references missing artifact %s; demoting to unavailable",
+                model_id, metric, artifact_path,
             )
         _models[model_id] = {
             "model_id": model_id,
-            "city_id": city_id,
             "metric": metric,
             "model_type": model_type,
             "version": version,
@@ -66,25 +68,24 @@ def get_model(model_id: str) -> dict | None:
     return _models.get(model_id)
 
 
-def list_models_for(city_id: str, metric: str | None = None) -> list[dict]:
+def list_models_for(metric: str | None = None) -> list[dict]:
     if not _models:
         load()  # defensive lazy-load -- see backend/registry/cities.py's get_city() for why
-    return [
-        m for m in _models.values()
-        if m["city_id"] == city_id and (metric is None or m["metric"] == metric)
-    ]
+    return [m for m in _models.values() if metric is None or m["metric"] == metric]
 
 
-def resolve_model(city_id: str, metric: str) -> dict | None:
-    """The active model backing `metric` for `city_id`, or None if the
-    capability isn't really wired (used as the capability gate)."""
-    for m in list_models_for(city_id, metric):
+def resolve_model(metric: str) -> dict | None:
+    """The active model backing `metric`, or None if the capability isn't
+    really wired (used as the capability gate)."""
+    for m in list_models_for(metric):
         if m["status"] == "active":
-            logger.info("model resolution city_id=%s metric=%s -> %s", city_id, metric, m["model_id"])
+            logger.info("model resolution metric=%s -> %s", metric, m["model_id"])
             return m
-    logger.info("model resolution city_id=%s metric=%s -> none", city_id, metric)
+    logger.info("model resolution metric=%s -> none", metric)
     return None
 
 
-def has_active_model(city_id: str) -> bool:
-    return any(m["status"] == "active" for m in _models.values() if m["city_id"] == city_id)
+def has_active_model() -> bool:
+    if not _models:
+        load()  # defensive lazy-load -- see backend/registry/cities.py's get_city() for why
+    return any(m["status"] == "active" for m in _models.values())

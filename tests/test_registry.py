@@ -1,8 +1,12 @@
-"""Correctness tests for the Global Mobility Domain Model registry
-(SPEC-013 FR-4/FR-9): country/city listing, capability resolution matches
-what's actually wired (no city claims a capability with no backing route),
-unsupported city/country returns the documented error, not a 200 with fake
-data.
+"""Correctness tests for the city registry (SPEC-013 FR-4/FR-9): profile
+resolution, and capability resolution matching what's actually wired (no
+capability claims a route that isn't registered).
+
+The "unknown city_id returns the documented error" test is gone with
+ADR-013: no route takes a city id any more, so a client can no longer ask
+for a city that doesn't exist. The registry's own missing-row guard is
+covered in tests/test_fare_provenance_and_capabilities.py
+(`test_capability_matrix_is_none_without_a_registered_city`).
 """
 import sys
 from pathlib import Path
@@ -51,24 +55,16 @@ def _route_paths(client) -> set[str]:
     return paths
 
 
-def test_list_cities_returns_only_registered_cities(client):
-    """ADR-011: this platform serves the cities it has real trip data for.
-    A city_id that isn't registered must not appear here."""
-    resp = client.get("/api/cities")
+def test_profile_is_the_registered_city(client):
+    """ADR-011/013: this platform serves the one city it has real trip data
+    for, and says so from its own seed row rather than a hardcoded literal."""
+    resp = client.get("/api/profile")
     assert resp.status_code == 200
-    ids = {c["id"] for c in resp.json()["results"]}
-    assert ids == {"nyc"}
-
-
-def test_unknown_city_returns_documented_error_not_fake_data(client):
-    resp = client.get("/api/cities/atlantis")
-    assert resp.status_code == 404
-    body = resp.json()
-    assert body["error"]["code"] == "CITY_NOT_FOUND"
+    assert resp.json()["id"] == "nyc"
 
 
 def test_capabilities_match_what_is_actually_wired(client):
-    resp = client.get("/api/cities/nyc/capabilities")
+    resp = client.get("/api/capabilities")
     assert resp.status_code == 200
     capabilities = resp.json()
 
@@ -79,25 +75,22 @@ def test_capabilities_match_what_is_actually_wired(client):
 
     # area_analysis is asserted against real canonical_areas rows, not a route.
     if capabilities["area_analysis"]:
-        areas = client.get("/api/cities/nyc/areas").json()
+        areas = client.get("/api/areas").json()
         assert len(areas) > 0
 
 
 def test_capabilities_backed_by_real_model_registry_rows(client):
     """No capability is hand-authored true -- every True demand/fare/journey
     flag traces back to an active model_registry row."""
-    resp = client.get("/api/cities/nyc/capabilities")
-    capabilities = resp.json()
+    capabilities = client.get("/api/capabilities").json()
     for metric in ("demand", "fare", "journey"):
-        resolved = models_registry.resolve_model("nyc", metric)
+        resolved = models_registry.resolve_model(metric)
         assert capabilities[metric] == (resolved is not None)
 
 
 def test_metrics_list_is_subset_of_capabilities(client):
-    metrics = client.get("/api/cities/nyc/metrics").json()
-    capabilities = client.get("/api/cities/nyc/capabilities").json()
+    metrics = client.get("/api/metrics").json()
+    capabilities = client.get("/api/capabilities").json()
     assert set(metrics) <= {"demand", "fare", "journey"}
     for m in metrics:
         assert capabilities[m] is True
-
-

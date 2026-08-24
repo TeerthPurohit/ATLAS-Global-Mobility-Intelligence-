@@ -52,11 +52,10 @@ export function BestDepartureCard({ request }: BestDepartureCardProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.bestDeparture(request),
     queryFn: () => getBestDeparture(request),
-    enabled: !!request.city_id,
   });
 
   return (
-    <CapabilityGate capability="best_departure" cityId={request.city_id} fallback={<BestDepartureCardSkeleton />}>
+    <CapabilityGate capability="best_departure" fallback={<BestDepartureCardSkeleton />}>
       {isLoading ? <BestDepartureCardSkeleton /> : error ? (
         <Card className="border-oxide/30 bg-oxide/5">
           <CardTitle className="font-display text-base tracking-wide flex items-center gap-2 text-oxide">
