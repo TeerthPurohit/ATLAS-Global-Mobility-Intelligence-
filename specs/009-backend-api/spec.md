@@ -1,6 +1,6 @@
 # SPEC-009: Backend API
 
-Owner: solo builder · Status: not started · Layer: 5 · Depends on: SPEC-006, SPEC-007, SPEC-008
+Owner: solo builder · Status: done · Layer: 5 · Depends on: SPEC-006, SPEC-007, SPEC-008
 
 ## Business Goal
 

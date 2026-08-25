@@ -1,6 +1,6 @@
 # SPEC-002: dbt Transformation Layer
 
-Owner: solo builder · Status: in-progress · Layer: 1 · Depends on: SPEC-001
+Owner: solo builder · Status: done · Layer: 1 · Depends on: SPEC-001
 
 ## Business Goal
 

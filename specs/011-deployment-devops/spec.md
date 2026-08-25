@@ -1,6 +1,6 @@
 # SPEC-011: Deployment & DevOps
 
-Owner: solo builder · Status: not started · Layer: 5 · Depends on: SPEC-009, SPEC-010
+Owner: solo builder · Status: in-progress (Dockerfiles + GitHub Actions CI exist; live deploy target not yet provisioned) · Layer: 5 · Depends on: SPEC-009, SPEC-010
 
 ## Business Goal
 

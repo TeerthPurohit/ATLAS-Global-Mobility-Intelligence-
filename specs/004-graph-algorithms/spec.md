@@ -1,6 +1,6 @@
 # SPEC-004: Graph Algorithms — PageRank + Dijkstra
 
-Owner: solo builder · Status: not started · Layer: 2 · Depends on: SPEC-002 (`zone_pair_flows`, `int_trips_enriched`)
+Owner: solo builder · Status: done · Layer: 2 · Depends on: SPEC-002 (`zone_pair_flows`, `int_trips_enriched`)
 
 ## Business Goal
 

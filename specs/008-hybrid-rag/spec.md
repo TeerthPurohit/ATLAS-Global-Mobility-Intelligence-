@@ -1,6 +1,6 @@
 # SPEC-008: Hybrid RAG Chat Layer
 
-Owner: solo builder · Status: not started · Layer: 4 · Depends on: SPEC-002, SPEC-004, SPEC-006
+Owner: solo builder · Status: done · Layer: 4 · Depends on: SPEC-002, SPEC-004, SPEC-006
 
 ## Business Goal
 

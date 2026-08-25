@@ -1,6 +1,6 @@
 # SPEC-014: Schema-Agnostic Query Plan + Fine-Tuned Model
 
-Owner: solo builder · Status: draft · Layer: 5+ (extends Layer 4) ·
+Owner: solo builder · Status: in-progress (QueryPlan compiler + baseline evaluator built, gated behind `USE_FINETUNED_QUERY_PLAN`, default off; paid fine-tune submission paused per ADR-010) · Layer: 5+ (extends Layer 4) ·
 Depends on: SPEC-008 (Hybrid RAG)
 
 ## Business Goal

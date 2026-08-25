@@ -1,6 +1,6 @@
 # SPEC-006: Model Ladder — Zone-Hourly Demand Forecasting
 
-Owner: solo builder · Status: not started · Layer: 3 · Depends on: SPEC-002, SPEC-005
+Owner: solo builder · Status: done · Layer: 3 · Depends on: SPEC-002, SPEC-005
 
 ## Business Goal
 

@@ -1,6 +1,6 @@
 # SPEC-007: Fare Prediction Model
 
-Owner: solo builder · Status: not started · Layer: 3 · Depends on: SPEC-002
+Owner: solo builder · Status: done · Layer: 3 · Depends on: SPEC-002
 
 ## Business Goal
 

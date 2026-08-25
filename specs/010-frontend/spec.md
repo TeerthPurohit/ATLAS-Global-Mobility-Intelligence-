@@ -1,6 +1,6 @@
 # SPEC-010: Frontend
 
-Owner: solo builder · Status: not started · Layer: 5 · Depends on: SPEC-009
+Owner: solo builder · Status: done (superseded in shape -- built as frontend-web/, Next.js, not the 3-component React+Vite app this spec describes) · Layer: 5 · Depends on: SPEC-009
 
 ## Business Goal
 

@@ -1,11 +1,13 @@
 # SPEC-015: London (real second city) + cross-city demand estimation
 
-> **SUPERSEDED (2026-08-23) by [ADR-011](../../docs/adr/ADR-011-retreat-from-global-coverage.md).**
-> London itself survives -- it has real data. The cross-city estimation half
-> of this spec (population-scaled demand, PPP-scaled fares) was removed with
-> the global layer.
+> **SUPERSEDED (2026-08-23) by [ADR-011](../../docs/adr/ADR-011-retreat-from-global-coverage.md),
+> then by [ADR-012](../../docs/adr/ADR-012-nyc-only.md).**
+> The cross-city estimation half of this spec (population-scaled demand,
+> PPP-scaled fares) was removed with the global layer under ADR-011. London
+> itself briefly survived that cut but was removed the same day by
+> ADR-012 -- the platform now serves NYC only.
 
-Owner: solo builder · Status: draft · Layer: 5+ (extends Layers 0, 1, 3, 5) ·
+Owner: solo builder · Status: superseded · Layer: 5+ (extends Layers 0, 1, 3, 5) ·
 Depends on: SPEC-002, SPEC-006, SPEC-013 (paused domain model/registry)
 
 ## Business Goal

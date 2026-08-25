@@ -1,6 +1,6 @@
 # SPEC-003: Spatial Algorithms — KD-Tree + Geohash
 
-Owner: solo builder · Status: not started · Layer: 2 · Depends on: SPEC-001 (zone centroids)
+Owner: solo builder · Status: done · Layer: 2 · Depends on: SPEC-001 (zone centroids)
 
 ## Business Goal
 

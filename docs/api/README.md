@@ -11,11 +11,12 @@ Base URL (local dev): `http://localhost:8000`.
   fields carry a `basis` of `computed` / `modeled_estimate` / `unavailable`,
   never a fabricated number (ADR-007).
 - Legacy routers (`/predict`, `/zones`, `/chat`, `/journey`, platform routes)
-  return FastAPI's default `{"detail": "..."}` on error, status 400/404 --
-  unchanged, for backward compatibility (SPEC-013 verified this by test).
-- The city routers (`/api/cities/*`) use a structured
-  `{"error": {"code": ..., "message": ...}}` envelope instead -- see
-  [Errors](#errors).
+  return FastAPI's default `{"detail": "..."}` on error, status 400/404.
+- The `city`, `mobility`, `context`, and `analytics` routers use a
+  structured `{"error": {"code": ..., "message": ...}}` envelope instead --
+  see [Errors](#errors).
+- No route takes a `city_id` (ADR-013) -- there is one registered city, so
+  every route is mounted bare under `/api/...` or its own top-level prefix.
 
 ---
 
@@ -107,60 +108,69 @@ unchanged.
 
 ---
 
-## Cities (`/api/cities/*`)
+## City (`backend/routers/city.py`, bare under `/api/...`)
 
-City -> Area/Metric/Prediction discovery, backed by
-`dbt_project/seeds/{cities,model_registry}.csv` and
-`backend/registry/*.py`. One real city, NYC (ADR-012); every
-capability returned is computed from what's actually wired (a real
+City/area/context discovery for the one registered city (NYC), backed by
+`dbt_project/seeds/{cities,model_registry}.csv` and `backend/registry/*.py`.
+Every capability returned is computed from what's actually wired (a real
 `model_registry` row, a real `canonical_areas` row), never hand-authored
-true/true/true. An unregistered `city_id` is a 404, not a degraded estimate.
+true/true/true. Since [ADR-013](../adr/ADR-013-collapse-city-id.md) none of
+these routes take a `city_id` -- there's nothing to disambiguate.
 
 | Route | Method | Returns | Errors |
 |---|---|---|---|
-| `/api/cities` | GET | `CitySearchResponse` (registered cities; optional `q`/`country` filters) | -- |
-| `/api/cities/{city_id}` | GET | `City` | `CITY_NOT_FOUND` (404) |
-| `/api/cities/{city_id}/capabilities` | GET | `Capabilities` (demand/fare/journey/chat/area_analysis booleans) | `CITY_NOT_FOUND` (404) |
-| `/api/cities/{city_id}/areas` | GET | `[Area]` | `CITY_NOT_FOUND` (404) |
-| `/api/cities/{city_id}/areas/{area_id}` | GET | `Area` | `AREA_NOT_FOUND` / `CITY_NOT_FOUND` (404) |
-| `/api/cities/{city_id}/metrics` | GET | `["demand", "fare", "journey"]` | `CITY_NOT_FOUND` (404) |
-| `/api/cities/{city_id}/predict/demand` | POST | `PredictionEnvelope` or `{available:false,...}` | `CITY_NOT_FOUND` (404), `PREDICTION_FAILED` (400) |
-| `/api/cities/{city_id}/predict/fare` | POST | `PredictionEnvelope` or `{available:false,...}` | same |
-| `/api/cities/{city_id}/forecast?metric=demand&hours=24` | GET | `ForecastEnvelope` or `{available:false,...}` | `CITY_NOT_FOUND` (404), `INVALID_TIME_RANGE` (400) |
-| `/api/cities/{city_id}/chat` | POST | `ChatResponse` | `CITY_NOT_FOUND` (404), `CHAT_FAILED` (500) |
-| `/api/cities/{city_id}/context` | GET | `CityContextResponse` (geography/weather/calendar/density/routing/demand-shape, each in a provenance envelope) | `CITY_NOT_FOUND` (404) |
-
-`PredictionEnvelope`: `{city_id, area_id, dropoff_area_id, metric,
-prediction, model, model_version, generated_at, data_timestamp, source}` --
-delegates to the exact same `model_service.py` functions the legacy
-`/predict/*` routes call, just provenance-wrapped.
+| `/api/capabilities` | GET | `Capabilities` (demand/fare/routing/congestion/availability/surge/carbon/best_departure booleans) | `CITY_NOT_FOUND` (404) |
+| `/api/areas` | GET | `[Area]` | `CITY_NOT_FOUND` (404) |
+| `/api/areas/{area_id}` | GET | `Area` | `AREA_NOT_FOUND` (404) |
+| `/api/metrics` | GET | `["demand", "fare", ...]` from `cities_registry.list_metrics()` | `CITY_NOT_FOUND` (404) |
+| `/api/forecast?metric=demand&hours=24` | GET | Real historical hourly aggregate (`ForecastEnvelope`) or `CapabilityUnavailable` | `INVALID_TIME_RANGE` (400) |
+| `/api/profile` | GET | `CityProfileResponse` -- identity, capabilities, tariff confidence | `CITY_NOT_FOUND` (404) |
+| `/api/tariff` | GET | `CityTariffResponse`, or `{available: false, reason: "no_tariff_profile"}` | -- |
+| `/api/context` | GET | `CityContextResponse` (geography/weather/calendar/density/routing/demand-shape, each provenance-wrapped) | `CITY_NOT_FOUND` (404) |
 
 A well-formed request against a real but not-yet-wired capability returns
 **200** with `{"available": false, "capability": "...", "reason": "..."}`
 (matching `/journey/estimate`'s "data unavailable != 4xx" precedent) --
-never a fabricated prediction.
+never a fabricated prediction. Predictions themselves still go through the
+legacy `/predict/demand` / `/predict/fare` routes above, not through `city`.
+
+---
+
+## Mobility (`/api/mobility/*`, `POST`)
+
+Per-signal journey predictors -- `route`, `fare`, `demand`, `congestion`,
+`availability`, `surge`, `carbon`, `departure-time` -- each backing one
+card in `frontend-web/components/journey/cards/`. Same envelope/`basis`
+discipline as `/journey/estimate` (ADR-007): unavailable signals return
+200 with `basis="unavailable"`, never a fabricated number.
+
+## Context (`/api/context/*`, GET) and Analytics (`/api/analytics/*`, GET)
+
+`context`: `weather`, `holiday`, `traffic` -- real adapter calls
+(OpenWeatherMap, Nager.Date, OSRM), degrading honestly when a free-tier
+adapter has nothing for the request. `analytics`: `summary`, `insights`,
+`history`, `trends` -- read precomputed marts/artifacts, no on-request
+aggregation over raw trips (rule 8).
 
 ---
 
 ## Errors
 
 ```json
-{ "error": { "code": "CITY_NOT_FOUND", "message": "unknown city_id='xyz'" } }
+{ "error": { "code": "AREA_NOT_FOUND", "message": "unknown area_id=9999" } }
 ```
 
 | Code | Typical HTTP | Meaning |
 |---|---|---|
-| `CITY_NOT_SUPPORTED` / `CITY_NOT_FOUND` | 404 | Unknown `city_id` |
+| `CITY_NOT_SUPPORTED` / `CITY_NOT_FOUND` | 404 | No registered city row (should not occur in normal operation -- one city is always seeded) |
 | `COUNTRY_NOT_SUPPORTED` | 404 | Country has no onboarded city |
-| `CAPABILITY_UNAVAILABLE` | 200 body | Metric not wired for this city (see above) |
+| `CAPABILITY_UNAVAILABLE` | 200 body | Metric not wired (see above) |
 | `MODEL_UNAVAILABLE` | 200 body | Registered model's artifact failed validation at startup |
-| `DATA_UNAVAILABLE` | 404 | No data source registered for this city |
-| `AREA_NOT_FOUND` | 404 | Unknown `area_id` for a known city |
-| `INVALID_TIME_RANGE` | 400 | `/forecast`'s `hours` out of range |
-| `PREDICTION_FAILED` | 400 | A well-formed request the underlying model genuinely can't answer (e.g. unknown area_id) |
+| `DATA_UNAVAILABLE` | 404 | No data source registered |
+| `AREA_NOT_FOUND` | 404 | Unknown `area_id` |
+| `INVALID_TIME_RANGE` | 400 | `/api/forecast`'s `hours` out of range |
+| `PREDICTION_FAILED` | 400 | A well-formed request the underlying model genuinely can't answer |
 | `CHAT_FAILED` | 500 | The RAG pipeline itself raised |
-| `PLACE_NOT_FOUND` | 404 | Unknown GeoNames place id |
-| `INVALID_COORDINATES` | 400 | `lat`/`lng` outside valid range |
 
 Credentials (`OPENAI_API_KEY`, etc.) are backend-only
 env vars (`.env`, gitignored) -- never read by the frontend, never echoed in

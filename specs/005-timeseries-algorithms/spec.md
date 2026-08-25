@@ -1,6 +1,6 @@
 # SPEC-005: Time-Series Algorithms — EWMA + Seasonality Decomposition
 
-Owner: solo builder · Status: not started · Layer: 2 · Depends on: SPEC-002 (`zone_hourly_demand`)
+Owner: solo builder · Status: done · Layer: 2 · Depends on: SPEC-002 (`zone_hourly_demand`)
 
 ## Business Goal
 
