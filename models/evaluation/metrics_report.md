@@ -235,59 +235,6 @@ model's metadata JSON sidecar next to its artifact:
 stale ones flagged above. Combined comparison numbers in
 `models/evaluation/compare_results.json`.
 
-## Global Transfer Model (Phase 8/9/10)
-
-**Target:** city-hour total demand (`SUM(total_trips)` per hour), joint
-across the 2 real OBSERVED cities only — NYC (`zone_hourly_demand`) and
-London (`london_station_hourly_demand`), aggregated to a comparable
-city-hour grain. **Features:** the same lag/EWMA/rolling temporal shape as
-the per-city XGBoost models, block-gap aware, plus `E_city` — a scaled
-static city feature vector (`models/global_transfer/build_features.py`:
-log population, population density, lat/lon, cycle-share flag —
-`models/global_transfer/build_features.py`'s module docstring documents
-exactly which raw columns exist per tier and which are NaN-flagged for the
-522 TRANSFER cities, e.g. lat/lon are NULL for all of them).
-
-**Chronological split:** global 70/15/15 `chronological_split()` over the
-concatenated NYC+London city-hour series (`models/data_prep/
-chronological_split.py`), leakage guard `train.ts.max() < val.ts.min() <
-test.ts.min()` asserted in `train_global.py` and tested in
-`tests/test_global_transfer_no_leakage.py`. TRANSFER-tier cities never
-appear as training/eval rows — tested in
-`tests/test_global_transfer_no_transfer_labels.py`.
-
-| Split | Rows (nyc / london) | Date range |
-|---|---|---|
-| train | 3,697 / 865 | 2024-01-08 → 2026-03-20 |
-| val | 792 / 287 | 2026-03-20 → 2026-04-22 |
-| test | 215 / 577 | 2026-04-22 → 2026-06-01 |
-
-**Metrics (joint fit, both cities in every split):** val RMSE=1269.75,
-MAE=821.02; test RMSE=1046.25, MAE=452.89 (city-hour total-trip counts;
-NYC's much larger per-hour scale dominates these totals — not comparable to
-the per-zone/per-station RMSE numbers above). Full grid search, feature
-importances, library versions in `models/global_transfer/xgb_metadata.json`.
-
-**Honesty (do not remove):** this fits only 2 real cities. `E_city` is
-functionally a 2-valued categorical here — nothing above demonstrates
-generalization to a third city. **Phase 10 two-city transfer validation**
-(`docs/global_transfer_model_comparison.json`, `models/global_transfer/
-model_comparison.py`) is the actual non-circular check: train the same
-architecture on ONE city only, evaluate on the other, with an ablation that
-removes `E_city`. Result: with only 1 training city, `E_city` is constant
-across every training row (zero variance), so the ablated and
-non-ablated models are numerically identical in both directions
-(`city_features_helped: false` both ways) — i.e., **city features provide
-no measurable benefit with N=1 training city**, exactly the outcome
-expected from a single-city fit and not a claim that city features are
-useless in general. Neither direction beats Phase 1's population-scaling
-baseline in a directly comparable way (different grain — daily WAPE vs.
-hourly RMSE, see the comparison file's explicit grain-mismatch note) but
-both leave-one-out RMSEs are large relative to the target scale, consistent
-with Phase 1's finding that simple cross-city transfer does not yet beat
-a global-mean baseline. **Never describe this model as "globally
-validated"** — always "two-city transfer validation," per task instruction.
-
 ## Congestion Model (Phase 6)
 
 **Target:** `congestion_multiplier = trip_duration_minutes / free_flow_duration_min`

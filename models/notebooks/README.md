@@ -1,21 +1,18 @@
 # Colab training notebooks
 
 Thin runners only. Every cell calls straight into `models/xgboost_model`,
-`models/congestion`, `models/eta`, `models/global_transfer` — no training
-logic is duplicated here. Use these when local hardware can't handle a
-bigger sample than the committed artifacts were trained on.
+`models/congestion`, `models/eta` — no training logic is duplicated here.
+Use these when local hardware can't handle a bigger sample than the
+committed artifacts were trained on.
 
 - `01_nyc_demand_congestion_eta.ipynb` — NYC zone-hourly demand, congestion
   multiplier, quantile ETA (p10/p50/p90).
-- `02_global_transfer.ipynb` — the joint NYC+London global transfer demand
-  model (`models/global_transfer/train_global.py`).
 
 ## Getting the DuckDB file into Colab
 
-`data/warehouse/nyc_rides.duckdb` is 6.0 GB and `data/warehouse/
-london_cycles.duckdb` is ~0.22 GB (both measured locally, not estimated) —
-too large to commit to git, so `git clone` inside the notebook only gets
-code. Get the data there separately, either way works:
+`data/warehouse/nyc_rides.duckdb` is 6.0 GB (measured locally, not
+estimated) — too large to commit to git, so `git clone` inside the
+notebook only gets code. Get the data there separately, either way works:
 
 - **Google Drive**: upload the `.duckdb` file(s) into any Drive folder,
   mount Drive in the notebook (cell 1), point `GLOBAL_MOBILITY_DATA_ROOT` at
@@ -33,8 +30,8 @@ code. Get the data there separately, either way works:
   to your own fork/clone URL.
 
 ## Progressive-sampling workflow (applies to notebook 01's congestion + ETA
-cells — NYC demand and the global transfer model already train on small
-pre-aggregated marts, no sampling knob needed there)
+cells — NYC demand already trains on a small pre-aggregated mart, no
+sampling knob needed there)
 
 `models/congestion/build_features.py::load_raw_trips()` already pushes
 `USING SAMPLE N ROWS (reservoir, seed)` down into DuckDB — never
