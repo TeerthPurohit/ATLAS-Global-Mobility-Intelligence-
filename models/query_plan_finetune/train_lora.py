@@ -27,6 +27,7 @@ def load_jsonl(path: Path) -> list[dict]:
 
 
 def train(smoke_test: bool = False) -> dict:
+    from datasets import Dataset
     from unsloth import FastLanguageModel
     from trl import SFTTrainer, SFTConfig
 
@@ -41,10 +42,15 @@ def train(smoke_test: bool = False) -> dict:
     train_rows = load_jsonl(DATA_DIR / "train_augmented.jsonl")
     if smoke_test:
         train_rows = train_rows[:5]
-    dataset = [{"text": tokenizer.apply_chat_template(r["messages"], tokenize=False)} for r in train_rows]
+    # SFTTrainer's _prepare_dataset calls .map()/isinstance(Dataset) internally --
+    # a plain list of dicts doesn't satisfy that, so wrap it in a real Dataset.
+    dataset = Dataset.from_list(
+        [{"text": tokenizer.apply_chat_template(r["messages"], tokenize=False)} for r in train_rows]
+    )
 
     trainer = SFTTrainer(
-        model=model, tokenizer=tokenizer, train_dataset=dataset,
+        # current trl renamed the `tokenizer` kwarg to `processing_class`
+        model=model, processing_class=tokenizer, train_dataset=dataset,
         args=SFTConfig(
             per_device_train_batch_size=4, num_train_epochs=1 if smoke_test else EPOCHS,
             max_steps=1 if smoke_test else -1, learning_rate=LR, seed=SEED,
