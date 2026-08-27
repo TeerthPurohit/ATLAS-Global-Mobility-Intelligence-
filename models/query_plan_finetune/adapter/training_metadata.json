@@ -1,0 +1,12 @@
+{
+  "base_model": "Qwen/Qwen2.5-3B-Instruct",
+  "seed": 42,
+  "lora_rank": 16,
+  "lora_alpha": 32,
+  "epochs": 3,
+  "learning_rate": 0.0002,
+  "n_train_rows": 908,
+  "final_train_loss": 0.1820713354612303,
+  "elapsed_seconds": 1166.1192348003387,
+  "smoke_test": false
+}
