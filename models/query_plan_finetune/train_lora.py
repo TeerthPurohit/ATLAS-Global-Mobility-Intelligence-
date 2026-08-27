@@ -28,9 +28,14 @@ def load_jsonl(path: Path) -> list[dict]:
 
 
 def train(smoke_test: bool = False) -> dict:
+    # unsloth must be imported before trl/transformers/peft so it can patch
+    # them for its speed/memory optimizations -- reordering this alphabetically
+    # (e.g. for a linter) silently disables those optimizations instead of
+    # erroring, so it's easy to break by accident. Keep this import first.
+    from unsloth import FastLanguageModel  # isort: skip
+    import torch
     from datasets import Dataset
     from trl import SFTConfig, SFTTrainer
-    from unsloth import FastLanguageModel
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=BASE_MODEL, max_seq_length=1024, load_in_4bit=True,
@@ -56,6 +61,11 @@ def train(smoke_test: bool = False) -> dict:
             per_device_train_batch_size=4, num_train_epochs=1 if smoke_test else EPOCHS,
             max_steps=1 if smoke_test else -1, learning_rate=LR, seed=SEED,
             output_dir=str(ADAPTER_DIR / "_trainer_tmp"), report_to="none",
+            # Neither trl/transformers nor this call picks a safe default here --
+            # bf16 needs an Ampere+ GPU (T4 doesn't qualify) and otherwise fails
+            # at construction time, so detect it the same way Unsloth's own
+            # startup banner does ("Bfloat16 = FALSE" for a T4).
+            bf16=torch.cuda.is_bf16_supported(), fp16=not torch.cuda.is_bf16_supported(),
         ),
     )
     start = time.time()
