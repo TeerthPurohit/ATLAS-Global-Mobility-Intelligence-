@@ -36,6 +36,8 @@ env/
 !models/xgboost_model/.gitkeep
 !models/lstm_model/.gitkeep
 models/query_plan_finetune/adapter/*.safetensors
+models/query_plan_finetune/gguf/*.gguf
+models/query_plan_finetune/merged/
 
 # ── IDE / OS ────────────────────────────────────────
 .claude/
