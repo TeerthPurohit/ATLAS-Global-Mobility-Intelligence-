@@ -1,67 +1,67 @@
 {
   "damping": 0.85,
-  "n_zones": 261,
-  "n_edges": 55459,
+  "n_zones": 262,
+  "n_edges": 63755,
   "top_hubs": [
     {
       "rank": 1,
       "zone": "Outside of NYC",
-      "pagerank_score": 0.038424695287344615,
-      "raw_weighted_degree": 319054.0
+      "pagerank_score": 0.04326921916371393,
+      "raw_weighted_degree": 4825622.0
     },
     {
       "rank": 2,
-      "zone": "JFK Airport",
-      "pagerank_score": 0.019447454499503577,
-      "raw_weighted_degree": 303931.0
+      "zone": "LaGuardia Airport",
+      "pagerank_score": 0.01793255803554987,
+      "raw_weighted_degree": 4308979.0
     },
     {
       "rank": 3,
-      "zone": "LaGuardia Airport",
-      "pagerank_score": 0.016107135754037626,
-      "raw_weighted_degree": 310271.0
+      "zone": "JFK Airport",
+      "pagerank_score": 0.017789227200899434,
+      "raw_weighted_degree": 3792880.0
     },
     {
       "rank": 4,
       "zone": "Crown Heights North",
-      "pagerank_score": 0.01093647724351192,
-      "raw_weighted_degree": 192195.0
+      "pagerank_score": 0.010687569585177222,
+      "raw_weighted_degree": 2660335.0
     },
     {
       "rank": 5,
       "zone": "Jamaica",
-      "pagerank_score": 0.008594220807976206,
-      "raw_weighted_degree": 103138.0
+      "pagerank_score": 0.010097063616410015,
+      "raw_weighted_degree": 1585717.0
     },
     {
       "rank": 6,
       "zone": "Bushwick South",
-      "pagerank_score": 0.00856677410124911,
-      "raw_weighted_degree": 158753.0
+      "pagerank_score": 0.008587869098922658,
+      "raw_weighted_degree": 2261198.0
     },
     {
       "rank": 7,
-      "zone": "Park Slope",
-      "pagerank_score": 0.007981066333602106,
-      "raw_weighted_degree": 138825.0
+      "zone": "East New York",
+      "pagerank_score": 0.008369630098829005,
+      "raw_weighted_degree": 1757332.0
     },
     {
       "rank": 8,
-      "zone": "East Chelsea",
-      "pagerank_score": 0.007920431483550634,
-      "raw_weighted_degree": 171265.0
+      "zone": "Park Slope",
+      "pagerank_score": 0.007979574686509977,
+      "raw_weighted_degree": 1951839.0
     },
     {
       "rank": 9,
-      "zone": "East New York",
-      "pagerank_score": 0.007869672339674548,
-      "raw_weighted_degree": 118548.0
+      "zone": "Astoria",
+      "pagerank_score": 0.007713133060986,
+      "raw_weighted_degree": 1846974.0
     },
     {
       "rank": 10,
-      "zone": "Astoria",
-      "pagerank_score": 0.007863487038232583,
-      "raw_weighted_degree": 134383.0
+      "zone": "Flatbush/Ditmas Park",
+      "pagerank_score": 0.007474259282895712,
+      "raw_weighted_degree": 1646107.0
     }
   ]
 }

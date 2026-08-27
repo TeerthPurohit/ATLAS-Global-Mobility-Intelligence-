@@ -22,7 +22,7 @@ seeds:
       a documented limitation, not an implicit "zero impact" claim.
     columns:
       - name: vehicle_class
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
 
   - name: countries
     description: >
@@ -35,9 +35,9 @@ seeds:
       (ADR-011), so there is no `supported` flag derived from it.
     columns:
       - name: iso_code
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: name
-        tests: [not_null]
+        data_tests: [not_null]
 
   - name: cities
     description: >
@@ -54,16 +54,16 @@ seeds:
       "active" automatically once its models actually land.
     columns:
       - name: id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: country_code
-        tests:
+        data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('countries')
                 field: iso_code
       - name: status
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: ["active", "planned"]
@@ -77,9 +77,9 @@ seeds:
       crashing or silently serving nothing.
     columns:
       - name: model_id
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]
       - name: status
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: ["active", "unavailable"]
@@ -93,4 +93,4 @@ seeds:
       a mart reading a mart (rule 6).
     columns:
       - name: LocationID
-        tests: [not_null, unique]
+        data_tests: [not_null, unique]

@@ -1,0 +1,11 @@
+{
+  "n_zones": 262,
+  "n_edges": 63755,
+  "n_sample_pairs": 200,
+  "n_unreachable": 3,
+  "max_speed_kmh": 120.0,
+  "avg_nodes_expanded_astar": 89.43,
+  "avg_nodes_expanded_dijkstra": 126.44,
+  "reduction_pct": 29.3,
+  "note": "nodes-expanded is the honest metric at this graph size; wall-clock difference between astar and dijkstra here is within measurement noise, unlike kdtree_benchmark.json where wall-clock is the right metric at a much larger n."
+}

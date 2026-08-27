@@ -67,7 +67,7 @@
   "ordering_violations_p10_p50_p90": 19,
   "library_versions": {
     "xgboost": "3.3.0",
-    "pandas": "3.0.3",
-    "numpy": "2.5.1"
+    "pandas": "2.2.3",
+    "numpy": "1.26.4"
   }
 }

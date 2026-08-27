@@ -2,9 +2,9 @@
   "n_zones": 263,
   "tree_depth": 9,
   "n_queries": 2000,
-  "linear_scan_seconds": 0.13551140006165951,
-  "linear_scan_us_per_query": 67.75570003082976,
-  "kdtree_seconds": 0.023672099923714995,
-  "kdtree_us_per_query": 11.836049961857498,
-  "speedup_x": 5.724519603176504
+  "linear_scan_seconds": 0.3111657999979798,
+  "linear_scan_us_per_query": 155.5828999989899,
+  "kdtree_seconds": 0.057565600000089034,
+  "kdtree_us_per_query": 28.782800000044517,
+  "speedup_x": 5.405412260056327
 }

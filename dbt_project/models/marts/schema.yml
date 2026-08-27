@@ -5,11 +5,14 @@ models:
     description: "Aggregated hourly demand per pickup zone"
     columns:
       - name: pickup_date
-        tests: [not_null]
+        description: "Calendar date of pickup (from int_trips_enriched.pickup_date). Part of this mart's grain: one row per (pickup_date, pickup_hour, pickup_location_id)."
+        data_tests: [not_null]
       - name: pickup_hour
-        tests: [not_null]
+        description: "Hour of day (0-23) of pickup. Part of this mart's grain alongside pickup_date and pickup_location_id."
+        data_tests: [not_null]
       - name: pickup_location_id
-        tests: [not_null]
+        description: "TLC taxi zone LocationID. Part of this mart's grain alongside pickup_date and pickup_hour; the join key the demand model ladder (models/data_prep/build_features.py) keys its target variable on."
+        data_tests: [not_null]
 
   - name: zone_fare_stats
     description: "Fare statistics for each zone-to-zone pair"
@@ -26,7 +29,8 @@ models:
       dropped in ADR-013.
     columns:
       - name: area_id
-        tests:
+        description: "TLC taxi zone LocationID, aliased as area_id for the generalized Area API shape backend/services/geography_service.py reads. One row per NYC TLC zone -- this mart's grain."
+        data_tests:
           - not_null
           - unique
           # Restored to a real test in ADR-012: this used to be omitted
@@ -38,7 +42,8 @@ models:
                 to: ref('stg_zones')
                 field: location_id
       - name: area_type
-        tests:
+        description: "Always 'zone' -- NYC-only (ADR-012) means there's currently only one geography type in play. A future non-zone-geography city would introduce other values here."
+        data_tests:
           - accepted_values:
               arguments:
                 values: ["zone"]

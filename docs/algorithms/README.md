@@ -29,7 +29,15 @@ demo sections, and docstrings, not in the algorithm logic itself
   matches the intuitive network-flow story (trips terminating outside the
   zone system, plus the airport, dominate weighted degree).
 - **`shortest_path_eta.py`**: Dijkstra shortest path over the same zone
-  graph, validated against `networkx.dijkstra_path`.
+  graph, validated against `networkx.dijkstra_path`. Also A*, guided by a
+  haversine-distance/120 km/h admissible heuristic over real zone centroids
+  (`canonical_areas`), validated against `networkx.astar_path`. Real
+  benchmark (`algorithms/graph/output/astar_benchmark.json`, regenerate via
+  `scripts/generate_algorithm_artifacts.py`): 262 zones, 200 sampled
+  source/target pairs, **29.3% fewer nodes expanded** than Dijkstra on
+  average. Reported on nodes expanded, not wall-clock — at this graph size
+  wall-clock differences are noise (unlike the KD-tree benchmark above,
+  where wall-clock is the right metric).
 
 ## Time series -- `algorithms/timeseries/`
 
