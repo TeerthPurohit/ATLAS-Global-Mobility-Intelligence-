@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag" / "nl_to_sql"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag"))
 
+import config  # noqa: E402,F401  -- load_dotenv() side effect must run before llm_client reads its env vars at import time
 from evaluate import score_plan  # noqa: E402  -- same directory; reuse, don't redefine
 from nyc_schema import NYC_SCHEMA  # noqa: E402
 from query_plan import QueryPlan  # noqa: E402
