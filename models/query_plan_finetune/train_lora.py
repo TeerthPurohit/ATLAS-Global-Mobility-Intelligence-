@@ -1,7 +1,8 @@
 # models/query_plan_finetune/train_lora.py
 """LoRA fine-tune of Qwen2.5-3B-Instruct on the QueryPlan generation task
 (spec-014 FR-7). Runs on a Colab T4 GPU by default; --smoke-test runs 1
-step on 5 examples for a fast, GPU-optional pipeline sanity check (no real
+step on 5 examples for a fast pipeline sanity check -- still needs the same
+GPU runtime (4-bit loading requires CUDA), it is just short (no real
 model quality claim -- see model-comparison skill's reproducibility bar,
 satisfied by Task 6's real eval, not this script's own loss number).
 """

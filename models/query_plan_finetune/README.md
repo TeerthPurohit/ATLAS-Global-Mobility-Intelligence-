@@ -15,9 +15,19 @@
    `models/query_plan_finetune/adapter/*.safetensors` to `.gitignore` if
    not already covered by an existing binary-artifact rule).
 
-## Local smoke test (no GPU needed, run before trusting the Colab run)
+## Smoke test (still needs a GPU — run it in Colab, not on your laptop)
 
-    python models/query_plan_finetune/train_lora.py --smoke-test
+    python train_lora.py --smoke-test
 
-Confirms the tokenizer/chat-template/trainer wiring is correct end-to-end
-on CPU in under a minute, before spending Colab GPU time on the real run.
+Confirms the tokenizer/chat-template/trainer wiring is correct end-to-end on
+a tiny number of steps, so a wiring bug fails in seconds instead of partway
+through the real run. Two hard requirements, both easy to trip over:
+
+- **GPU runtime required.** `train()` loads the base model with
+  `load_in_4bit=True`, and unsloth/bitsandbytes 4-bit loading needs CUDA —
+  it cannot run on a CPU-only machine at all. Run this in the *same* Colab
+  T4 session as step 4 above, right before the real run.
+- **`data/train_augmented.jsonl` must exist first** — it is produced by the
+  augmentation step, not checked in: `python rag/nl_to_sql/augment_training_data.py`
+  (writes `models/query_plan_finetune/data/train_augmented.jsonl`). Without
+  it the smoke test dies with `FileNotFoundError` before reaching the model.
