@@ -30,4 +30,5 @@ through the real run. Two hard requirements, both easy to trip over:
 - **`data/train_augmented.jsonl` must exist first** — it is produced by the
   augmentation step, not checked in: `python rag/nl_to_sql/augment_training_data.py`
   (writes `models/query_plan_finetune/data/train_augmented.jsonl`). Without
-  it the smoke test dies with `FileNotFoundError` before reaching the model.
+  it the smoke test dies with `FileNotFoundError` partway through — the base
+  model (the GPU-requiring part) loads first, then this file is read.
