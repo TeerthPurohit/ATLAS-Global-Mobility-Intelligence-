@@ -1,0 +1,16 @@
+# Reference copy for readability/version-tracking only. The live unit file
+# is generated on the VM by setup.sh's heredoc (with $HOME and
+# $LLAMA_API_KEY expanded at that time) -- editing this file has no effect
+# on a running VM; edit the heredoc in setup.sh instead.
+[Unit]
+Description=llama.cpp server (QueryPlan model)
+After=network.target
+
+[Service]
+ExecStart=$HOME/llama.cpp/build/bin/llama-server -m /opt/queryplan-model/model.gguf -c 2048 --host 0.0.0.0 --port 8080 --api-key $LLAMA_API_KEY
+Restart=always
+RestartSec=5
+User=ubuntu
+
+[Install]
+WantedBy=multi-user.target
