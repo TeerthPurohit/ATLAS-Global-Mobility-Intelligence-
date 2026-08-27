@@ -12,6 +12,7 @@ held-out example's own label compiles to -- not string-identical JSON
 """
 from __future__ import annotations
 
+import functools
 import json
 import sys
 from pathlib import Path
@@ -45,16 +46,23 @@ def score(generate_fn, rows: list[dict], schema) -> tuple[float, int]:
 
 
 def run() -> dict:
-    from query_plan_agent import generate_plan as local_generate  # requires QUERY_PLAN_FINETUNED_MODEL_ID set
+    from query_plan_agent import FINETUNED_MODEL_ID, generate_plan as local_generate  # requires QUERY_PLAN_FINETUNED_MODEL_ID set
     from sql_agent import generate_plan as hosted_generate
+
+    # query_plan_agent.generate_plan's `model` param has no default (unlike
+    # sql_agent.generate_plan's), so score()'s generate_fn(question, schema=schema)
+    # call would TypeError on every row for the local tier -- bind it here rather
+    # than in score(), reusing query_plan_agent's own env-var read instead of a
+    # second one. hosted_generate is left unbound: its `model` already defaults.
+    local_generate_bound = functools.partial(local_generate, model=FINETUNED_MODEL_ID)
 
     nyc_rows = load_eval_rows("eval_nyc_holdout.jsonl")
     unseen_rows = load_eval_rows("eval_unseen_schema.jsonl")
 
     results = {
         "local": {
-            "nyc_holdout": dict(zip(("accuracy", "n"), score(local_generate, nyc_rows, NYC_SCHEMA))),
-            "unseen_schema": dict(zip(("accuracy", "n"), score(local_generate, unseen_rows, HELD_OUT_SCHEMA))),
+            "nyc_holdout": dict(zip(("accuracy", "n"), score(local_generate_bound, nyc_rows, NYC_SCHEMA))),
+            "unseen_schema": dict(zip(("accuracy", "n"), score(local_generate_bound, unseen_rows, HELD_OUT_SCHEMA))),
         },
         "hosted_deepseek_or_openai": {
             "nyc_holdout": dict(zip(("accuracy", "n"), score(hosted_generate, nyc_rows, NYC_SCHEMA))),
