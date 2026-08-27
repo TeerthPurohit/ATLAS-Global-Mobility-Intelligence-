@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import config  # noqa: E402,F401  -- load_dotenv() side effect must run before llm_client reads its env vars at import time
 from llm_client import chat_completion  # noqa: E402
 from training_data_gen import DATA_DIR, build_splits  # noqa: E402
 
