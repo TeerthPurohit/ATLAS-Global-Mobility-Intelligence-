@@ -20,10 +20,16 @@ from scipy.spatial import KDTree as ScipyKDTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from algorithms.spatial.kdtree_zone_lookup import KDTree, load_zone_points
+from algorithms.spatial.kdtree_zone_lookup import KDTree, load_zone_points  # noqa: I001
 from algorithms.graph.build_zone_graph import build_zone_graph
 from algorithms.graph.pagerank_hubs import pagerank, DAMPING
-from algorithms.graph.shortest_path_eta import build_eta_graph, dijkstra
+from algorithms.graph.shortest_path_eta import (
+    astar,
+    benchmark_astar_vs_dijkstra,
+    build_eta_graph,
+    dijkstra,
+    load_zone_coords,
+)
 from algorithms.timeseries.ewma_smoothing import ewma
 from algorithms.timeseries.seasonality_decompose import decompose
 
@@ -102,7 +108,7 @@ def test_dijkstra_matches_networkx_on_zone_graph():
     nodes = list(graph.nodes())
     source, target = nodes[0], nodes[len(nodes) // 2]
 
-    _, my_eta = dijkstra(graph, source, target)
+    _, my_eta, _ = dijkstra(graph, source, target)
     ref_eta = nx.dijkstra_path_length(graph, source, target, weight="weight")
     assert my_eta == pytest.approx(ref_eta, abs=1e-6)
 
@@ -118,7 +124,7 @@ def test_dijkstra_matches_networkx_small_synthetic_graph():
             ("C", "D", 5.0),
         ]
     )
-    my_path, my_eta = dijkstra(graph, "A", "D")
+    my_path, my_eta, _ = dijkstra(graph, "A", "D")
     ref_path = nx.dijkstra_path(graph, "A", "D", weight="weight")
     ref_eta = nx.dijkstra_path_length(graph, "A", "D", weight="weight")
 
@@ -134,6 +140,107 @@ def test_dijkstra_no_path_raises_like_networkx():
         dijkstra(graph, "A", "C")
     with pytest.raises(nx.NetworkXNoPath):
         nx.dijkstra_path(graph, "A", "C")
+
+
+# ---- shortest_path_eta: from-scratch A* vs networkx.astar_path ----
+
+def _synthetic_graph_and_coords():
+    graph = nx.DiGraph()
+    graph.add_weighted_edges_from(
+        [
+            ("A", "B", 4.0),
+            ("A", "C", 1.0),
+            ("C", "B", 1.0),
+            ("B", "D", 1.0),
+            ("C", "D", 5.0),
+        ]
+    )
+    # Small lat/lon spread so the haversine heuristic is actually informative,
+    # not just h=0 everywhere -- same MAX_SPEED_KMH governs admissibility here.
+    coords = {
+        "A": (40.70, -74.00),
+        "B": (40.71, -73.99),
+        "C": (40.705, -73.995),
+        "D": (40.72, -73.98),
+    }
+    return graph, coords
+
+
+def _nx_heuristic(coords):
+    from algorithms.graph.shortest_path_eta import MAX_SPEED_KMH, haversine_km
+
+    def h(u, v):
+        # Same missing-coords fallback as astar()'s internal heuristic ("N/A",
+        # "Outside of NYC" have no real centroid) -- h=0 stays admissible.
+        if u not in coords or v not in coords:
+            return 0.0
+        lat1, lon1 = coords[u]
+        lat2, lon2 = coords[v]
+        return haversine_km(lat1, lon1, lat2, lon2) / MAX_SPEED_KMH * 60.0
+
+    return h
+
+
+@requires_warehouse
+def test_astar_matches_networkx_on_zone_graph():
+    graph = build_eta_graph()
+    coords = load_zone_coords()
+    nodes = list(graph.nodes())
+    source, target = nodes[0], nodes[len(nodes) // 2]
+
+    _, my_eta, _ = astar(graph, source, target, coords)
+    ref_eta = nx.astar_path_length(graph, source, target, heuristic=_nx_heuristic(coords), weight="weight")
+    assert my_eta == pytest.approx(ref_eta, abs=1e-6)
+
+
+@requires_warehouse
+def test_astar_matches_dijkstra_cost_on_zone_graph():
+    graph = build_eta_graph()
+    coords = load_zone_coords()
+    nodes = list(graph.nodes())
+    source, target = nodes[0], nodes[len(nodes) // 2]
+
+    _, astar_eta, _ = astar(graph, source, target, coords)
+    _, dijkstra_eta, _ = dijkstra(graph, source, target)
+    assert astar_eta == pytest.approx(dijkstra_eta, abs=1e-6)
+
+
+def test_astar_matches_networkx_small_synthetic_graph():
+    graph, coords = _synthetic_graph_and_coords()
+    my_path, my_eta, _ = astar(graph, "A", "D", coords)
+    ref_path = nx.astar_path(graph, "A", "D", heuristic=_nx_heuristic(coords), weight="weight")
+    ref_eta = nx.astar_path_length(graph, "A", "D", heuristic=_nx_heuristic(coords), weight="weight")
+
+    assert my_path == ref_path
+    assert my_eta == pytest.approx(ref_eta, abs=1e-9)
+
+
+def test_astar_no_path_raises_like_networkx():
+    graph = nx.DiGraph()
+    graph.add_weighted_edges_from([("A", "B", 1.0)])
+    graph.add_node("C")
+    coords = {"A": (40.70, -74.00), "B": (40.71, -73.99), "C": (40.72, -73.98)}
+    with pytest.raises(nx.NetworkXNoPath):
+        astar(graph, "A", "C", coords)
+    with pytest.raises(nx.NetworkXNoPath):
+        nx.astar_path(graph, "A", "C", heuristic=_nx_heuristic(coords), weight="weight")
+
+
+@requires_warehouse
+def test_astar_vs_dijkstra_benchmark_reports_real_numbers():
+    import random
+
+    graph = build_eta_graph()
+    coords = load_zone_coords()
+    nodes = [n for n in graph.nodes() if n in coords]
+
+    random.seed(42)
+    sample_pairs = [(random.choice(nodes), random.choice(nodes)) for _ in range(100)]
+    result = benchmark_astar_vs_dijkstra(graph, coords, sample_pairs)
+
+    assert result["n_sample_pairs"] == 100
+    assert result["avg_nodes_expanded_astar"] > 0
+    assert result["avg_nodes_expanded_dijkstra"] > 0
 
 
 # ---- ewma_smoothing: from-scratch recursive EWMA vs pandas.ewm ----

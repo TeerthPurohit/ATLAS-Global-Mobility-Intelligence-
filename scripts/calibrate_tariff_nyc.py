@@ -34,7 +34,7 @@ load_dotenv(REPO_ROOT / ".env")
 from llm_client import chat_completion  # noqa: E402
 
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
-OUT_PATH = REPO_ROOT / "docs" / "tariff_calibration.json"
+OUT_PATH = REPO_ROOT / "data" / "tariff_calibration.json"
 _MODEL = "gpt-5.4-nano"
 _SAMPLE_ROWS = 50_000
 
@@ -84,7 +84,7 @@ def measure_mape(guess: dict, sample_rows: int = _SAMPLE_ROWS) -> dict:
     )
     actual = df["total_amount"].to_numpy()
     mape = float(np.mean(np.abs(predicted - actual) / actual) * 100)
-    return {"mape_pct": round(mape, 1), "n": int(len(df))}
+    return {"mape_pct": round(mape, 1), "n": int(len(df))}  # noqa: RUF046
 
 
 def main() -> None:

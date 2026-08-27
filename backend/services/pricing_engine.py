@@ -18,7 +18,7 @@ traffic/weather/demand *score* into a *surcharge* is this project's own
 product rule, not a measured fact, same honesty bar as `congestion`'s
 fusion in journey_predictors.py.
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import json
 from datetime import datetime
@@ -47,7 +47,7 @@ _PEAK_HOURS = frozenset({7, 8, 9, 17, 18, 19})
 # demand momentum crosses into surge territory, never a permanent markup.
 _SURGE_ACTIVE_THRESHOLD = 0.55
 
-_CALIBRATION_PATH = Path(__file__).resolve().parents[2] / "docs" / "tariff_calibration.json"
+_CALIBRATION_PATH = Path(__file__).resolve().parents[2] / "data" / "tariff_calibration.json"
 
 
 def _load_calibration() -> tuple[str, float | None]:
@@ -56,9 +56,9 @@ def _load_calibration() -> tuple[str, float | None]:
     the calibration script hasn't been run yet."""
     try:
         data = json.loads(_CALIBRATION_PATH.read_text())
-        note = f"reproduces real NYC fares to within {data['mape_pct']}% MAPE when blind-tested (n={data['n']}, measured, N=1 city; see docs/tariff_calibration.json)"
+        note = f"reproduces real NYC fares to within {data['mape_pct']}% MAPE when blind-tested (n={data['n']}, measured, N=1 city; see data/tariff_calibration.json)"
         return note, float(data["mape_pct"])
-    except Exception as exc:  # noqa: BLE001 -- calibration is a nice-to-have annotation, never a hard dependency
+    except Exception as exc:  # noqa: BLE001
         logger.debug("pricing_engine._load_calibration step=missing path={} reason={}", _CALIBRATION_PATH, exc)
         return "calibration not yet measured -- run scripts/calibrate_tariff_nyc.py", None
 
@@ -87,7 +87,7 @@ def _base_fare_nyc(ctx: JourneyContext) -> PredictionResult:
     except KeyError as exc:
         logger.info("pricing_engine._base_fare_nyc step=no_fare_history reason={}", exc)
         return PredictionResult(value=None, unit=None, basis="unavailable", source="xgboost_fare_v1", reason=str(exc))
-    except Exception as exc:  # noqa: BLE001 -- see below
+    except Exception as exc:  # noqa: BLE001
         # A model artifact that won't score (e.g. an xgboost version whose
         # categorical container disagrees with the saved model) is a data
         # problem, not a request problem: degrade to an honest `unavailable`
@@ -180,7 +180,7 @@ def estimate_tariff_base_fare(distance_miles: float, hour: int) -> PredictionRes
     """
     ctx = JourneyContext(
         pickup_lat=0.0, pickup_lon=0.0, dropoff_lat=0.0, dropoff_lon=0.0,
-        departure_time=datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0),
+        departure_time=datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0),  # noqa: DTZ005
         vehicle_type="car", pickup_zone_id=None, dropoff_zone_id=None, vehicle_profile=None,
         weather=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
         holiday=PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="not resolved for this path"),
