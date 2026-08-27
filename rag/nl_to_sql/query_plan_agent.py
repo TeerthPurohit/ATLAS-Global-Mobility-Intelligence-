@@ -54,10 +54,18 @@ def generate_plan(question: str, schema: CityMobilitySchema, model: str) -> Quer
     the QueryPlan JSON shape from those examples, not from a repeated
     instruction (see evaluate.py's docstring for why the base-model eval
     prompt differs from this one)."""
-    from openai import OpenAI
+    # Routed through llm_client.chat_completion (same as sql_agent.generate_plan)
+    # rather than OpenAI() directly -- this is what makes the local fine-tuned
+    # model (spec-014 FR-7, docs/superpowers/specs/2026-08-27-local-queryplan-
+    # model-design.md) actually reachable from QueryPlan generation at all.
+    # Tradeoff, deliberate: chat_completion's local tier is process-wide, so
+    # setting LOCAL_MODEL_BASE_URL routes *every* chat_completion() caller in
+    # the repo (rag_pipeline, sql_agent) at the local model too, not just this
+    # one. Accepted over a per-call opt-in flag; see evaluate_comparison.py's
+    # run() for the one place that has to override it back off.
+    from llm_client import chat_completion
 
-    client = OpenAI()
-    resp = client.chat.completions.create(
+    resp = chat_completion(
         model=model,
         messages=[
             {"role": "system", "content": schema.describe()},

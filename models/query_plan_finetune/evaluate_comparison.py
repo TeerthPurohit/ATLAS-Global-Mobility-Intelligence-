@@ -5,10 +5,13 @@ training_data_gen.py already produces. Mirrors models/evaluation/
 compare_models.py's standalone-script shape for the demand model ladder --
 same discipline, different task.
 
-"Correct" here means the generated QueryPlan, when compiled via
-query_plan_compiler.compile(), produces the exact same SQL as the
-held-out example's own label compiles to -- not string-identical JSON
-(field order/nulls can legitimately differ), but semantically identical.
+"Correct" here is `evaluate.py::score_plan()`'s definition, reused verbatim
+rather than redefined: a structural match on intent/metric/aggregation/
+filters, deliberately *not* group_by/order/limit (compiler hints, not the
+canonical mapping this fine-tune is meant to test). That's what makes these
+numbers directly comparable to the base-model baseline ADR-010 records
+(53.8% NYC holdout / 66.7% synthetic) -- a different correctness definition
+here would produce numbers that look comparable and aren't.
 """
 from __future__ import annotations
 
@@ -17,11 +20,12 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "nl_to_sql"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag" / "nl_to_sql"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag"))
 
+from evaluate import score_plan  # noqa: E402  -- same directory; reuse, don't redefine
 from nyc_schema import NYC_SCHEMA  # noqa: E402
 from query_plan import QueryPlan  # noqa: E402
-from query_plan_compiler import compile as compile_plan  # noqa: E402
 from synthetic_schemas import HELD_OUT_SCHEMA  # noqa: E402
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -39,15 +43,23 @@ def score(generate_fn, rows: list[dict], schema) -> tuple[float, int]:
         expected_plan = QueryPlan.from_json(row["messages"][2]["content"])
         try:
             actual_plan = generate_fn(question, schema=schema)
-            correct += int(compile_plan(actual_plan, schema) == compile_plan(expected_plan, schema))
         except Exception:
-            pass  # a generation/compile failure counts as incorrect, not a crash
+            actual_plan = None  # a generation failure counts as incorrect, not a crash
+        correct += int(score_plan(expected_plan, actual_plan)["exact_match"])
     return correct / len(rows), len(rows)
 
 
 def run() -> dict:
+    import llm_client
     from query_plan_agent import FINETUNED_MODEL_ID, generate_plan as local_generate  # requires QUERY_PLAN_FINETUNED_MODEL_ID set
     from sql_agent import generate_plan as hosted_generate
+
+    if not FINETUNED_MODEL_ID:
+        raise SystemExit(
+            "QUERY_PLAN_FINETUNED_MODEL_ID is unset -- every local-tier call would fail and be "
+            "scored as a miss, reporting a fake-looking 0% accuracy instead of an error. Set it "
+            "(and LOCAL_MODEL_BASE_URL, pointing at the served fine-tuned model) first."
+        )
 
     # query_plan_agent.generate_plan's `model` param has no default (unlike
     # sql_agent.generate_plan's), so score()'s generate_fn(question, schema=schema)
@@ -59,15 +71,28 @@ def run() -> dict:
     nyc_rows = load_eval_rows("eval_nyc_holdout.jsonl")
     unseen_rows = load_eval_rows("eval_unseen_schema.jsonl")
 
+    # Test isolation, non-obvious from the call sites: both tiers now go through
+    # llm_client.chat_completion(), which tries the local model FIRST whenever
+    # LOCAL_MODEL_BASE_URL is set. Left alone, the "hosted" pass would silently be
+    # served by the local model too and this script would compare the local model
+    # against itself. So clear the module attribute for the hosted pass only, and
+    # restore it (finally) before the local pass, which needs it set.
+    saved_local_base_url = llm_client.LOCAL_MODEL_BASE_URL
+    llm_client.LOCAL_MODEL_BASE_URL = ""
+    try:
+        hosted_results = {
+            "nyc_holdout": dict(zip(("accuracy", "n"), score(hosted_generate, nyc_rows, NYC_SCHEMA))),
+            "unseen_schema": dict(zip(("accuracy", "n"), score(hosted_generate, unseen_rows, HELD_OUT_SCHEMA))),
+        }
+    finally:
+        llm_client.LOCAL_MODEL_BASE_URL = saved_local_base_url
+
     results = {
         "local": {
             "nyc_holdout": dict(zip(("accuracy", "n"), score(local_generate_bound, nyc_rows, NYC_SCHEMA))),
             "unseen_schema": dict(zip(("accuracy", "n"), score(local_generate_bound, unseen_rows, HELD_OUT_SCHEMA))),
         },
-        "hosted_deepseek_or_openai": {
-            "nyc_holdout": dict(zip(("accuracy", "n"), score(hosted_generate, nyc_rows, NYC_SCHEMA))),
-            "unseen_schema": dict(zip(("accuracy", "n"), score(hosted_generate, unseen_rows, HELD_OUT_SCHEMA))),
-        },
+        "hosted_deepseek_or_openai": hosted_results,
     }
     RESULTS_PATH.write_text(json.dumps(results, indent=2))
     return results
