@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Entry point for `cdk deploy` / `cdk synth`. See stack.py for what this
 actually builds and why (ADR-009).
 
