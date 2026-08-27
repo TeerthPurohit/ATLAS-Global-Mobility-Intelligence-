@@ -135,3 +135,66 @@ on only after the eval numbers below are in hand, not before.
 - Where the paraphrase-augmentation script lives (likely
   `rag/nl_to_sql/training_data_gen.py` gains a new function, or a sibling
   script) — implementation detail.
+
+## Results (2026-08-27)
+
+Full pipeline built and run for real: LoRA fine-tune (Qwen2.5-3B-Instruct,
+rank 16/alpha 32, 3 epochs, 908 rows, real Colab T4 run — `final_train_loss`
+0.1821), merged, quantized to Q4_K_M (1.83GB), deployed on a live Oracle
+Always-Free VM, verified reachable and reboot-durable. Real comparison
+against the hosted DeepSeek/OpenAI zero-shot path
+(`models/query_plan_finetune/comparison_results.json`, scored via
+`evaluate.py::score_plan()`, same definition as the ADR-010 baseline):
+
+| Tier | NYC holdout (n=13) | Unseen schema (n=63) |
+|---|---|---|
+| Local (this fine-tune) | **7.7%** | **50.8%** |
+| Hosted (DeepSeek/OpenAI) | 76.9% | 63.5% |
+
+**Honest read: the local model is not ready to replace the hosted path.**
+The gap is large enough on NYC holdout specifically that this is not a
+"close enough, ship it" result.
+
+**But the raw percentage understates what the model actually learned.**
+Manually inspecting all 13 NYC-holdout failures against
+`evaluate.py::score_plan()`'s exact-match `intent` field found:
+
+- 3/13: the model wrote `"metric lookup"` (a space) instead of the trained
+  enum string `"metric_lookup"` (an underscore) — the correct field
+  otherwise, scored as a hard miss by exact-match on principle (this
+  eval's whole point is to test exact structural correctness, not to
+  guess at intent), but not a comprehension failure.
+- 5/13: the model wrote the bare string `"metric"` — not a valid enum
+  value at all, a genuine and systematic malformation, always on the
+  same `metric_lookup` value.
+- 1/13: `top_n` instead of `area_ranking` — a real category confusion
+  between two genuinely adjacent intents ("which area has the highest
+  X" reads ambiguously between "rank areas, take the top" and "rank
+  areas by X").
+- 2/13: generation produced text that failed to parse as valid JSON at
+  all — an outright miss, not scoreable as "close."
+- 2/13: exact match.
+
+So **8 of the 11 misses are one narrow, specific failure mode** — unreliable
+exact spelling of the `metric_lookup` enum string — not broad task
+misunderstanding. This is consistent with a small (LoRA rank 16), heavily
+quantized (Q4_K_M, ~4 bits/weight) 3B model losing precision on one
+compound token sequence, not with the fine-tune having failed to learn the
+QueryPlan task in general.
+
+**Rollout decision: `USE_FINETUNED_QUERY_PLAN` stays off.** Per the plan's
+own Global Constraint (no forcing a weaker tier to primary regardless of
+what's measured), these numbers don't clear the bar. Real, honest,
+unglamorous result — not a fabricated pass.
+
+**If revisited later**, the two cheapest next experiments implied by this
+diagnosis: (1) train more steps/higher rank specifically to nail the
+`metric_lookup` string (the training data already has it right, so this is
+a capacity/dosage question, not a data-quality one), or (2) evaluate the
+unquantized merged model directly (skip Q4_K_M for evaluation purposes
+only) to isolate whether quantization is the primary cause of the
+spelling failures — the `unseen_schema` split's smaller local-vs-hosted
+gap (50.8% vs 63.5%, far closer than NYC holdout's 7.7% vs 76.9%) is
+itself a clue worth investigating: it suggests the model's degradation is
+NYC-domain-specific in some way, not a uniform quantization tax across
+every split.
