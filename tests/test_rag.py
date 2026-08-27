@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "insight_generation"))
@@ -108,6 +109,15 @@ def test_session_store_crud():
         assert history[1]["route"] == "numeric"
         assert history[1]["sql"] == "SELECT 1"
     finally:
-        with session_store.get_connection() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            conn.commit()
+        # Unlike every call above, this cleanup bypasses session_store's own
+        # SQLAlchemyError degradation -- an unreachable-RDS timeout here would
+        # otherwise mask the real assertion result AND let a third-party
+        # (psycopg) traceback frame dump the connection string, password
+        # included, straight into pytest's output. Degrade the same way
+        # session_store's own functions do.
+        try:
+            with session_store.get_connection() as conn:
+                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+                conn.commit()
+        except SQLAlchemyError:
+            pass
