@@ -35,6 +35,7 @@ env/
 *.joblib
 !models/xgboost_model/.gitkeep
 !models/lstm_model/.gitkeep
+models/query_plan_finetune/adapter/*.safetensors
 
 # ── IDE / OS ────────────────────────────────────────
 .claude/
