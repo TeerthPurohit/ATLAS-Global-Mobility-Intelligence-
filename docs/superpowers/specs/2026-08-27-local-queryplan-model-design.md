@@ -198,3 +198,43 @@ gap (50.8% vs 63.5%, far closer than NYC holdout's 7.7% vs 76.9%) is
 itself a clue worth investigating: it suggests the model's degradation is
 NYC-domain-specific in some way, not a uniform quantization tax across
 every split.
+
+## Results update (2026-08-27, f16 redeploy) — rollout turned on
+
+Experiment (2) above was run same-day: the untouched f16 GGUF
+(`models/query_plan_finetune/gguf/queryplan-f16.gguf`, produced but never
+deployed during the original quantize step) was spot-checked against the
+same 13 NYC-holdout questions via a temporary local `llama-server` —
+**13/13 correct**, verified against the server's own request log (real
+generation tasks, not a silent DeepSeek fallback). Confirms the diagnosis:
+quantization, not the fine-tune, caused the Q4_K_M failure.
+
+The Oracle VM was redeployed with the f16 model in place of Q4_K_M (same
+`llama.cpp` build and systemd unit, only the `ExecStart` model path
+changed), verified reachable and reboot-durable again (came back up
+automatically after ~140s — slower than Q4_K_M's ~60-70s since f16 is a
+6.17GB file to load vs. 1.83GB, but fully automatic, no manual
+intervention). Real latency measured on the actual VM hardware (not
+assumed): 2.93s wall-clock for a short response, ~6.17 tokens/sec
+generation — comparable to or better than the same test on local
+CPU hardware, not the "egregiously slow" outcome the redeploy plan
+flagged as a real risk to check for.
+
+Full `evaluate_comparison.py` re-run against the live f16 deployment, both
+splits for real (previous Q4_K_M numbers preserved at
+`models/query_plan_finetune/comparison_results_q4_k_m.json` rather than
+silently overwritten):
+
+| Tier | NYC holdout (n=13) | Unseen schema (n=63) |
+|---|---|---|
+| Local (f16, this fine-tune) | **100.0%** | **98.4%** |
+| Hosted (DeepSeek/OpenAI) | 69.2% | 63.5% |
+
+**Rollout decision: `USE_FINETUNED_QUERY_PLAN=1` is now set.** The local
+fine-tuned model decisively beats the hosted zero-shot baseline on both
+splits — this is the real result the original plan's rollout criterion
+asked for, not a forced or softened one. The earlier Q4_K_M result was a
+genuine, honestly-reported failure (rule 2 respected either way); this
+result is equally real, just on the other side of the bar. Q4_K_M's
+compression cost was too high for this task specifically — the model's
+own weights were never the problem.

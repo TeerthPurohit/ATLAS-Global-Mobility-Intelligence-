@@ -1,17 +1,17 @@
 {
   "local": {
     "nyc_holdout": {
-      "accuracy": 1.0,
+      "accuracy": 0.07692307692307693,
       "n": 13
     },
     "unseen_schema": {
-      "accuracy": 0.9841269841269841,
+      "accuracy": 0.5079365079365079,
       "n": 63
     }
   },
   "hosted_deepseek_or_openai": {
     "nyc_holdout": {
-      "accuracy": 0.6923076923076923,
+      "accuracy": 0.7692307692307693,
       "n": 13
     },
     "unseen_schema": {
