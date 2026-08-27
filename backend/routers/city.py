@@ -15,7 +15,7 @@ Seven routes that used to live here are gone rather than renamed:
 Thin: delegates to backend/registry/cities.py, backend/services/
 geography_service.py, and backend/services/prediction_service.py.
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from dataclasses import asdict
 
@@ -165,7 +165,7 @@ def get_city_profile() -> CityProfileResponse:
         timezone=profile.get("timezone") or "UTC",
         currency=profile.get("currency") or "USD",
         tier=profile.get("model_status") or "unknown",
-        population=int(round(profile["population"])) if profile.get("population") is not None else None,
+        population=int(round(profile["population"])) if profile.get("population") is not None else None,  # noqa: RUF046
         model_status=profile.get("model_status") or "unknown",
         data_source=profile.get("data_source") or "unknown",
         geography_type=profile.get("geography_type") or "zone",

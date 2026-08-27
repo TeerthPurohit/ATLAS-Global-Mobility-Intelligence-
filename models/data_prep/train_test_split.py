@@ -12,11 +12,11 @@ unchanged.
 
 from __future__ import annotations
 
-from .chronological_split import (  # noqa: F401
-    _latest_month_start,
-    chronological_split,
+from .chronological_split import (
+    _latest_month_start,  # noqa: F401
+    chronological_split,  # noqa: F401
     demo,
-    split_demand_blocks,
+    split_demand_blocks,  # noqa: F401
 )
 
 if __name__ == "__main__":

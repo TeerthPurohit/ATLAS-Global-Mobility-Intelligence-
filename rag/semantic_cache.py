@@ -55,7 +55,7 @@ def _embed(text: str) -> list[float]:
     vector. See embeddings/build_vector_store.py's _embed for the same
     pattern (kept separate here since this module embeds one string at a
     time, not a batch)."""
-    import time
+    import time  # noqa: I001
 
     from openai import OpenAI, RateLimitError
 
@@ -92,7 +92,7 @@ def _point_id(namespace: str, question: str) -> int:
     """Deterministic id from namespace+question so re-put()ing the same
     question overwrites its existing cache entry instead of duplicating it.
     Truncated to 63 bits to stay inside Qdrant's unsigned point-id range."""
-    digest = hashlib.sha256(f"{namespace}:{question}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{namespace}:{question}".encode("utf-8")).hexdigest()  # noqa: UP012
     return int(digest, 16) & ((1 << 63) - 1)
 
 

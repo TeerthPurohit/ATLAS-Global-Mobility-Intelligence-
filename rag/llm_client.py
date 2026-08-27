@@ -26,7 +26,7 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
-from openai import OpenAI  # noqa: E402  -- module-level so tests can monkeypatch it
+from openai import OpenAI  # noqa: E402
 
 
 def chat_completion(*, model: str, **kwargs):
@@ -40,7 +40,7 @@ def chat_completion(*, model: str, **kwargs):
         try:
             client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL)
             return client.chat.completions.create(model=LOCAL_MODEL_NAME, **kwargs)
-        except Exception as exc:  # noqa: BLE001 -- fall through to DeepSeek/OpenAI
+        except Exception as exc:  # noqa: BLE001
             import sys
             print(f"[warn] local model call failed ({exc}); falling back to DeepSeek/OpenAI", file=sys.stderr)
 
@@ -48,7 +48,7 @@ def chat_completion(*, model: str, **kwargs):
         try:
             client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
             return client.chat.completions.create(model=DEEPSEEK_MODEL, **kwargs)
-        except Exception as exc:  # noqa: BLE001 -- fall through to OpenAI
+        except Exception as exc:  # noqa: BLE001
             import sys
             print(f"[warn] DeepSeek call failed ({exc}); falling back to OpenAI", file=sys.stderr)
 

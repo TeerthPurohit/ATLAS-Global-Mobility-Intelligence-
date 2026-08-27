@@ -15,7 +15,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "rag"))
 sys.path.insert(0, str(REPO_ROOT / "rag" / "nl_to_sql"))
 
-from nyc_schema import NYC_SCHEMA  # noqa: E402
+from nyc_schema import NYC_SCHEMA  # noqa: E402, I001
 from query_plan import QueryFilters, QueryPlan  # noqa: E402
 from query_plan_compiler import compile as compile_plan  # noqa: E402
 import sql_agent  # noqa: E402

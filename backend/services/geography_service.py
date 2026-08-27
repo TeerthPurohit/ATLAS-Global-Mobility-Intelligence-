@@ -24,7 +24,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
-from algorithms.spatial.kdtree_zone_lookup import KDTree, ZonePoint, load_zone_points  # noqa: E402
+from algorithms.spatial.kdtree_zone_lookup import (  # noqa: E402, F401
+    KDTree,
+    ZonePoint,
+    load_zone_points,
+)
 
 # NYC's real zone-coverage bounding box, same bounds used by
 # kdtree_zone_lookup.py's own benchmark_summary() for synthetic NYC queries.

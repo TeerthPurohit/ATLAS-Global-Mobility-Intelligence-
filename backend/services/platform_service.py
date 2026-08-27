@@ -224,7 +224,7 @@ def _load_insight_docs() -> list[dict]:
     rag_dir = REPO_ROOT / "rag" / "insight_generation"
     if str(rag_dir) not in sys.path:
         sys.path.insert(0, str(rag_dir))
-    from generate_insight_docs import load_insight_docs  # noqa: PLC0415
+    from generate_insight_docs import load_insight_docs
 
     docs = load_insight_docs()
     docs.sort(key=lambda d: d.get("total_trips") or 0, reverse=True)
@@ -244,7 +244,7 @@ def check_health() -> dict:
         con.execute("select 1").fetchone()
         con.close()
         duckdb_ok = True
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("platform_service.check_health step=duckdb failed reason={}", exc)
         duckdb_ok = False
 
@@ -253,13 +253,13 @@ def check_health() -> dict:
         rag_dir = REPO_ROOT / "rag"
         if str(rag_dir) not in sys.path:
             sys.path.insert(0, str(rag_dir))
-        from config import QDRANT_URL  # noqa: PLC0415
-        from qdrant_client import QdrantClient  # noqa: PLC0415
+        from config import QDRANT_URL
+        from qdrant_client import QdrantClient
 
         client = QdrantClient(url=QDRANT_URL, timeout=2)
         client.get_collections()
         qdrant_ok = True
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("platform_service.check_health step=qdrant failed reason={}", exc)
         qdrant_ok = False
 
@@ -275,7 +275,7 @@ def get_capability_summary() -> dict:
     matrix -- no hardcoded totals. One city (ADR-013), so every count here is
     0 or 1; the shape is kept so the report still reads the same way if a
     second city ever lands."""
-    from backend.registry import cities as cities_registry  # noqa: PLC0415
+    from backend.registry import cities as cities_registry
 
     matrix = cities_registry.capability_matrix() or {}
     total = 1 if cities_registry.get_city() else 0

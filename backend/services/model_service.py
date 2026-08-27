@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
-from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
+from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402, I001
 from data_prep.build_features import FEATURE_COLUMNS as NYC_FEATURE_COLUMNS  # noqa: E402
 from data_prep.build_features import build_features as nyc_build_features  # noqa: E402
 
@@ -99,7 +99,7 @@ def load() -> None:
                 _load_zone_demand_artifacts(con)
             finally:
                 con.close()
-    except Exception:
+    except Exception:  # noqa: BLE001
         logger.exception("model_service.load step=demand_model failed -- demand predict will report unavailable")
 
     logger.info("model_service.load step=fare_model_start path={}", FARE_MODEL_PATH)

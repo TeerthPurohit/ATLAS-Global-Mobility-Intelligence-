@@ -32,7 +32,7 @@ from dotenv import load_dotenv  # noqa: E402
 # never got main.py's load_dotenv() for free.
 load_dotenv(REPO_ROOT / ".env")
 
-from backend.predictors import journey_predictors  # noqa: E402
+from backend.predictors import journey_predictors  # noqa: E402, I001
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.services import model_service, platform_service, pricing_engine, tariff_profiles  # noqa: E402
@@ -64,7 +64,7 @@ def _ctx(hour: int = 12, pickup_zone_id: int | None = None, dropoff_zone_id: int
     unavailable = PredictionResult(value=None, unit=None, basis="unavailable", source="n/a", reason="n/a")
     return JourneyContext(
         pickup_lat=0.0, pickup_lon=0.0, dropoff_lat=0.0, dropoff_lon=0.0,
-        departure_time=datetime(2026, 6, 15, hour, 0), vehicle_type="sedan",
+        departure_time=datetime(2026, 6, 15, hour, 0), vehicle_type="sedan",  # noqa: DTZ001
         pickup_zone_id=pickup_zone_id, dropoff_zone_id=dropoff_zone_id, vehicle_profile=None,
         weather=unavailable, holiday=unavailable,
     )
@@ -140,7 +140,7 @@ def test_minimum_fare_floor_is_enforced():
 
 
 def test_optional_components_are_only_applied_when_the_profile_defines_them(monkeypatch):
-    base = dict(
+    base = dict(  # noqa: C408
         city_id="testcity", currency="EUR", base_fare=3.0, per_km=1.0, per_min=0.5, min_fare=0.0,
         night_multiplier=1.0, airport_surcharge=0.0, source="llm_anchored",
         generated_at="2026-08-10T00:00:00", model_id="test", confidence=0.7, notes="",
@@ -166,7 +166,7 @@ def test_optional_components_are_only_applied_when_the_profile_defines_them(monk
     ],
 )
 def test_malformed_tariff_profiles_are_rejected_at_construction(bad):
-    good = dict(
+    good = dict(  # noqa: C408
         city_id="testcity", currency="EUR", base_fare=3.0, per_km=1.0, per_min=0.5, min_fare=1.0,
         night_multiplier=1.0, airport_surcharge=0.0, source="llm_anchored",
         generated_at="2026-08-10T00:00:00", model_id="test", confidence=0.7, notes="",

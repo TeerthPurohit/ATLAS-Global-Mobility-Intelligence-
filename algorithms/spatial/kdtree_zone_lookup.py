@@ -30,9 +30,9 @@ class ZonePoint:
 
 
 class KDNode:
-    __slots__ = ("point", "axis", "left", "right")
+    __slots__ = ("point", "axis", "left", "right")  # noqa: RUF023
 
-    def __init__(self, point: ZonePoint, axis: int, left: "KDNode | None", right: "KDNode | None"):
+    def __init__(self, point: ZonePoint, axis: int, left: "KDNode | None", right: "KDNode | None"):  # noqa: UP037
         self.point = point
         self.axis = axis
         self.left = left

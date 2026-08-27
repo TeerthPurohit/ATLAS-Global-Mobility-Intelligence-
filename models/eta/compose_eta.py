@@ -22,7 +22,7 @@ import pandas as pd
 import xgboost as xgb
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from congestion.build_features import FEATURE_COLUMNS, _bucket  # noqa: E402
+from congestion.build_features import FEATURE_COLUMNS, _bucket
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "congestion"
 

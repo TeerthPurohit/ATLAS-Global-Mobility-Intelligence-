@@ -49,7 +49,7 @@ def _year_holidays(year: int, country_code: str) -> frozenset[str] | None:
         resp.raise_for_status()
         rows = resp.json()
         return frozenset(r["date"] for r in rows)
-    except Exception as exc:  # noqa: BLE001 -- caller turns this into an honest PredictionResult
+    except Exception as exc:  # noqa: BLE001
         logger.warning("holidays_nager step=year_holidays failed year={} country={} reason={}", year, country_code, exc)
         return None
 
@@ -96,21 +96,21 @@ def fetch(lat: float, lon: float, at: datetime, country_code: str | None = None)
 def demo() -> None:
     # A real, well-known fixed-date US holiday -- Independence Day always
     # falls on July 4th regardless of year.
-    result = fetch(40.7128, -74.0060, datetime(2024, 7, 4), country_code="US")
+    result = fetch(40.7128, -74.0060, datetime(2024, 7, 4), country_code="US")  # noqa: DTZ001
     assert result.basis in ("computed", "unavailable")
     if result.basis == "computed":
         assert result.value is True, "2024-07-04 should resolve as a US holiday (Independence Day)"
-    non_holiday = fetch(40.7128, -74.0060, datetime(2024, 3, 15), country_code="US")
+    non_holiday = fetch(40.7128, -74.0060, datetime(2024, 3, 15), country_code="US")  # noqa: DTZ001
     if non_holiday.basis == "computed":
         assert non_holiday.value is False
     print(f"July 4 2024 US holiday: {result.value} ({result.basis})")
 
     # India isn't in Nager.Date's 204 countries -- exercises the extended
     # fixed-date fallback (scripts/extract_fixed_holidays.py).
-    india_independence_day = fetch(19.076, 72.8777, datetime(2026, 8, 15), country_code="IN")
+    india_independence_day = fetch(19.076, 72.8777, datetime(2026, 8, 15), country_code="IN")  # noqa: DTZ001
     assert india_independence_day.basis == "modeled_estimate"
     assert india_independence_day.value is True
-    india_ordinary_day = fetch(19.076, 72.8777, datetime(2026, 8, 9), country_code="IN")
+    india_ordinary_day = fetch(19.076, 72.8777, datetime(2026, 8, 9), country_code="IN")  # noqa: DTZ001
     assert india_ordinary_day.value is False
     print(f"India Aug 15 holiday (extended fallback): {india_independence_day.value} ({india_independence_day.basis})")
 

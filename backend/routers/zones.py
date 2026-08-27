@@ -64,7 +64,7 @@ def _get_zones() -> dict[int, Zone]:
         logger.info("zones step=loading warehouse={}", WAREHOUSE_PATH)
         try:
             _zones = _load_zones()
-        except (duckdb.Error, OSError) as exc:  # noqa: BLE001 -- missing warehouse must not kill startup
+        except (duckdb.Error, OSError) as exc:
             logger.warning("zones step=load_zones failed: {} -- serving empty zone list", exc)
             _zones = {}
         else:

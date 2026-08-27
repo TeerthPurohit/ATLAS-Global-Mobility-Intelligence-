@@ -50,6 +50,6 @@ def test_coverage_is_measured_not_hardcoded(metadata):
 
 
 def test_pinball_losses_are_real_numbers(metadata):
-    for name, m in metadata["metrics"].items():
+    for name, m in metadata["metrics"].items():  # noqa: PERF102
         assert np.isfinite(m["pinball_loss"])
         assert m["pinball_loss"] >= 0

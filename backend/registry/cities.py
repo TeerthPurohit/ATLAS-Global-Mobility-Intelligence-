@@ -67,7 +67,7 @@ def _effective_model_status(seed_status: str) -> str:
 
 
 def _area_count() -> int:
-    from backend.services import geography_service  # local import: avoids a hard import-order dependency at module load
+    from backend.services import geography_service  # local import: avoids a hard import-order dependency at module load  # noqa: I001
 
     return len(geography_service.list_areas())
 

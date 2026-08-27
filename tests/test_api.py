@@ -94,7 +94,7 @@ def test_websocket_chat_stream(client):
                 received.append(data)
                 if data.get("type") == "done":
                     break
-            except Exception:
+            except Exception:  # noqa: BLE001
                 break
         assert len(received) >= 1
         assert received[-1]["type"] == "done"
@@ -302,7 +302,7 @@ def test_websocket_stream_echoes_city_and_area(client):
         while True:
             try:
                 data = websocket.receive_json()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 break
             if data.get("type") == "done":
                 done = data["payload"]

@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from algorithms.timeseries.ewma_smoothing import load_zone_hourly_blocks  # noqa: E402
+from algorithms.timeseries.ewma_smoothing import load_zone_hourly_blocks
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "warehouse" / "nyc_rides.duckdb"
 WINDOW = 24

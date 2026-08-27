@@ -11,7 +11,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from backend.errors import DomainError  # noqa: E402
+from backend.errors import DomainError  # noqa: E402, I001
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
 from backend.schemas import CapabilityUnavailable, ErrorCode, PredictionEnvelope  # noqa: E402

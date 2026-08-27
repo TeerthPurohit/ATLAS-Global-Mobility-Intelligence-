@@ -6,7 +6,7 @@ Set the GitHub org/repo via `cdk deploy -c github_org=... -c github_repo=...`
 (or edit the defaults below) so the OIDC trust policy only lets *this* repo's
 main-branch workflow assume the build role.
 """
-import os
+import os  # noqa: I001
 
 import aws_cdk as cdk
 

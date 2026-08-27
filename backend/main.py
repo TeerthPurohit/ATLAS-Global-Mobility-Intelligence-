@@ -19,7 +19,7 @@ load_dotenv()  # API keys must be set before adapters read os.environ at import 
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="{time:YYYY-MM-DD HH:mm:ss} {level} {name}: {message}")
 
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI  # noqa: E402, I001
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 
@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
         logger.info("Loading {}...", name)
         try:
             load()
-        except Exception:
+        except Exception:  # noqa: BLE001
             failed.append(name)
             logger.exception("{} failed to load - its features will report unavailable", name)
     if failed:

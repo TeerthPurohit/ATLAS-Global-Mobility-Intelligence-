@@ -68,7 +68,7 @@ class QueryPlan:
         return json.dumps(self.to_dict())
 
     @staticmethod
-    def from_dict(data: dict) -> "QueryPlan":
+    def from_dict(data: dict) -> "QueryPlan":  # noqa: UP037
         filters_data = data.get("filters") or {}
         date_range = filters_data.get("date_range")
         filters = QueryFilters(
@@ -89,7 +89,7 @@ class QueryPlan:
         )
 
     @staticmethod
-    def from_json(text: str) -> "QueryPlan":
+    def from_json(text: str) -> "QueryPlan":  # noqa: UP037
         return QueryPlan.from_dict(json.loads(text))
 
 

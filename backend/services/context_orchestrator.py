@@ -28,8 +28,12 @@ from loguru import logger
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
-from backend.registry import CITY_ID
+from backend.adapters import (  # noqa: E402
+    holidays_nager,
+    routing_osrm,
+    weather_openmeteo,
+)
+from backend.registry import CITY_ID  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
 from backend.services import model_service, transit_service  # noqa: E402

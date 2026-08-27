@@ -23,11 +23,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag" / "nl_to_sql"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag"))
 
-import config  # noqa: E402,F401  -- load_dotenv() side effect must run before llm_client reads its env vars at import time
-from evaluate import score_plan  # noqa: E402  -- same directory; reuse, don't redefine
-from nyc_schema import NYC_SCHEMA  # noqa: E402
-from query_plan import QueryPlan  # noqa: E402
-from synthetic_schemas import HELD_OUT_SCHEMA  # noqa: E402
+import config  # noqa: F401
+from evaluate import score_plan
+from nyc_schema import NYC_SCHEMA
+from query_plan import QueryPlan
+from synthetic_schemas import HELD_OUT_SCHEMA
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 RESULTS_PATH = Path(__file__).resolve().parent / "comparison_results.json"
@@ -44,7 +44,7 @@ def score(generate_fn, rows: list[dict], schema) -> tuple[float, int]:
         expected_plan = QueryPlan.from_json(row["messages"][2]["content"])
         try:
             actual_plan = generate_fn(question, schema=schema)
-        except Exception:  # noqa: BLE001 -- a generation failure counts as incorrect, not a crash
+        except Exception:  # noqa: BLE001
             actual_plan = None
         correct += int(score_plan(expected_plan, actual_plan)["exact_match"])
     return correct / len(rows), len(rows)

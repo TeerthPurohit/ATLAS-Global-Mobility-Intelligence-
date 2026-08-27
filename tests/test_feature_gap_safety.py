@@ -18,7 +18,9 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from models.data_prep.build_features import _block_features as nyc_block_features  # noqa: E402
+from models.data_prep.build_features import (  # noqa: E402
+    _block_features as nyc_block_features,
+)
 
 
 def _make_gapped_blocks():

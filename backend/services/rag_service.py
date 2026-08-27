@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any, Generator  # noqa: UP035
 
 from loguru import logger
 

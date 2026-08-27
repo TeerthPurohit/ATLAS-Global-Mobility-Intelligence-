@@ -1,4 +1,4 @@
-import duckdb
+import duckdb  # noqa: I001
 import os
 
 con = duckdb.connect(os.environ.get("DUCKDB_PATH", "data/warehouse/nyc_rides.duckdb"))

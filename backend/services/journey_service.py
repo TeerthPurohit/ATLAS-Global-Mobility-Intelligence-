@@ -19,7 +19,7 @@ import duckdb
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
+from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402, I001
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
 from backend.predictors import journey_predictors  # noqa: E402
 from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402

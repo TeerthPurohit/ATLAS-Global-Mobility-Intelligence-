@@ -30,10 +30,10 @@ import duckdb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
-from nyc_schema import NYC_SCHEMA  # noqa: E402
-from query_plan import CityMobilitySchema, QueryPlan  # noqa: E402
-from query_plan_compiler import compile as compile_plan  # noqa: E402
+from config import DEFAULT_DB_PATH, OPENAI_MODEL
+from nyc_schema import NYC_SCHEMA
+from query_plan import CityMobilitySchema, QueryPlan
+from query_plan_compiler import compile as compile_plan
 
 ALLOWED_TABLES = {"zone_hourly_demand", "zone_fare_stats", "zone_pair_flows"}
 

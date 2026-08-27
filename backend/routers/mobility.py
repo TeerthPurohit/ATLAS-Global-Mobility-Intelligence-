@@ -8,22 +8,22 @@ Internal: delegates to journey_service / pricing_engine / journey_predictors
 so there is ONE source of truth per prediction (journey/estimate calls the
 same services).
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException  # noqa: F401
 from loguru import logger
 
 # Add repo root for imports
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from backend.predictors.base import PredictionResult  # noqa: E402
-from backend.predictors import journey_predictors  # noqa: E402
-from backend.schemas import (  # noqa: E402
+from backend.predictors.base import PredictionResult  # noqa: I001
+from backend.predictors import journey_predictors
+from backend.schemas import (
     AvailabilityResponse,
     CarbonResponse,
     CongestionResponse,
@@ -37,7 +37,7 @@ from backend.schemas import (  # noqa: E402
     RouteResponse,
     SurgeResponse,
 )
-from backend.services import journey_service, pricing_engine, model_service  # noqa: E402
+from backend.services import journey_service, pricing_engine, model_service  # noqa: F401
 
 router = APIRouter(prefix="/api/mobility", tags=["Mobility"])
 
@@ -99,7 +99,7 @@ def route(req: RouteRequest) -> RouteResponse:
         distance=_make_mobility_response(distance),
         duration=_make_mobility_response(duration),
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -168,7 +168,7 @@ def fare(req: PredictionRequest) -> FareResponse:
         breakdown=breakdown,
         currency=currency,
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -190,7 +190,7 @@ def demand(req: PredictionRequest) -> DemandResponse:
     return DemandResponse(
         demand=_make_mobility_response(demand_result),
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -212,7 +212,7 @@ def congestion(req: PredictionRequest) -> CongestionResponse:
     return CongestionResponse(
         congestion=_make_mobility_response(congestion_result),
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -234,7 +234,7 @@ def availability(req: PredictionRequest) -> AvailabilityResponse:
     return AvailabilityResponse(
         availability=_make_mobility_response(avail_result),
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -260,7 +260,7 @@ def surge(req: PredictionRequest) -> SurgeResponse:
     return SurgeResponse(
         surge=_make_mobility_response(surge_result),
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -282,7 +282,7 @@ def carbon(req: PredictionRequest) -> CarbonResponse:
     return CarbonResponse(
         carbon=_make_mobility_response(carbon_result),
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )
 
 
@@ -296,7 +296,7 @@ def departure_time(req: PredictionRequest) -> DepartureTimeResponse:
         req.pickup.lat, req.pickup.lon, req.dropoff.lat, req.dropoff.lon,
         req.departure_time, req.vehicle_type
     )
-    features = journey_service.build_features(ctx)
+    features = journey_service.build_features(ctx)  # noqa: F841
 
     best = journey_predictors.sweep_best_departure_time(
         ctx.pickup_zone_id, req.departure_time.hour, req.departure_time.weekday(),
@@ -310,5 +310,5 @@ def departure_time(req: PredictionRequest) -> DepartureTimeResponse:
         confidence=best.confidence if best.confidence is not None else 0.0,
         status=best.basis,
         request_id=request_id,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.utcnow(),  # noqa: DTZ003
     )

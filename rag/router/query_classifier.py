@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import OPENAI_MODEL  # noqa: E402
+from config import OPENAI_MODEL
 
 NUMERIC = "numeric"
 EXPLANATORY = "explanatory"
@@ -80,7 +80,7 @@ def classify(question: str, model: str = OPENAI_MODEL) -> str:
         if label.startswith("EXPLANATORY"):
             return EXPLANATORY
         print(f"[warn] classifier returned unparseable label {label!r}; using keyword heuristic", file=sys.stderr)
-    except Exception as exc:  # noqa: BLE001 -- any LLM/network failure falls back
+    except Exception as exc:  # noqa: BLE001
         print(f"[warn] classifier LLM call failed ({exc}); using keyword heuristic", file=sys.stderr)
     return _heuristic_classify(question)
 

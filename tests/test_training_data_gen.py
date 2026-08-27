@@ -7,10 +7,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "nl_to_sql"))
 
-from nyc_schema import NYC_SCHEMA  # noqa: E402
-from query_plan_compiler import compile as compile_plan  # noqa: E402
-from synthetic_schemas import HELD_OUT_SCHEMA, TRAIN_SYNTHETIC_SCHEMAS  # noqa: E402
-from training_data_gen import build_splits, generate_examples  # noqa: E402
+from nyc_schema import NYC_SCHEMA
+from query_plan_compiler import compile as compile_plan
+from synthetic_schemas import HELD_OUT_SCHEMA, TRAIN_SYNTHETIC_SCHEMAS
+from training_data_gen import build_splits, generate_examples
 
 ALL_SCHEMAS = (NYC_SCHEMA, *TRAIN_SYNTHETIC_SCHEMAS, HELD_OUT_SCHEMA)
 

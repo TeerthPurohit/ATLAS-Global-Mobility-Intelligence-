@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import OPENAI_EMBEDDING_MODEL, QDRANT_URL  # noqa: E402
-from insight_generation.generate_insight_docs import OUTPUT_PATH as INSIGHT_DOCS_PATH  # noqa: E402
-from insight_generation.generate_insight_docs import load_insight_docs  # noqa: E402
+from config import OPENAI_EMBEDDING_MODEL, QDRANT_URL
+from insight_generation.generate_insight_docs import OUTPUT_PATH as INSIGHT_DOCS_PATH
+from insight_generation.generate_insight_docs import load_insight_docs
 
 MODEL_NAME = OPENAI_EMBEDDING_MODEL
 EMBED_DIM = 1536

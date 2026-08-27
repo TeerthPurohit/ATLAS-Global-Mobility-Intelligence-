@@ -1,4 +1,4 @@
-import duckdb
+import duckdb  # noqa: I001
 import os
 import sys
 

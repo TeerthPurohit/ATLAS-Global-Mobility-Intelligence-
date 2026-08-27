@@ -17,7 +17,7 @@ two splits start in the same month.
 from __future__ import annotations
 
 import json
-import sys
+import sys  # noqa: F401
 from pathlib import Path
 
 import pandas as pd

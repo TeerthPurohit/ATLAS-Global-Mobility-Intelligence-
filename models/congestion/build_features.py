@@ -47,7 +47,7 @@ import duckdb
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from backend.adapters.holidays_nager import fetch as fetch_holiday  # noqa: E402
+from backend.adapters.holidays_nager import fetch as fetch_holiday
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "warehouse" / "nyc_rides.duckdb"
 BUCKET_WIDTH_MILES = 0.5
@@ -98,7 +98,7 @@ def _holiday_flags(dates: pd.Series) -> dict[str, int]:
     flags = {}
     for d in dates.unique():
         ts = pd.Timestamp(d)
-        result = fetch_holiday(40.7128, -74.0060, datetime(ts.year, ts.month, ts.day), country_code="US")
+        result = fetch_holiday(40.7128, -74.0060, datetime(ts.year, ts.month, ts.day), country_code="US")  # noqa: DTZ001
         flags[d] = 1 if result.value is True else 0
     return flags
 

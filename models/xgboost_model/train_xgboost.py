@@ -22,8 +22,8 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from data_prep.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, TARGET_COLUMN, build_features  # noqa: E402
-from data_prep.train_test_split import split_demand_blocks  # noqa: E402
+from data_prep.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, TARGET_COLUMN, build_features  # noqa: I001
+from data_prep.train_test_split import split_demand_blocks
 
 ARTIFACT_DIR = Path(__file__).resolve().parent
 SEED = 42

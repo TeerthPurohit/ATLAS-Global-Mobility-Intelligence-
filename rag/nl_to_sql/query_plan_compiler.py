@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from query_plan import AGGREGATIONS, CityMobilitySchema, QueryPlan  # noqa: E402
+from query_plan import AGGREGATIONS, CityMobilitySchema, QueryPlan
 
 _AGG_SQL = {"count": "COUNT", "avg": "AVG", "sum": "SUM", "max": "MAX", "min": "MIN"}
 
@@ -49,7 +49,7 @@ def _sql_literal(value: object, is_text: bool) -> str:
             raise ValueError(f"expected a text value, got {value!r}")
         return "'" + value.replace("'", "''") + "'"
     if isinstance(value, bool):
-        raise ValueError(f"expected a numeric value, got {value!r}")
+        raise ValueError(f"expected a numeric value, got {value!r}")  # noqa: TRY004
     if isinstance(value, (int, float)):
         return str(value)
     if isinstance(value, str):
@@ -93,7 +93,7 @@ def validate_plan(plan: QueryPlan, schema: CityMobilitySchema) -> None:
         raise ValueError(f"limit must be a positive integer, got {plan.limit!r}")
 
 
-def compile(plan: QueryPlan, schema: CityMobilitySchema) -> str:  # noqa: A001 -- matches spec's `compile(plan, schema)`
+def compile(plan: QueryPlan, schema: CityMobilitySchema) -> str:
     validate_plan(plan, schema)
     metric_schema = schema.resolve_metric(plan.metric)
     metric_expr = f"{_AGG_SQL[plan.aggregation]}({metric_schema.value.column}) AS {plan.metric}"
@@ -135,8 +135,8 @@ def compile(plan: QueryPlan, schema: CityMobilitySchema) -> str:  # noqa: A001 -
 
 
 def demo() -> None:
-    from query_plan import QueryFilters  # noqa: E402
-    from nyc_schema import NYC_SCHEMA  # noqa: E402
+    from query_plan import QueryFilters  # noqa: I001
+    from nyc_schema import NYC_SCHEMA
 
     plan = QueryPlan(
         intent="metric_lookup", metric="fare", aggregation="avg", filters=QueryFilters(area="JFK Airport")

@@ -18,14 +18,14 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from congestion.build_features import (  # noqa: E402
+from congestion.build_features import (
     DEFAULT_DB_PATH,
     FEATURE_COLUMNS,
     FREE_FLOW_PERCENTILE,
     TARGET_COLUMN,
     build_features,
 )
-from data_prep.chronological_split import split_demand_blocks  # noqa: E402
+from data_prep.chronological_split import split_demand_blocks
 
 ARTIFACT_DIR = Path(__file__).resolve().parent
 SEED = 42

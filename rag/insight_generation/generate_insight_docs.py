@@ -26,7 +26,7 @@ import duckdb
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
+from config import DEFAULT_DB_PATH, OPENAI_MODEL
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -146,7 +146,7 @@ def validate_grounding(text: str, allowed: set[float], tol: float = 0.55) -> boo
 def _template_sentence(facts: dict) -> str:
     if facts["total_trips"]:
         parts = [
-            f"{facts['zone_name']} ({facts['borough']}) recorded {facts['total_trips']:,} pickups "
+            f"{facts['zone_name']} ({facts['borough']}) recorded {facts['total_trips']:,} pickups "  # noqa: ISC004
             f"in the observed period, averaging ${facts['avg_fare']:.2f} per trip over "
             f"{facts['avg_distance_miles']:.1f} miles."
         ]
@@ -191,7 +191,7 @@ def _phrase_with_llm(facts: dict) -> str | None:
             max_completion_tokens=250,
         )
         text = (resp.choices[0].message.content or "").strip()
-    except Exception as exc:  # noqa: BLE001 -- any LLM/network failure just falls back
+    except Exception as exc:  # noqa: BLE001
         print(f"  [warn] LLM phrasing failed for {facts['zone_name']} ({exc}); using template", file=sys.stderr)
         return None
 
@@ -264,7 +264,7 @@ def generate_all(db_path: Path = DEFAULT_DB_PATH, output_path: Path = OUTPUT_PAT
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        for doc in docs:
+        for doc in docs:  # noqa: FURB122
             f.write(json.dumps(doc) + "\n")
 
     print(f"wrote {len(docs)} insight docs to {output_path} ({n_llm} llm-phrased, {n_template} template fallback)")

@@ -8,7 +8,7 @@ string) for time bucketing and `response_json` (a JSON string of the full
 JourneyEstimate) for fare/distance/city extraction. Every timestamp is kept
 timezone-aware so bucketing never compares naive against aware datetimes.
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -21,13 +21,13 @@ from loguru import logger
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from backend.schemas import (  # noqa: E402
+from backend.schemas import (
     AnalyticsHistoryResponse,
     AnalyticsInsightsResponse,
     AnalyticsSummaryResponse,
     AnalyticsTrendsResponse,
 )
-from backend.services import platform_service, prediction_log  # noqa: E402
+from backend.services import platform_service, prediction_log
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 

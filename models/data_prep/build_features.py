@@ -23,7 +23,7 @@ import duckdb
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from algorithms.timeseries.ewma_smoothing import DEFAULT_ALPHA, ewma, load_zone_hourly_blocks  # noqa: E402
+from algorithms.timeseries.ewma_smoothing import DEFAULT_ALPHA, ewma, load_zone_hourly_blocks  # noqa: I001
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "warehouse" / "nyc_rides.duckdb"
 ROLLING_WINDOW_H = 24 * 7

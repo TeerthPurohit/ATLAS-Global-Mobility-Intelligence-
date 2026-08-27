@@ -12,10 +12,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "nl_to_sql"))
 
-import query_plan_compiler as qpc  # noqa: E402
-from nyc_schema import NYC_SCHEMA  # noqa: E402
-from query_plan import QueryFilters, QueryPlan  # noqa: E402
-from query_plan_compiler import compile as compile_plan  # noqa: E402
+import query_plan_compiler as qpc  # noqa: I001
+from nyc_schema import NYC_SCHEMA
+from query_plan import QueryFilters, QueryPlan
+from query_plan_compiler import compile as compile_plan
 
 
 # ---- one correctness case per canonical intent ----

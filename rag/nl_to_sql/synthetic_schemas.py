@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from query_plan import CityMobilitySchema, FieldMapping, MetricSchema  # noqa: E402
+from query_plan import CityMobilitySchema, FieldMapping, MetricSchema
 
 
 def _full_coverage_schema(

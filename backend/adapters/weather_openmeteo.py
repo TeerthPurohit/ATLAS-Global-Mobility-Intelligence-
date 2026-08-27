@@ -66,7 +66,7 @@ def _cached_fetch(lat_bucket: float, lon_bucket: float, hour_bucket: int) -> Pre
         return PredictionResult(
             value=severity, unit="severity_0_to_1", basis="computed", source="open-meteo", reason=None,
         )
-    except Exception as exc:  # noqa: BLE001 -- any network/API failure degrades honestly
+    except Exception as exc:  # noqa: BLE001
         logger.warning("weather_openmeteo step=fetch failed lat={} lon={} reason={}", lat_bucket, lon_bucket, exc)
         return PredictionResult(
             value=None, unit=None, basis="unavailable", source="open-meteo",
@@ -85,7 +85,7 @@ def demo() -> None:
     assert _severity_from_conditions(20.0, 0.0) == 0.0
     assert _severity_from_conditions(20.0, 100.0) == 1.0
     assert _severity_from_conditions(-5.0, 0.0) == _TEMP_EXTREME_BUMP
-    result = fetch(52.52, 13.41, datetime.now())
+    result = fetch(52.52, 13.41, datetime.now())  # noqa: DTZ005
     assert result.basis in ("computed", "unavailable")
     print(f"Berlin weather severity: {result.value} ({result.basis})")
 

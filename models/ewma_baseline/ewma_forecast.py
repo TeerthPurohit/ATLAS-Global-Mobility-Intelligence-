@@ -22,11 +22,11 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from data_prep.build_features import DEFAULT_DB_PATH, TARGET_COLUMN, build_features  # noqa: E402
-from data_prep.train_test_split import split_demand_blocks  # noqa: E402
+from data_prep.build_features import DEFAULT_DB_PATH, TARGET_COLUMN, build_features
+from data_prep.train_test_split import split_demand_blocks
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from algorithms.timeseries.ewma_smoothing import DEFAULT_ALPHA  # noqa: E402
+from algorithms.timeseries.ewma_smoothing import DEFAULT_ALPHA
 
 ARTIFACT_DIR = Path(__file__).resolve().parent
 

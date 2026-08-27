@@ -40,7 +40,7 @@ def _cached_route(pickup_lat: float, pickup_lon: float, dropoff_lat: float, drop
             return None
         route = data["routes"][0]
         return {"distance_m": route["distance"], "duration_s": route["duration"]}
-    except Exception as exc:  # noqa: BLE001 -- network/API failure degrades honestly upstream
+    except Exception as exc:  # noqa: BLE001
         logger.warning("routing_osrm step=route failed url={} reason={}", url, exc)
         return None
 

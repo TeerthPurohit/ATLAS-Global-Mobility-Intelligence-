@@ -27,8 +27,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag" / "nl_to_sql"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rag"))
 
-from config import OPENAI_MODEL  # noqa: E402
-from query_plan import QueryPlan  # noqa: E402
+from config import OPENAI_MODEL
+from query_plan import QueryPlan
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 REPORT_PATH = Path(__file__).resolve().parent / "eval_report.json"
@@ -65,7 +65,7 @@ def _strip_fences(text: str) -> str:
 def _parse_model_plan(text: str) -> QueryPlan | None:
     try:
         return QueryPlan.from_dict(json.loads(_strip_fences(text)))
-    except Exception:  # noqa: BLE001 -- any malformed/unparseable model output just scores as a miss
+    except Exception:  # noqa: BLE001
         return None
 
 

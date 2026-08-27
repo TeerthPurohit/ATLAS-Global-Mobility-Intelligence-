@@ -17,10 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "insight_ge
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "nl_to_sql"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag" / "router"))
 
-from generate_insight_docs import validate_grounding  # noqa: E402
-from query_classifier import _heuristic_classify, EXPLANATORY, NUMERIC  # noqa: E402
-import session_store  # noqa: E402
-from sql_agent import _validate_sql  # noqa: E402
+from generate_insight_docs import validate_grounding  # noqa: I001
+from query_classifier import _heuristic_classify, EXPLANATORY, NUMERIC
+import session_store
+from sql_agent import _validate_sql
 
 
 # ---- generate_insight_docs.validate_grounding ----

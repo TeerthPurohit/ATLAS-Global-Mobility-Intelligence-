@@ -23,10 +23,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from nyc_schema import NYC_SCHEMA  # noqa: E402
-from query_plan import CityMobilitySchema, QueryFilters, QueryPlan  # noqa: E402
-from query_plan_compiler import compile as compile_plan  # noqa: E402
-from synthetic_schemas import HELD_OUT_SCHEMA, TRAIN_SYNTHETIC_SCHEMAS  # noqa: E402
+from nyc_schema import NYC_SCHEMA
+from query_plan import CityMobilitySchema, QueryFilters, QueryPlan
+from query_plan_compiler import compile as compile_plan
+from synthetic_schemas import HELD_OUT_SCHEMA, TRAIN_SYNTHETIC_SCHEMAS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "models" / "query_plan_finetune" / "data"
 

@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
-from data_prep.chronological_split import chronological_split, split_demand_blocks  # noqa: E402
+from data_prep.chronological_split import chronological_split, split_demand_blocks  # noqa: E402, I001
 from data_prep import train_test_split as legacy_module  # noqa: E402
 from fare_prediction.train_fare_xgb import split_data  # noqa: E402
 

@@ -29,7 +29,7 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from data_prep.chronological_split import split_demand_blocks  # noqa: E402
+from data_prep.chronological_split import split_demand_blocks
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "warehouse" / "nyc_rides.duckdb"
 ARTIFACT_DIR = Path(__file__).resolve().parent

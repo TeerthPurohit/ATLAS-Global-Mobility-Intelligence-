@@ -11,8 +11,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import OPENAI_MODEL  # noqa: E402
-from insight_generation.generate_insight_docs import extract_numbers, validate_grounding  # noqa: E402
+from config import OPENAI_MODEL
+from insight_generation.generate_insight_docs import extract_numbers, validate_grounding
 
 SYSTEM_PROMPT = """You write one short recommendation (2-3 sentences) for a \
 ride-hailing journey estimate, for a chat/app answer.
@@ -106,7 +106,7 @@ def _phrase_with_llm(facts: dict) -> str | None:
             max_completion_tokens=200,
         )
         text = (resp.choices[0].message.content or "").strip()
-    except Exception:  # noqa: BLE001 -- any LLM/network failure falls back to the template
+    except Exception:  # noqa: BLE001
         return None
 
     if not text or not validate_grounding(text, _allowed_numbers(facts)):

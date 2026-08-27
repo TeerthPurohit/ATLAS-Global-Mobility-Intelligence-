@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: F401
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -73,7 +73,7 @@ def run_one(entry: dict) -> tuple[bool, str]:
 
     try:
         result = rag_service.answer_question(question=entry["question"])
-    except Exception as exc:  # noqa: BLE001 -- a real crash is a real FAIL, not a harness bug
+    except Exception as exc:  # noqa: BLE001
         return False, f"ERROR calling answer_question: {exc!r}"
 
     route_ok = result.get("route") == entry["route"]

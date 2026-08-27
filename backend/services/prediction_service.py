@@ -12,7 +12,7 @@ a real failure resolving a known-valid request (e.g. an unrecognized
 area_id), raises `DomainError` -- the router translates that to a 404/400
 `ErrorResponse`.
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from datetime import datetime, timezone
 

@@ -28,8 +28,8 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from congestion.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, build_features  # noqa: E402
-from data_prep.chronological_split import split_demand_blocks  # noqa: E402
+from congestion.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, build_features
+from data_prep.chronological_split import split_demand_blocks
 
 ARTIFACT_DIR = Path(__file__).resolve().parent
 SEED = 42
@@ -102,7 +102,7 @@ def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300
         "prediction_interval_coverage": {
             "nominal": 0.80,
             "measured_p10_p90_coverage": coverage,
-            "n_test_rows": int(len(test)),
+            "n_test_rows": int(len(test)),  # noqa: RUF046
             "note": (
                 "empirically measured fraction of held-out test rows where actual duration fell within "
                 "[p10_pred, p90_pred] -- not assumed or hardcoded; see the gap vs nominal 0.80 above"

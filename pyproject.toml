@@ -1,0 +1,11 @@
+[tool.ruff.lint]
+# E402 (module import not at top of file) isn't in ruff's default rule set,
+# which left ~300 existing `# noqa: E402` comments across this repo flagged
+# as RUF100 "unused noqa" -- they were suppressing a rule that was never
+# actually enabled, silently failing CI's lint step. Enabling it restores
+# their real purpose: this repo's common `sys.path.insert(...)` then
+# `from x import y` pattern (used throughout rag/, dbt-adjacent scripts,
+# and tests) deliberately imports after a non-import statement, and the
+# noqa comments mark that as intentional rather than a real ordering bug
+# everywhere else.
+extend-select = ["E402"]

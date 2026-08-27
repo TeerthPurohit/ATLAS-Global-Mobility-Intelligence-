@@ -31,10 +31,10 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from data_prep.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, TARGET_COLUMN, build_features  # noqa: E402
-from data_prep.train_test_split import split_demand_blocks  # noqa: E402
-from lstm_model.dataset import build_sequences  # noqa: E402
-from lstm_model.train_lstm import DemandLSTM  # noqa: E402
+from data_prep.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, TARGET_COLUMN, build_features  # noqa: I001
+from data_prep.train_test_split import split_demand_blocks
+from lstm_model.dataset import build_sequences
+from lstm_model.train_lstm import DemandLSTM
 
 ARTIFACT_DIR = Path(__file__).resolve().parent
 

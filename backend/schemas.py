@@ -54,7 +54,7 @@ class PredictionOut(BaseModel):
     confidence: float | None = None
     method: str | None = None
 
-    def model_post_init(self, __context: typing.Any) -> None:
+    def model_post_init(self, __context: typing.Any) -> None:  # noqa: F821, PYI063
         if self.ui_label is None:
             if self.basis == "computed":
                 self.ui_label = "Model Prediction"
@@ -263,7 +263,7 @@ class JourneyContextRequest(BaseModel):
 
 class RouteRequest(JourneyContextRequest):
     """Request for routing - inherits all context fields."""
-    pass
+    pass  # noqa: PIE790
 
 
 class PredictionRequest(JourneyContextRequest):

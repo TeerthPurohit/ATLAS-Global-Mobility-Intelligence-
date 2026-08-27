@@ -18,20 +18,20 @@ from __future__ import annotations
 import sys
 import uuid
 from pathlib import Path
-from typing import Generator
+from typing import Generator  # noqa: UP035
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: E402
-from embeddings.build_vector_store import COLLECTION as DEFAULT_COLLECTION  # noqa: E402
-from embeddings.build_vector_store import search as vector_search  # noqa: E402
-from insight_generation.generate_insight_docs import extract_numbers, validate_grounding  # noqa: E402
-from llm_client import chat_completion  # noqa: E402
-from nl_to_sql import query_plan_agent, sql_agent  # noqa: E402
-from nl_to_sql.nyc_schema import NYC_SCHEMA  # noqa: E402
-from nl_to_sql.query_plan import CityMobilitySchema  # noqa: E402
-from router.query_classifier import EXPLANATORY, NUMERIC, classify  # noqa: E402
-import semantic_cache  # noqa: E402
-import session_store  # noqa: E402
+from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: I001
+from embeddings.build_vector_store import COLLECTION as DEFAULT_COLLECTION
+from embeddings.build_vector_store import search as vector_search
+from insight_generation.generate_insight_docs import extract_numbers, validate_grounding
+from llm_client import chat_completion
+from nl_to_sql import query_plan_agent, sql_agent
+from nl_to_sql.nyc_schema import NYC_SCHEMA
+from nl_to_sql.query_plan import CityMobilitySchema
+from router.query_classifier import EXPLANATORY, NUMERIC, classify
+import semantic_cache
+import session_store
 
 SYNTHESIS_SYSTEM_PROMPT = """Answer the user's question in 2-4 plain-language \
 sentences using ONLY facts and numbers that literally appear in the \
@@ -131,7 +131,7 @@ def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
             max_completion_tokens=250,
         )
         text = (resp.choices[0].message.content or "").strip()
-    except Exception as exc:  # noqa: BLE001 -- any LLM/network failure falls back to raw retrieval
+    except Exception as exc:  # noqa: BLE001
         print(f"[warn] explanatory synthesis failed ({exc}); returning retrieved doc verbatim", file=sys.stderr)
         return hits[0]["doc_text"]
 

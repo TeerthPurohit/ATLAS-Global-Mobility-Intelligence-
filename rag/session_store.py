@@ -17,7 +17,7 @@ down the entire chat feature for every question, in every city (found via
 /debug 2026-08-13 -- the raw connection error was also leaking to the
 frontend through chat.py's WS handler, a second, related bug fixed there).
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import logging
 from typing import Any

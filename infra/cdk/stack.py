@@ -18,7 +18,7 @@ Then copy the three CfnOutputs (bucket name, GitHub Actions role ARN,
 instance profile ARN) into the repo's GitHub Actions repository
 variables/secrets -- see .github/workflows/dbt-build-aws.yml.
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from aws_cdk import (
     CfnOutput,

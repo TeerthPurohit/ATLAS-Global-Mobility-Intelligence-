@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import refresh_model_registry as m  # noqa: E402
-from refresh_model_registry import demo  # noqa: E402
+import refresh_model_registry as m
+from refresh_model_registry import demo
 
 
 def test_refresh_demo_self_check():

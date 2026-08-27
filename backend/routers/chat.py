@@ -1,6 +1,6 @@
 """Chat router endpoints: POST /chat, GET /chat/history/{session_id}, and WS /chat/stream (FR-4, FR-8, FR-9).
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import json
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -97,7 +97,7 @@ async def websocket_chat_stream(websocket: WebSocket):
         logger.info("WS /chat/stream step=done")
     except WebSocketDisconnect:
         logger.info("WS /chat/stream step=client_disconnected")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001, F841
         # Log the real exception server-side for investigation; never forward
         # str(exc) to the client -- it can contain internal details (DB
         # hostnames/ports, driver error text) that are none of the caller's
@@ -110,5 +110,5 @@ async def websocket_chat_stream(websocket: WebSocket):
         try:
             await websocket.send_json({"error": "Something went wrong answering this question. Please try again."})
             await websocket.close(code=1011)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass

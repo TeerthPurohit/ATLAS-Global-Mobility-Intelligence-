@@ -12,7 +12,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from backend.predictors.base import JourneyContext, JourneyFeatures, PredictionResult  # noqa: E402
+from backend.predictors.base import (  # noqa: E402
+    JourneyContext,
+    JourneyFeatures,
+    PredictionResult,
+)
 from backend.services import pricing_engine, tariff_profiles  # noqa: E402
 from backend.services.tariff_profiles import TariffProfile  # noqa: E402
 
@@ -38,7 +42,7 @@ def _features(distance_miles: float | None, duration_min: float = 10.0) -> Journ
 def _ctx(hour: int = 12) -> JourneyContext:
     return JourneyContext(
         pickup_lat=0.0, pickup_lon=0.0, dropoff_lat=0.0, dropoff_lon=0.0,
-        departure_time=datetime(2026, 8, 9, hour, 0), vehicle_type="mini",
+        departure_time=datetime(2026, 8, 9, hour, 0), vehicle_type="mini",  # noqa: DTZ001
         pickup_zone_id=None, dropoff_zone_id=None, vehicle_profile=None,
         weather=PredictionResult(value=None, unit=None, basis="unavailable", source="weather", reason="n/a"),
         holiday=PredictionResult(value=None, unit=None, basis="unavailable", source="holiday", reason="n/a"),

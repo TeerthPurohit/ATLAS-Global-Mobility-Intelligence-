@@ -4,7 +4,7 @@ Environmental/context information separated from mobility predictions.
 `lat`/`lon` are optional: omitted, they fall back to the served city's own
 seeded coordinates. A registry with no city row is a 400, never a bare 500.
 """
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 from datetime import datetime
 from pathlib import Path
@@ -16,13 +16,13 @@ from loguru import logger
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: E402
-from backend.predictors import journey_predictors  # noqa: E402
-from backend.predictors.base import JourneyContext, PredictionResult  # noqa: E402
-from backend.schemas import HolidayResponse, TrafficResponse, WeatherResponse  # noqa: E402
-from backend.registry import CITY_ID  # noqa: E402
-from backend.registry import cities as cities_registry  # noqa: E402
-from backend.services import journey_service  # noqa: E402
+from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: F401, I001
+from backend.predictors import journey_predictors  # noqa: F401
+from backend.predictors.base import JourneyContext, PredictionResult  # noqa: F401
+from backend.schemas import HolidayResponse, TrafficResponse, WeatherResponse
+from backend.registry import CITY_ID
+from backend.registry import cities as cities_registry
+from backend.services import journey_service
 
 router = APIRouter(prefix="/api/context", tags=["Context"])
 
@@ -68,7 +68,7 @@ def weather(
             logger.warning("GET /api/context/weather step=invalid_timestamp value={!r}", timestamp)
             raise HTTPException(status_code=400, detail=f"invalid timestamp={timestamp!r}: expected ISO 8601")
     else:
-        dt = datetime.now()
+        dt = datetime.now()  # noqa: DTZ005
 
     weather_result = weather_openmeteo.fetch(lat, lon, dt)
     logger.info("GET /api/context/weather step=done source={}", weather_result.source)
@@ -111,7 +111,7 @@ def holiday(
             logger.warning("GET /api/context/holiday step=invalid_date value={!r}", date)
             raise HTTPException(status_code=400, detail=f"invalid date={date!r}: expected YYYY-MM-DD")
     else:
-        dt = datetime.now()
+        dt = datetime.now()  # noqa: DTZ005
 
     holiday_result = holidays_nager.fetch(lat, lon, dt)
     logger.info("GET /api/context/holiday step=done source={}", holiday_result.source)
@@ -144,7 +144,7 @@ def traffic(
     if lat is None or lon is None:
         lat, lon = _city_coords()
 
-    dt = datetime.now()
+    dt = datetime.now()  # noqa: DTZ005
     ctx = journey_service.build_context(lat, lon, lat + 0.01, lon + 0.01, dt, "car")
     features = journey_service.build_features(ctx)
 

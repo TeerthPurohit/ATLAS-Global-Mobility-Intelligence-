@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from rag import journey_narrative  # noqa: E402
+from rag import journey_narrative  # noqa: I001
 
 from fastapi import APIRouter, Query
 from loguru import logger
@@ -105,7 +105,7 @@ def history(limit: int = Query(50, ge=1, le=200)) -> list[JourneyHistoryEntry]:
 def features(
     pickup_lat: float = Query(...), pickup_lon: float = Query(...),
     dropoff_lat: float = Query(...), dropoff_lon: float = Query(...),
-    departure_time: datetime = Query(...), vehicle_type: str = Query(...),
+    departure_time: datetime = Query(...), vehicle_type: str = Query(...),  # noqa: B008
     city_id: str | None = Query(None),
 ) -> dict:
     logger.info("GET /journey/features step=start city_id={} vehicle_type={}", city_id, vehicle_type)
