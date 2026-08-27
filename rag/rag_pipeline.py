@@ -26,7 +26,7 @@ from embeddings.build_vector_store import COLLECTION as DEFAULT_COLLECTION  # no
 from embeddings.build_vector_store import search as vector_search  # noqa: E402
 from insight_generation.generate_insight_docs import extract_numbers, validate_grounding  # noqa: E402
 from llm_client import chat_completion  # noqa: E402
-from nl_to_sql import sql_agent  # noqa: E402
+from nl_to_sql import query_plan_agent, sql_agent  # noqa: E402
 from nl_to_sql.nyc_schema import NYC_SCHEMA  # noqa: E402
 from nl_to_sql.query_plan import CityMobilitySchema  # noqa: E402
 from router.query_classifier import EXPLANATORY, NUMERIC, classify  # noqa: E402
@@ -83,7 +83,12 @@ def _format_numeric_answer(result: dict) -> str:
 
 
 def _answer_numeric(question: str, db_path: Path = DEFAULT_DB_PATH, schema: CityMobilitySchema = NYC_SCHEMA) -> dict:
-    result = sql_agent.answer(question, db_path=db_path, schema=schema)
+    # USE_FINETUNED_QUERY_PLAN (spec-014 FR-7): the fine-tuned local model now
+    # beats the hosted zero-shot path on its own eval (see the design doc's
+    # 2026-08-27 results) -- same return shape as sql_agent.answer(), so this
+    # is a direct swap, not a new code path.
+    agent = query_plan_agent if query_plan_agent.USE_FINETUNED_QUERY_PLAN else sql_agent
+    result = agent.answer(question, db_path=db_path, schema=schema)
     return {
         "question": question,
         "route": NUMERIC,
