@@ -29,8 +29,8 @@ def load_jsonl(path: Path) -> list[dict]:
 
 def train(smoke_test: bool = False) -> dict:
     from datasets import Dataset
+    from trl import SFTConfig, SFTTrainer
     from unsloth import FastLanguageModel
-    from trl import SFTTrainer, SFTConfig
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=BASE_MODEL, max_seq_length=1024, load_in_4bit=True,

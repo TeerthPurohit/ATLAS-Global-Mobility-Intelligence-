@@ -43,15 +43,18 @@ def score(generate_fn, rows: list[dict], schema) -> tuple[float, int]:
         expected_plan = QueryPlan.from_json(row["messages"][2]["content"])
         try:
             actual_plan = generate_fn(question, schema=schema)
-        except Exception:
-            actual_plan = None  # a generation failure counts as incorrect, not a crash
+        except Exception:  # noqa: BLE001 -- a generation failure counts as incorrect, not a crash
+            actual_plan = None
         correct += int(score_plan(expected_plan, actual_plan)["exact_match"])
     return correct / len(rows), len(rows)
 
 
 def run() -> dict:
     import llm_client
-    from query_plan_agent import FINETUNED_MODEL_ID, generate_plan as local_generate  # requires QUERY_PLAN_FINETUNED_MODEL_ID set
+    from query_plan_agent import (
+        FINETUNED_MODEL_ID,  # requires QUERY_PLAN_FINETUNED_MODEL_ID set
+    )
+    from query_plan_agent import generate_plan as local_generate
     from sql_agent import generate_plan as hosted_generate
 
     if not FINETUNED_MODEL_ID:
