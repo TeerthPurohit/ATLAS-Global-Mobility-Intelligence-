@@ -20,13 +20,19 @@ pytestmark = pytest.mark.skipif(not DEFAULT_DB_PATH.exists(), reason="warehouse 
 
 
 @pytest.fixture(scope="module")
-def metadata():
+def metadata(tmp_path_factory):
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
     try:
         df = build_features(con, sample_rows=20_000)
     finally:
         con.close()
-    return train_and_save(df=df)
+    # output_dir isolates test artifacts from the real trained models this
+    # module saves in production -- writing to the real path here once
+    # silently overwrote a full-data streaming run's eta_p*_model.json with
+    # this 20K-row sample's models, and a naive file-existence-based resume
+    # check then scored that stale small model against the real test set
+    # and reported it as the full-data result (caught 2026-08-28).
+    return train_and_save(df=df, output_dir=tmp_path_factory.mktemp("eta_test_artifacts"))
 
 
 def test_quantile_ordering_mostly_holds(metadata):

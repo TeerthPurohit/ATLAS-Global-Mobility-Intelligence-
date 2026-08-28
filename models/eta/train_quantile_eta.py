@@ -49,10 +49,30 @@ SEED = 42
 TARGET_COLUMN = "trip_duration_minutes"
 QUANTILES = {"p10": 0.10, "p50": 0.50, "p90": 0.90}
 XGB_PARAMS = {"max_depth": 6, "learning_rate": 0.1, "n_estimators": 300}
+CHECKPOINT_PATH = ARTIFACT_DIR / "_streaming_checkpoint.json"
 
 
 def _log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def _load_checkpoint() -> dict:
+    """Resume state keyed on this run's own XGB_PARAMS -- NOT on whether
+    eta_{name}_model.json merely exists. Bare file-existence was a real bug:
+    tests/test_quantile_eta_ordering_and_coverage.py calls this module's
+    non-streaming train_and_save() with a 20K-row sample df, which writes to
+    these exact same production paths. A streaming run that resumed off
+    file-existence alone silently scored a 20K-row-trained model against the
+    real ~21M-row test set and reported that as the full-data result
+    (caught 2026-08-28 by checking the log for "resuming from saved" against
+    a run that should have been training fresh)."""
+    if CHECKPOINT_PATH.exists():
+        return json.loads(CHECKPOINT_PATH.read_text())
+    return {"done": {}}  # name -> XGB_PARAMS it was actually trained with
+
+
+def _save_checkpoint(state: dict) -> None:
+    CHECKPOINT_PATH.write_text(json.dumps(state, indent=2))
 
 
 def pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, alpha: float) -> float:
@@ -87,16 +107,17 @@ def _train_and_save_streaming() -> dict:
     test_df = materialize_split(con, "test", bounds, lookups)
     _log(f"test split ready in {time.perf_counter()-t0:.1f}s: {len(test_df)} rows")
 
+    state = _load_checkpoint()
+    if state["done"]:
+        _log(f"resuming from checkpoint: {sorted(state['done'])} already trained this run")
+
     preds = {}
     per_quantile_metrics = {}
     for name, alpha in QUANTILES.items():
         model_path = ARTIFACT_DIR / f"eta_{name}_model.json"
         booster = xgb.Booster()
-        if model_path.exists():
-            # Resume: a model file surviving from a prior run for this
-            # quantile means training already succeeded -- reload it (fast)
-            # instead of repeating a multi-hour external-memory fit.
-            _log(f"quantile {name} (alpha={alpha}) -- resuming from saved {model_path.name}")
+        if state["done"].get(name) == XGB_PARAMS and model_path.exists():
+            _log(f"quantile {name} (alpha={alpha}) -- resuming from checkpoint ({model_path.name})")
             booster.load_model(str(model_path))
         else:
             _log(f"quantile {name} (alpha={alpha}) -- training")
@@ -114,6 +135,8 @@ def _train_and_save_streaming() -> dict:
             # never be thrown away by a failure in the comparatively cheap
             # test-set prediction that follows.
             booster.save_model(str(model_path))
+            state["done"][name] = XGB_PARAMS
+            _save_checkpoint(state)
             _log(f"quantile {name} model saved")
 
         p = booster.predict(xgb.DMatrix(test_df[FEATURE_COLUMNS]))
@@ -158,11 +181,14 @@ def _train_and_save_streaming() -> dict:
         "library_versions": {"xgboost": xgb.__version__, "pandas": pd.__version__, "numpy": np.__version__},
     }
     (ARTIFACT_DIR / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
+    CHECKPOINT_PATH.unlink(missing_ok=True)  # full success -- resume state no longer needed
     _log("eta training complete")
     return metadata
 
 
-def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300_000) -> dict:
+def train_and_save(
+    df: pd.DataFrame | None = None, sample_rows: int | None = 300_000, output_dir: Path = ARTIFACT_DIR
+) -> dict:
     if df is None and sample_rows is None:
         return _train_and_save_streaming()
 
@@ -180,7 +206,7 @@ def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300
     per_quantile_metrics = {}
     for name, alpha in QUANTILES.items():
         model = train_quantile(train_val, alpha)
-        model.save_model(str(ARTIFACT_DIR / f"eta_{name}_model.json"))
+        model.save_model(str(output_dir / f"eta_{name}_model.json"))
         p = model.predict(test[FEATURE_COLUMNS])
         preds[name] = p
         per_quantile_metrics[name] = {
@@ -221,7 +247,7 @@ def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300
         "ordering_violations_p10_p50_p90": ordering_violations,
         "library_versions": {"xgboost": xgb.__version__, "pandas": pd.__version__, "numpy": np.__version__},
     }
-    (ARTIFACT_DIR / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
+    (output_dir / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
     return metadata
 
 
