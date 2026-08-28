@@ -14,6 +14,12 @@ exist to measure real prediction-interval coverage on held-out data.
 Coverage is *measured*, not assumed: fraction of held-out test rows where
 p10_pred <= actual <= p90_pred, reported honestly even if it misses the
 nominal 80%.
+
+`sample_rows=None` (train on the full ~113M-row corpus, project decision
+2026-08-28) routes to `models/congestion/streaming_features.py`'s
+external-memory path -- same reasoning as
+`models/congestion/train_congestion_xgb.py`'s identical dispatch; the two
+share this feature table and the OOM risk is the same.
 """
 from __future__ import annotations
 
@@ -29,6 +35,12 @@ from sklearn.metrics import mean_absolute_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from congestion.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, build_features
+from congestion.streaming_features import (
+    TrainDataIter,
+    count_split,
+    load_streaming_context,
+    materialize_split,
+)
 from data_prep.chronological_split import split_demand_blocks
 
 ARTIFACT_DIR = Path(__file__).resolve().parent
@@ -56,7 +68,71 @@ def train_quantile(train: pd.DataFrame, alpha: float) -> xgb.XGBRegressor:
     return model
 
 
+def _train_and_save_streaming() -> dict:
+    con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    bounds, lookups = load_streaming_context(con)
+    train_end, val_start, test_start = bounds
+
+    preds = {}
+    per_quantile_metrics = {}
+    test_df = materialize_split(con, "test", bounds, lookups)
+    for name, alpha in QUANTILES.items():
+        it = TrainDataIter(con, bounds, lookups, split="train_val")
+        dtrain_val = xgb.DMatrix(it)
+        xgb_params = {
+            **{k: v for k, v in XGB_PARAMS.items() if k != "n_estimators"},
+            "objective": "reg:quantileerror", "quantile_alpha": alpha, "tree_method": "hist", "seed": SEED,
+        }
+        booster = xgb.train(xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"])
+        booster.save_model(str(ARTIFACT_DIR / f"eta_{name}_model.json"))
+        p = booster.predict(xgb.DMatrix(test_df[FEATURE_COLUMNS]))
+        preds[name] = p
+        per_quantile_metrics[name] = {
+            "alpha": alpha,
+            "pinball_loss": pinball_loss(test_df[TARGET_COLUMN].to_numpy(), p, alpha),
+            "mae": float(mean_absolute_error(test_df[TARGET_COLUMN], p)),
+        }
+
+    actual = test_df[TARGET_COLUMN].to_numpy()
+    within_interval = (actual >= preds["p10"]) & (actual <= preds["p90"])
+    coverage = float(np.mean(within_interval))
+    ordering_violations = int(np.sum((preds["p10"] > preds["p50"]) | (preds["p50"] > preds["p90"])))
+
+    metadata = {
+        "seed": SEED,
+        "sample_rows": None,
+        "training_mode": "streaming_external_memory",
+        "date_range": {
+            "train": ["(streamed, not materialized)", str(train_end)],
+            "val": [str(val_start), str(test_start)],
+            "test": [str(test_start), "(latest)"],
+        },
+        "n_rows": {"train_val_raw_upper_bound": count_split(con, "train_val", bounds), "test": len(test_df)},
+        "features": FEATURE_COLUMNS,
+        "target": TARGET_COLUMN,
+        "hyperparameters": XGB_PARAMS,
+        "quantiles": QUANTILES,
+        "metrics": per_quantile_metrics,
+        "prediction_interval_coverage": {
+            "nominal": 0.80,
+            "measured_p10_p90_coverage": coverage,
+            "n_test_rows": int(len(test_df)),  # noqa: RUF046
+            "note": (
+                "empirically measured fraction of held-out test rows where actual duration fell within "
+                "[p10_pred, p90_pred] -- not assumed or hardcoded; see the gap vs nominal 0.80 above"
+            ),
+        },
+        "ordering_violations_p10_p50_p90": ordering_violations,
+        "library_versions": {"xgboost": xgb.__version__, "pandas": pd.__version__, "numpy": np.__version__},
+    }
+    (ARTIFACT_DIR / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
+    return metadata
+
+
 def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300_000) -> dict:
+    if df is None and sample_rows is None:
+        return _train_and_save_streaming()
+
     if df is None:
         con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
         df = build_features(con, sample_rows=sample_rows)
@@ -88,6 +164,7 @@ def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300
     metadata = {
         "seed": SEED,
         "sample_rows": sample_rows,
+        "training_mode": "in_memory",
         "date_range": {
             "train": [str(train["pickup_at"].min()), str(train["pickup_at"].max())],
             "val": [str(val["pickup_at"].min()), str(val["pickup_at"].max())],

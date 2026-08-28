@@ -103,21 +103,45 @@ def _holiday_flags(dates: pd.Series) -> dict[str, int]:
     return flags
 
 
+_RAW_TRIPS_WHERE = "trip_distance > 0.1 and trip_duration_minutes > 0"
+_RAW_TRIPS_SELECT = (
+    "select pickup_at, pickup_hour, pickup_day_of_week, pickup_date, pickup_location_id, "
+    f"trip_distance, trip_duration_minutes from int_trips_enriched where {_RAW_TRIPS_WHERE}"
+)
+
+
 def load_raw_trips(con: duckdb.DuckDBPyConnection, sample_rows: int | None) -> pd.DataFrame:
-    query = (
-        "select pickup_at, pickup_hour, pickup_day_of_week, pickup_date, pickup_location_id, "
-        "trip_distance, trip_duration_minutes "
-        "from int_trips_enriched where trip_distance > 0.1 and trip_duration_minutes > 0"
-    )
+    query = _RAW_TRIPS_SELECT
     if sample_rows is not None:
         query += f" USING SAMPLE {sample_rows} ROWS (reservoir, {SEED})"
     return con.execute(query).fetchdf()
 
 
-def build_features(con: duckdb.DuckDBPyConnection, sample_rows: int | None = 300_000) -> pd.DataFrame:
-    trips = load_raw_trips(con, sample_rows)
+def load_lookups(con: duckdb.DuckDBPyConnection) -> tuple[pd.DataFrame, dict[str, int], pd.DataFrame]:
+    """The three small, cheap-to-materialize tables `transform_batch()` joins
+    against -- computed once (over the FULL, unsampled data, same as
+    `build_free_flow_lookup()` already did) and reused across every batch by
+    `models/congestion/streaming_features.py`'s external-memory path, instead
+    of being recomputed (or, for holiday_flags, silently scoped to only
+    whatever dates happen to be in one batch) per call."""
     free_flow = build_free_flow_lookup(con)
+    dates = con.execute(f"select distinct pickup_date from int_trips_enriched where {_RAW_TRIPS_WHERE}").df()["pickup_date"]
+    holiday_flags = _holiday_flags(dates)
+    weather_demand = con.execute(
+        "select pickup_date, pickup_hour as hour, pickup_location_id, total_trips as demand_index, "
+        "temperature_c, precipitation_mm from zone_hourly_demand"
+    ).fetchdf()
+    return free_flow, holiday_flags, weather_demand
 
+
+def transform_batch(
+    trips: pd.DataFrame, free_flow: pd.DataFrame, holiday_flags: dict[str, int], weather_demand: pd.DataFrame
+) -> pd.DataFrame:
+    """Pure transform: raw trip rows -> congestion feature rows. The single
+    implementation both `build_features()` (small/sampled, in-memory path)
+    and `streaming_features.py`'s batched external-memory path call -- no
+    duplicated logic between the two."""
+    trips = trips.copy()
     trips["distance_bucket"] = _bucket(trips["trip_distance"])
     trips = trips.merge(free_flow[["distance_bucket", "free_flow_speed_mph"]], on="distance_bucket", how="inner")
     trips["free_flow_duration_min"] = trips["trip_distance"] / trips["free_flow_speed_mph"] * 60.0
@@ -129,13 +153,8 @@ def build_features(con: duckdb.DuckDBPyConnection, sample_rows: int | None = 300
 
     trips = trips.rename(columns={"pickup_hour": "hour", "pickup_day_of_week": "day_of_week"})
 
-    holiday_flags = _holiday_flags(trips["pickup_date"])
     trips["is_holiday"] = trips["pickup_date"].map(holiday_flags)
 
-    weather_demand = con.execute(
-        "select pickup_date, pickup_hour as hour, pickup_location_id, total_trips as demand_index, "
-        "temperature_c, precipitation_mm from zone_hourly_demand"
-    ).fetchdf()
     trips = trips.merge(
         weather_demand, on=["pickup_date", "hour", "pickup_location_id"], how="left"
     )
@@ -145,6 +164,12 @@ def build_features(con: duckdb.DuckDBPyConnection, sample_rows: int | None = 300
 
     trips["free_flow_source"] = "estimated"
     return trips.dropna(subset=FEATURE_COLUMNS + [TARGET_COLUMN]).reset_index(drop=True)
+
+
+def build_features(con: duckdb.DuckDBPyConnection, sample_rows: int | None = 300_000) -> pd.DataFrame:
+    trips = load_raw_trips(con, sample_rows)
+    free_flow, holiday_flags, weather_demand = load_lookups(con)
+    return transform_batch(trips, free_flow, holiday_flags, weather_demand)
 
 
 def demo() -> None:
