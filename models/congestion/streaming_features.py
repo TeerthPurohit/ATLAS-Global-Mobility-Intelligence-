@@ -89,7 +89,14 @@ def stream_raw_batches(
         "select pickup_at, pickup_hour, pickup_day_of_week, pickup_date, pickup_location_id, "
         f"trip_distance, trip_duration_minutes from int_trips_enriched where {where}"
     )
-    reader = con.execute(query).to_arrow_reader(batch_rows)
+    result = con.execute(query)
+    # to_arrow_reader() is the current (non-deprecated) name; older duckdb
+    # (<1.1-ish, what Colab's `duckdb>=1.0,<2.0` pip pin can resolve to)
+    # only has the older fetch_record_batch() -- same behavior either name.
+    if hasattr(result, "to_arrow_reader"):
+        reader = result.to_arrow_reader(batch_rows)
+    else:
+        reader = result.fetch_record_batch(batch_rows)
     for record_batch in reader:
         batch = record_batch.to_pandas()
         # Arrow's to_pandas() gives pickup_date as object/datetime.date;
