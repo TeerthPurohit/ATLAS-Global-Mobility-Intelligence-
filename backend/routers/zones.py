@@ -12,14 +12,15 @@ import sys
 from pathlib import Path
 
 import duckdb
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from loguru import logger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from algorithms.spatial.kdtree_zone_lookup import load_zone_points  # noqa: E402
-from backend.schemas import Zone  # noqa: E402
+from backend.errors import DomainError  # noqa: E402
+from backend.schemas import ErrorCode, Zone  # noqa: E402
 
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 
@@ -82,13 +83,13 @@ def list_zones() -> list[Zone]:
 
 @router.get(
     "/{zone_id}", response_model=Zone, summary="Get one zone",
-    responses={400: {"description": "unknown zone_id"}},
+    responses={404: {"description": "unknown zone_id"}},
 )
 def get_zone(zone_id: int) -> Zone:
     logger.info("GET /zones/{{id}} step=start zone_id={}", zone_id)
     zone = _get_zones().get(zone_id)
     if zone is None:
         logger.warning("GET /zones/{{id}} step=not_found zone_id={}", zone_id)
-        raise HTTPException(status_code=400, detail=f"unknown zone_id={zone_id}")
+        raise DomainError(ErrorCode.AREA_NOT_FOUND, f"unknown zone_id={zone_id}", 404)
     logger.info("GET /zones/{{id}} step=done zone_id={}", zone_id)
     return zone

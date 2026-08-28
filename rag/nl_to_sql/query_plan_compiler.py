@@ -58,7 +58,7 @@ def _sql_literal(value: object, is_text: bool) -> str:
         # numeric string ("161" for an area filter that's really an int
         # column) is a real, observed LLM output, not a hypothetical -- found
         # via the RAG eval set 2026-08-14 crashing every area-filtered
-        # `demand` question. Coercing a cleanly-numeric string here is the
+        # `demand` query. Coercing a cleanly-numeric string here is the
         # honest fix: the value IS the right number, it's just JSON-quoted;
         # anything that doesn't parse as a number still raises, same as before.
         stripped = value.strip()

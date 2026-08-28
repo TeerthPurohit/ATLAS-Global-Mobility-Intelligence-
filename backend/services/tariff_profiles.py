@@ -12,11 +12,12 @@ not generated. The offline LLM-anchored generation path that produced the
 other ~515 profiles was removed with the global layer -- see ADR-011 for
 why those profiles were not trustworthy enough to keep.
 
-Storage (2026-08-16 migration): this table lives in the same RDS Postgres
-instance as `prediction_log.py` / `rag/session_store.py` (ADR-009), reached
-through the same shared SQLAlchemy engine -- not DuckDB. Postgres is the
-SOLE SOURCE OF TRUTH for `city_tariff_profiles`; every other table in this
-repo's DuckDB warehouse is still authoritative as before.
+Storage (2026-08-16 migration, moved from RDS to Neon 2026-08-28): this
+table lives in the same Postgres instance as `prediction_log.py` /
+`rag/session_store.py` (ADR-009), reached through the same shared
+SQLAlchemy engine -- not DuckDB. Postgres is the SOLE SOURCE OF TRUTH for
+`city_tariff_profiles`; every other table in this repo's DuckDB warehouse is
+still authoritative as before.
 """
 from __future__ import annotations
 
@@ -225,8 +226,9 @@ def load(conninfo: str | None = None, table_name: str = TABLE_NAME) -> None:
     once at app startup and thereafter only defensively/lazily, never per
     request). Postgres unreachable degrades to an empty cache -- every city
     then honestly serves `unavailable` instead of crashing the backend, same
-    contract session_store.py/prediction_log.py use for this RDS instance
-    (ADR-009: unreachable outside the VPC is expected, not exceptional)."""
+    contract session_store.py/prediction_log.py use for this Postgres
+    instance (ADR-009; any transient network/DB issue degrades, not just
+    the old RDS-in-a-VPC case this guard was originally written for)."""
     logger.info("tariff_profiles.load step=start table={}", table_name)
     _profiles.clear()
     try:

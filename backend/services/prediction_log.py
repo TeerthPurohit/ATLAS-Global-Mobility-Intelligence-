@@ -11,10 +11,10 @@ honest, append-only record of what was asked and what was returned, so
 future training data isn't lost by never having been captured.
 
 Every public function below degrades to a no-op/empty result on a
-`SQLAlchemyError` instead of raising -- same reasoning and same root cause as
-rag/session_store.py's identical guard: the RDS instance is deliberately
-private (ADR-009), so a deployment outside its VPC seeing it as unreachable
-is expected, not exceptional. Before this guard, `POST /journey/estimate`
+`SQLAlchemyError` instead of raising -- same guard as rag/session_store.py's
+identical one. Originally guarded against RDS being deliberately private
+(ADR-009); migrated to Neon 2026-08-28 (publicly reachable), but the
+degrade-gracefully contract stays. Before this guard, `POST /journey/estimate`
 computed a fully valid result and then discarded it, returning a 500,
 because this optional analytics write was unconditional (found via /debug
 2026-08-13 -- the same pattern also broke GET /journey/history and

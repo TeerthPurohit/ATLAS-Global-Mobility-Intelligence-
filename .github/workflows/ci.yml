@@ -24,8 +24,18 @@ jobs:
       - name: Lint (ruff)
         run: pip install ruff && ruff check .
       - name: Test
+        # ~111 of 162 tests skip here (module-level `skipif(not
+        # WAREHOUSE_PATH.exists())`): they need the real 113M-row, 12GB
+        # DuckDB warehouse, which is gitignored and not built by this
+        # workflow -- reconstructing it from raw TLC data in a shared
+        # runner isn't practical for a solo project (rule 7, no speculative
+        # infra). Those tests are local/pre-deploy verification, run
+        # against a real `data/warehouse/nyc_rides.duckdb`, not CI-gated.
+        # The remaining ~51 (schema/unit/algorithm-level, plus everything
+        # here that only needs DATABASE_URL) run for real and gate the build.
         run: pytest tests/ -q
-        continue-on-error: true # no tests exist yet for most layers — flip off once tests/ has real coverage
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   frontend:
     runs-on: ubuntu-latest

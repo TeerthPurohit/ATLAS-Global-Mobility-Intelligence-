@@ -38,7 +38,7 @@ def test_sql_agent_answer_routes_through_the_compiler_not_raw_text(monkeypatch):
     LLM-authored string -- the only untrusted LLM output on this path is
     already-typed QueryPlan JSON, never SQL text."""
     plan = QueryPlan(intent="metric_lookup", metric="fare", aggregation="avg", filters=QueryFilters(area="JFK Airport"))
-    monkeypatch.setattr(sql_agent, "generate_plan", lambda question, model=sql_agent.OPENAI_MODEL: plan)
+    monkeypatch.setattr(sql_agent, "generate_plan", lambda question, schema=NYC_SCHEMA, model=sql_agent.OPENAI_MODEL: plan)
 
     result = sql_agent.answer("What is the average fare for JFK Airport?")
     assert result["sql"] == compile_plan(plan, NYC_SCHEMA)

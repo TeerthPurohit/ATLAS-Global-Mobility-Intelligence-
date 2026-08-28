@@ -45,6 +45,12 @@ def test_predict_demand_negative_raw_pred_falls_back_to_ewma(client):
 
 
 
+def test_predict_demand_unknown_zone_is_prediction_failed(client):
+    resp = client.get("/predict/demand", params={"zone_id": 999999, "hour": 8, "day_of_week": 1})
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "PREDICTION_FAILED"
+
+
 def test_predict_fare_happy_path(client):
     resp = client.get("/predict/fare", params={"pickup_zone": 132, "dropoff_zone": 230, "hour": 8})
     assert resp.status_code == 200
@@ -59,6 +65,12 @@ def test_list_zones_happy_path(client):
     body = resp.json()
     assert len(body) > 200
     assert {"zone_id", "zone", "borough", "latitude", "longitude"} <= body[0].keys()
+
+
+def test_get_zone_unknown_id_is_area_not_found(client):
+    resp = client.get("/zones/999999")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "AREA_NOT_FOUND"
 
 
 def test_post_chat_and_history(client):
@@ -82,6 +94,7 @@ def test_post_chat_and_history(client):
 def test_chat_history_404(client):
     resp = client.get("/chat/history/non_existent_session_99999")
     assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "SESSION_NOT_FOUND"
 
 
 def test_websocket_chat_stream(client):
@@ -316,11 +329,13 @@ def test_websocket_stream_echoes_city_and_area(client):
 def test_context_weather_bad_timestamp_is_400(client):
     resp = client.get("/api/context/weather", params={"timestamp": "not-a-date"})
     assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_context_holiday_bad_date_is_400(client):
     resp = client.get("/api/context/holiday", params={"date": "bogus"})
     assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_mobility_contract(client):

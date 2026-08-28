@@ -7,6 +7,12 @@ training data (backend/services/prediction_log.py).
 GET /journey/features is the feature inspector -- returns the same
 JourneyFeatures a prediction would consume, without running any predictor,
 for debugging "why did this predictor return X".
+
+Not part of the DomainError -> ErrorResponse migration (see backend/errors.py,
+city.py/predictions.py/zones.py/chat.py/context.py): neither route here
+raises an explicit HTTP error today -- journey_service/prediction_log
+degrade internally (basis="unavailable" predictors, prediction_log.py's own
+degrade-on-SQLAlchemyError guard) rather than raising, same as platform.py.
 """
 from __future__ import annotations
 

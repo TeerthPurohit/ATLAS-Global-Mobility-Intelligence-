@@ -3,10 +3,11 @@ delegates to model_service, maps lookup failures to 400."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from loguru import logger
 
-from backend.schemas import DemandPrediction, FarePrediction
+from backend.errors import DomainError
+from backend.schemas import DemandPrediction, ErrorCode, FarePrediction
 from backend.services import model_service
 
 router = APIRouter(prefix="/predict", tags=["predictions"])
@@ -32,7 +33,7 @@ def predict_demand(
         predicted, model_name = model_service.predict_demand(zone_id, hour, day_of_week)
     except KeyError as exc:
         logger.warning("GET /predict/demand step=model_service.predict_demand failed zone_id={} reason={}", zone_id, exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise DomainError(ErrorCode.PREDICTION_FAILED, str(exc), 400) from exc
     logger.info("GET /predict/demand step=done zone_id={} model={} predicted={}", zone_id, model_name, predicted)
     return DemandPrediction(
         zone_id=zone_id, hour=hour, day_of_week=day_of_week, predicted_demand=predicted, model=model_name
@@ -58,7 +59,7 @@ def predict_fare(
         predicted, model_name = model_service.predict_fare(pickup_zone, dropoff_zone, hour)
     except KeyError as exc:
         logger.warning("GET /predict/fare step=model_service.predict_fare failed pickup_zone={} dropoff_zone={} reason={}", pickup_zone, dropoff_zone, exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise DomainError(ErrorCode.PREDICTION_FAILED, str(exc), 400) from exc
     logger.info("GET /predict/fare step=done model={} predicted={}", model_name, predicted)
     return FarePrediction(
         pickup_zone=pickup_zone, dropoff_zone=dropoff_zone, hour=hour, predicted_fare=predicted, model=model_name

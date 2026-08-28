@@ -7,11 +7,12 @@ backend instances, so a shared Postgres connection replaces the
 per-instance SQLite file (ADR-004, SPEC-008 FR-7).
 
 Every public function below degrades to a no-op/empty result on a
-`SQLAlchemyError` instead of raising. Root cause this guards against: the
-RDS instance is deliberately not publicly accessible (ADR-009, private VPC)
--- unreachable from a local/CI/non-VPC deployment is the EXPECTED state, not
-a bug to alarm on every request. Conversation history is a convenience
-feature; before this guard, `answer_stream()` calling `save_message()`
+`SQLAlchemyError` instead of raising. Originally guarded against RDS being
+deliberately not publicly accessible (ADR-009, private VPC); migrated to
+Neon 2026-08-28 (publicly reachable, no VPC), but the degrade-gracefully
+contract stays -- any transient network/DB issue should still be a
+convenience-feature miss, not a request failure. Conversation history is a
+convenience feature; before this guard, `answer_stream()` calling `save_message()`
 before generating any answer meant one unreachable Postgres instance took
 down the entire chat feature for every question, in every city (found via
 /debug 2026-08-13 -- the raw connection error was also leaking to the

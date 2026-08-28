@@ -104,9 +104,8 @@ def test_fare_model_failure_degrades_honestly(monkeypatch):
 
 def test_the_tariff_tests_below_are_actually_exercising_something():
     """Canary. `tariff_profiles.load()` swallows a connection failure and
-    leaves the store empty (ADR-009: unreachable outside the VPC is expected,
-    not exceptional), which would leave every tariff assertion below asserting
-    against None. This fails loudly instead."""
+    leaves the store empty, which would leave every tariff assertion below
+    asserting against None. This fails loudly instead."""
     assert _REAL_PROFILE is not None, (
         "no tariff profile resolved -- the Postgres store is unreachable or empty, "
         "so every tariff test in this file is vacuous. Set DATABASE_URL and re-run."

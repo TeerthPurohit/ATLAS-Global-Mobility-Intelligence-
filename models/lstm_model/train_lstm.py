@@ -1,12 +1,10 @@
-"""1-layer LSTM for zone-hourly demand (SPEC-006, FR-6), trained on CPU.
+"""1-layer LSTM for zone-hourly demand (SPEC-006, FR-6).
 
-No Colab/Kaggle GPU available in this environment (per task instructions),
-so epochs are deliberately small (see EPOCHS) and this is stated here rather
-than faked -- loss curves below are the real per-epoch train/val MSE on the
-full ~557k-sequence, 261-zone dataset, not a subsample dressed up as
-convergence. ponytail: 3 epochs is a real corner cut for CPU wall-clock
-time, not a modeling choice -- rerun with more epochs (and ideally a GPU) if
-this becomes a real deployment candidate rather than a ladder rung.
+Local/default (`train_and_save()` with no args): CPU, 3 epochs -- a real
+corner cut for CPU wall-clock time, not a modeling choice. `epochs` and
+`device` are overridable so `models/notebooks/01_nyc_demand_congestion_eta.ipynb`
+can call this same function on a Colab GPU with many more epochs instead of
+duplicating the training loop -- see that notebook's LSTM section.
 
 Targets are standardized (zero mean, unit variance) using train-set
 statistics only, then inverse-transformed before computing RMSE/MAE so the
@@ -55,12 +53,13 @@ class DemandLSTM(nn.Module):
         return self.head(out[:, -1, :]).squeeze(-1)
 
 
-def _epoch(model, loader, optimizer=None) -> float:
+def _epoch(model, loader, device, optimizer=None) -> float:
     training = optimizer is not None
     model.train(training)
     total_loss, n = 0.0, 0
     loss_fn = nn.MSELoss()
     for xb, yb in loader:
+        xb, yb = xb.to(device), yb.to(device)
         if training:
             optimizer.zero_grad()
         with torch.set_grad_enabled(training):
@@ -74,7 +73,9 @@ def _epoch(model, loader, optimizer=None) -> float:
     return total_loss / n
 
 
-def train_and_save(zone_ids: list[int] | None = None) -> dict:
+def train_and_save(
+    zone_ids: list[int] | None = None, epochs: int = EPOCHS, device: str = "cpu"
+) -> dict:
     torch.manual_seed(SEED)
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
     X, y, meta = build_sequences(con, zone_ids=zone_ids)
@@ -97,15 +98,15 @@ def train_and_save(zone_ids: list[int] | None = None) -> dict:
     val_loader = to_loader(val_pos, False)
     test_loader = to_loader(test_pos, False)
 
-    model = DemandLSTM()
+    model = DemandLSTM().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
     loss_curve = []
-    for epoch in range(1, EPOCHS + 1):
-        train_loss = _epoch(model, train_loader, optimizer)
-        val_loss = _epoch(model, val_loader)
+    for epoch in range(1, epochs + 1):
+        train_loss = _epoch(model, train_loader, device, optimizer)
+        val_loss = _epoch(model, val_loader, device)
         loss_curve.append({"epoch": epoch, "train_mse_norm": train_loss, "val_mse_norm": val_loss})
-        print(f"epoch {epoch}/{EPOCHS}  train_mse={train_loss:.4f}  val_mse={val_loss:.4f}")
+        print(f"epoch {epoch}/{epochs}  train_mse={train_loss:.4f}  val_mse={val_loss:.4f}")
 
     # inference latency measured per-row on the test set, real forward passes
     model.eval()
@@ -113,7 +114,7 @@ def train_and_save(zone_ids: list[int] | None = None) -> dict:
     start = time.perf_counter()
     with torch.no_grad():
         for xb, _ in test_loader:
-            preds_norm.append(model(xb).numpy())
+            preds_norm.append(model(xb.to(device)).cpu().numpy())
     latency_ms = (time.perf_counter() - start) / len(test_pos) * 1000
     preds = np.concatenate(preds_norm) * y_std + y_mean
     y_true = y[test_pos]
@@ -135,11 +136,10 @@ def train_and_save(zone_ids: list[int] | None = None) -> dict:
             "hidden_size": HIDDEN_SIZE,
             "num_layers": NUM_LAYERS,
             "batch_size": BATCH_SIZE,
-            "epochs": EPOCHS,
+            "epochs": epochs,
             "learning_rate": LR,
         },
-        "cpu_only_tradeoff": "trained on CPU (no GPU in this environment); epochs capped at "
-        f"{EPOCHS} for wall-clock time -- real loss curve below, not a placeholder",
+        "training_device": device,
         "loss_curve": loss_curve,
         "target_scaling": {"mean": float(y_mean), "std": float(y_std)},
         "metrics": {"test_rmse": rmse, "test_mae": mae, "test_inference_latency_ms_per_row": latency_ms},

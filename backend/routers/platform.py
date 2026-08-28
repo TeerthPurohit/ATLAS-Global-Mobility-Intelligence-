@@ -2,6 +2,12 @@
 model registry metrics, algorithm benchmarks, dbt pipeline status, and mart
 reads. Added to back widgets that were hardcoded in the frontend -- see
 ARCHITECTURE_AUDIT.md for the widget-by-widget mapping.
+
+Not part of the DomainError -> ErrorResponse migration (see backend/errors.py,
+city.py/predictions.py/zones.py/chat.py/context.py): every route here just
+returns whatever platform_service gives it, and that service layer already
+degrades to an empty/partial result instead of raising -- there is no error
+path in this router to migrate.
 """
 from __future__ import annotations
 

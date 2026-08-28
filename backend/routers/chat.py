@@ -3,11 +3,12 @@
 from __future__ import annotations  # noqa: I001
 
 import json
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
 
+from backend.errors import DomainError
 from backend.registry import CITY_ID
-from backend.schemas import ChatMessage, ChatRequest, ChatResponse
+from backend.schemas import ChatMessage, ChatRequest, ChatResponse, ErrorCode
 from backend.services import rag_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -53,7 +54,7 @@ def get_chat_history(session_id: str) -> list[ChatMessage]:
     history = rag_service.get_history(session_id)
     if history is None:
         logger.warning("GET /chat/history step=not_found session_id={}", session_id)
-        raise HTTPException(status_code=404, detail=f"Session history for id '{session_id}' not found")
+        raise DomainError(ErrorCode.SESSION_NOT_FOUND, f"Session history for id '{session_id}' not found", 404)
     logger.info("GET /chat/history step=done session_id={} messages={}", session_id, len(history))
     return [
         ChatMessage(

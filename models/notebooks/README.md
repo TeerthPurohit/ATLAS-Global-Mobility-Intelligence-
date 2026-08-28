@@ -1,12 +1,14 @@
 # Colab training notebooks
 
 Thin runners only. Every cell calls straight into `models/xgboost_model`,
-`models/congestion`, `models/eta` — no training logic is duplicated here.
-Use these when local hardware can't handle a bigger sample than the
-committed artifacts were trained on.
+`models/congestion`, `models/eta`, `models/lstm_model` — no training logic
+is duplicated here. Use these when local hardware can't handle a bigger
+sample than the committed artifacts were trained on, or (LSTM) needs a real
+GPU this environment doesn't have.
 
 - `01_nyc_demand_congestion_eta.ipynb` — NYC zone-hourly demand, congestion
-  multiplier, quantile ETA (p10/p50/p90).
+  multiplier, quantile ETA (p10/p50/p90), and LSTM zone-hourly demand
+  (section 9b, needs a GPU runtime).
 
 ## Getting the DuckDB file into Colab
 
@@ -50,3 +52,11 @@ and re-running, not new code.
 3. Notebook 01's cell 9 accumulates a small `run_log` table (rows / time /
    metrics) across every sample size actually run in the session — use it
    to decide where to stop, don't just run `ALL` because it's available.
+
+**2026-08-28 exception:** the congestion/ETA retrain that produced the
+currently-committed artifacts skipped this ladder and trained directly on
+`SAMPLE_ROWS = None` (ALL ~113M rows), per an explicit project decision to
+train on the full corpus rather than whatever smaller sample happens to
+saturate the metric. The ladder above is still the default methodology for
+any *future* retrain — this is a one-time, deliberate override, not a
+change to the recommendation.

@@ -9,7 +9,7 @@ from __future__ import annotations  # noqa: I001
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from loguru import logger
 
 # Add repo root for imports
@@ -17,9 +17,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from backend.adapters import holidays_nager, routing_osrm, weather_openmeteo  # noqa: F401, I001
+from backend.errors import DomainError
 from backend.predictors import journey_predictors  # noqa: F401
 from backend.predictors.base import JourneyContext, PredictionResult  # noqa: F401
-from backend.schemas import HolidayResponse, TrafficResponse, WeatherResponse
+from backend.schemas import ErrorCode, HolidayResponse, TrafficResponse, WeatherResponse
 from backend.registry import CITY_ID
 from backend.registry import cities as cities_registry
 from backend.services import journey_service
@@ -37,11 +38,11 @@ def _city_coords() -> tuple[float, float]:
     """
     profile = cities_registry.get_city_profile()
     if not profile:
-        raise HTTPException(status_code=400, detail="Cannot resolve coordinates: no registered city")
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, "Cannot resolve coordinates: no registered city", 400)
     coords = profile.get("coordinates") or {}
     lat, lon = coords.get("latitude"), coords.get("longitude")
     if lat is None or lon is None:
-        raise HTTPException(status_code=400, detail="City profile is missing coordinates")
+        raise DomainError(ErrorCode.CITY_NOT_FOUND, "City profile is missing coordinates", 400)
     return float(lat), float(lon)
 
 
@@ -66,7 +67,7 @@ def weather(
             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         except ValueError:
             logger.warning("GET /api/context/weather step=invalid_timestamp value={!r}", timestamp)
-            raise HTTPException(status_code=400, detail=f"invalid timestamp={timestamp!r}: expected ISO 8601")
+            raise DomainError(ErrorCode.INVALID_REQUEST, f"invalid timestamp={timestamp!r}: expected ISO 8601", 400)
     else:
         dt = datetime.now()  # noqa: DTZ005
 
@@ -109,7 +110,7 @@ def holiday(
             dt = datetime.fromisoformat(date)
         except ValueError:
             logger.warning("GET /api/context/holiday step=invalid_date value={!r}", date)
-            raise HTTPException(status_code=400, detail=f"invalid date={date!r}: expected YYYY-MM-DD")
+            raise DomainError(ErrorCode.INVALID_REQUEST, f"invalid date={date!r}: expected YYYY-MM-DD", 400)
     else:
         dt = datetime.now()  # noqa: DTZ005
 
