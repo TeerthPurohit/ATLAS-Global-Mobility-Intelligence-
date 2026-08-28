@@ -9,6 +9,9 @@ data/warehouse/*
 *.duckdb.wal
 *.db
 
+# ── Streaming-training resume state (transient, regenerate locally) ──
+_streaming_checkpoint.json
+
 # ── dbt ─────────────────────────────────────────────
 dbt_project/target/
 dbt_project/logs/

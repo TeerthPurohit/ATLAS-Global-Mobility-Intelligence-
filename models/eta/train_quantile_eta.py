@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import duckdb
@@ -50,6 +51,10 @@ QUANTILES = {"p10": 0.10, "p50": 0.50, "p90": 0.90}
 XGB_PARAMS = {"max_depth": 6, "learning_rate": 0.1, "n_estimators": 300}
 
 
+def _log(msg: str) -> None:
+    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
 def pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, alpha: float) -> float:
     diff = y_true - y_pred
     return float(np.mean(np.maximum(alpha * diff, (alpha - 1) * diff)))
@@ -69,22 +74,48 @@ def train_quantile(train: pd.DataFrame, alpha: float) -> xgb.XGBRegressor:
 
 
 def _train_and_save_streaming() -> dict:
+    _log("connecting to warehouse")
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    _log("computing split bounds + loading lookups")
+    t0 = time.perf_counter()
     bounds, lookups = load_streaming_context(con)
     train_end, val_start, test_start = bounds
+    _log(f"bounds/lookups ready in {time.perf_counter()-t0:.1f}s")
+
+    _log("materializing test split")
+    t0 = time.perf_counter()
+    test_df = materialize_split(con, "test", bounds, lookups)
+    _log(f"test split ready in {time.perf_counter()-t0:.1f}s: {len(test_df)} rows")
 
     preds = {}
     per_quantile_metrics = {}
-    test_df = materialize_split(con, "test", bounds, lookups)
     for name, alpha in QUANTILES.items():
-        it = TrainDataIter(con, bounds, lookups, split="train_val")
-        dtrain_val = xgb.DMatrix(it)
-        xgb_params = {
-            **{k: v for k, v in XGB_PARAMS.items() if k != "n_estimators"},
-            "objective": "reg:quantileerror", "quantile_alpha": alpha, "tree_method": "hist", "seed": SEED,
-        }
-        booster = xgb.train(xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"])
-        booster.save_model(str(ARTIFACT_DIR / f"eta_{name}_model.json"))
+        model_path = ARTIFACT_DIR / f"eta_{name}_model.json"
+        booster = xgb.Booster()
+        if model_path.exists():
+            # Resume: a model file surviving from a prior run for this
+            # quantile means training already succeeded -- reload it (fast)
+            # instead of repeating a multi-hour external-memory fit.
+            _log(f"quantile {name} (alpha={alpha}) -- resuming from saved {model_path.name}")
+            booster.load_model(str(model_path))
+        else:
+            _log(f"quantile {name} (alpha={alpha}) -- training")
+            t0 = time.perf_counter()
+            it = TrainDataIter(con, bounds, lookups, split="train_val")
+            dtrain_val = xgb.DMatrix(it)
+            xgb_params = {
+                **{k: v for k, v in XGB_PARAMS.items() if k != "n_estimators"},
+                "objective": "reg:quantileerror", "quantile_alpha": alpha, "tree_method": "hist", "seed": SEED,
+            }
+            booster = xgb.train(xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"])
+            _log(f"quantile {name} trained in {time.perf_counter()-t0:.1f}s")
+            # Save immediately, before scoring -- same reasoning as
+            # congestion's identical fix: a multi-hour training step must
+            # never be thrown away by a failure in the comparatively cheap
+            # test-set prediction that follows.
+            booster.save_model(str(model_path))
+            _log(f"quantile {name} model saved")
+
         p = booster.predict(xgb.DMatrix(test_df[FEATURE_COLUMNS]))
         preds[name] = p
         per_quantile_metrics[name] = {
@@ -92,6 +123,7 @@ def _train_and_save_streaming() -> dict:
             "pinball_loss": pinball_loss(test_df[TARGET_COLUMN].to_numpy(), p, alpha),
             "mae": float(mean_absolute_error(test_df[TARGET_COLUMN], p)),
         }
+        _log(f"quantile {name} scored: pinball_loss={per_quantile_metrics[name]['pinball_loss']:.4f}")
 
     actual = test_df[TARGET_COLUMN].to_numpy()
     within_interval = (actual >= preds["p10"]) & (actual <= preds["p90"])
@@ -126,6 +158,7 @@ def _train_and_save_streaming() -> dict:
         "library_versions": {"xgboost": xgb.__version__, "pandas": pd.__version__, "numpy": np.__version__},
     }
     (ARTIFACT_DIR / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
+    _log("eta training complete")
     return metadata
 
 
