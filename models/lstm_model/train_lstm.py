@@ -77,8 +77,14 @@ def train_and_save(
     zone_ids: list[int] | None = None, epochs: int = EPOCHS, device: str = "cpu"
 ) -> dict:
     torch.manual_seed(SEED)
+    print(f"[{time.strftime('%H:%M:%S')}] starting data build", flush=True)
+    t_data = time.time()
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
     X, y, meta = build_sequences(con, zone_ids=zone_ids)
+    print(
+        f"[{time.strftime('%H:%M:%S')}] data build complete in {time.time() - t_data:.1f}s, {len(X)} sequences",
+        flush=True,
+    )
 
     meta = meta.reset_index().rename(columns={"index": "_pos"})
     train_m, val_m, test_m = split_demand_blocks(meta, "ts")
@@ -101,12 +107,15 @@ def train_and_save(
     model = DemandLSTM().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
+    print(f"[{time.strftime('%H:%M:%S')}] starting training ({epochs} epochs, device={device})", flush=True)
+    t_train = time.time()
     loss_curve = []
     for epoch in range(1, epochs + 1):
         train_loss = _epoch(model, train_loader, device, optimizer)
         val_loss = _epoch(model, val_loader, device)
         loss_curve.append({"epoch": epoch, "train_mse_norm": train_loss, "val_mse_norm": val_loss})
-        print(f"epoch {epoch}/{epochs}  train_mse={train_loss:.4f}  val_mse={val_loss:.4f}")
+        print(f"epoch {epoch}/{epochs}  train_mse={train_loss:.4f}  val_mse={val_loss:.4f}", flush=True)
+    print(f"[{time.strftime('%H:%M:%S')}] training complete in {time.time() - t_train:.1f}s", flush=True)
 
     # inference latency measured per-row on the test set, real forward passes
     model.eval()
