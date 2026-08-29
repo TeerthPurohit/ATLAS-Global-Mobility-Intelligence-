@@ -75,6 +75,27 @@ def _save_checkpoint(state: dict) -> None:
     CHECKPOINT_PATH.write_text(json.dumps(state, indent=2))
 
 
+class _ProgressCallback(xgb.callback.TrainingCallback):
+    """Prints a timestamped line every `every` boosting rounds -- without
+    this, a multi-hour CPU `xgb.train()` call for ~90M rows produces zero
+    output between "training" and "trained in Xs", which is bad for anyone
+    monitoring a long-running background job."""
+
+    def __init__(self, name: str, total_rounds: int, every: int = 25) -> None:
+        self.name = name
+        self.total_rounds = total_rounds
+        self.every = every
+        self._t0 = time.perf_counter()
+
+    def after_iteration(self, model, epoch: int, evals_log: dict) -> bool:
+        round_num = epoch + 1
+        if round_num % self.every == 0 or round_num == self.total_rounds:
+            pct = 100 * round_num / self.total_rounds
+            elapsed = time.perf_counter() - self._t0
+            _log(f"quantile {self.name}: round {round_num}/{self.total_rounds} ({pct:.1f}%), elapsed {elapsed:.0f}s")
+        return False  # False = keep training
+
+
 def pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, alpha: float) -> float:
     diff = y_true - y_pred
     return float(np.mean(np.maximum(alpha * diff, (alpha - 1) * diff)))
@@ -138,7 +159,10 @@ def _train_and_save_streaming() -> dict:
                 "objective": "reg:quantileerror", "quantile_alpha": alpha,
                 "tree_method": "hist", "seed": SEED,
             }
-            booster = xgb.train(xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"])
+            booster = xgb.train(
+                xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"],
+                callbacks=[_ProgressCallback(name, XGB_PARAMS["n_estimators"])],
+            )
             _log(f"quantile {name} trained in {time.perf_counter()-t0:.1f}s")
             # Save immediately, before scoring -- same reasoning as
             # congestion's identical fix: a multi-hour training step must
