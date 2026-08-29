@@ -125,7 +125,7 @@ def _train_and_save_streaming() -> dict:
             _log(f"quantile {name} (alpha={alpha}) -- training")
             if dtrain_val is None:
                 t0 = time.perf_counter()
-                it = TrainDataIter(con, bounds, lookups, split="train_val")
+                it = TrainDataIter(con, bounds, lookups, split="train_val", cache=False)
                 # QuantileDMatrix (not plain DMatrix) builds hist bins directly from
                 # the iterator on-device -- the memory-efficient, GPU-native path
                 # `tree_method="hist"`/device="cuda" expects; plain DMatrix stages a

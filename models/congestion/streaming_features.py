@@ -140,19 +140,27 @@ class TrainDataIter(xgb.DataIter):
     time -- at most `batch_rows` (default 2M) feature rows are ever in
     memory at once, never the full ~78M-row train split. `cache_prefix`
     points XGBoost at on-disk paging for processed batches instead of
-    holding them all in RAM, which is what actually avoids the OOM."""
+    holding them all in RAM, which is what actually avoids the OOM.
+
+    `cache=False` skips that disk cache -- required when this iterator feeds
+    `xgb.QuantileDMatrix` instead of plain `xgb.DMatrix`: QuantileDMatrix
+    builds its own in-memory histogram representation and raises if handed a
+    cache_prefix at all."""
 
     def __init__(
         self, con: duckdb.DuckDBPyConnection, bounds: Bounds, lookups: Lookups,
-        batch_rows: int = DEFAULT_BATCH_ROWS, split: str = "train",
+        batch_rows: int = DEFAULT_BATCH_ROWS, split: str = "train", cache: bool = True,
     ) -> None:
         self._con = con
         self._where = _where_for(split, bounds)
         self._free_flow, self._holiday_flags, self._weather_demand = lookups
         self._batch_rows = batch_rows
         self._reader_iter: Iterator[pd.DataFrame] | None = None
-        self._cache_dir = tempfile.mkdtemp(prefix="xgb_ext_mem_")
-        super().__init__(cache_prefix=os.path.join(self._cache_dir, "cache"))
+        if cache:
+            self._cache_dir = tempfile.mkdtemp(prefix="xgb_ext_mem_")
+            super().__init__(cache_prefix=os.path.join(self._cache_dir, "cache"))
+        else:
+            super().__init__()
 
     def reset(self) -> None:
         self._reader_iter = stream_raw_batches(self._con, self._where, self._batch_rows)
