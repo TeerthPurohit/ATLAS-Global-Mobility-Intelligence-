@@ -113,6 +113,8 @@ def _train_and_save_streaming() -> dict:
 
     preds = {}
     per_quantile_metrics = {}
+    dtrain_val = None  # built once, lazily, and reused across quantiles -- same train_val
+    # rows/features for all three, so re-scanning the ~90M-row split per quantile was pure waste
     for name, alpha in QUANTILES.items():
         model_path = ARTIFACT_DIR / f"eta_{name}_model.json"
         booster = xgb.Booster()
@@ -121,12 +123,20 @@ def _train_and_save_streaming() -> dict:
             booster.load_model(str(model_path))
         else:
             _log(f"quantile {name} (alpha={alpha}) -- training")
+            if dtrain_val is None:
+                t0 = time.perf_counter()
+                it = TrainDataIter(con, bounds, lookups, split="train_val")
+                # QuantileDMatrix (not plain DMatrix) builds hist bins directly from
+                # the iterator on-device -- the memory-efficient, GPU-native path
+                # `tree_method="hist"`/device="cuda" expects; plain DMatrix stages a
+                # full CPU-side copy first.
+                dtrain_val = xgb.QuantileDMatrix(it)
+                _log(f"train_val QuantileDMatrix materialized in {time.perf_counter()-t0:.1f}s (shared across remaining quantiles)")
             t0 = time.perf_counter()
-            it = TrainDataIter(con, bounds, lookups, split="train_val")
-            dtrain_val = xgb.DMatrix(it)
             xgb_params = {
                 **{k: v for k, v in XGB_PARAMS.items() if k != "n_estimators"},
-                "objective": "reg:quantileerror", "quantile_alpha": alpha, "tree_method": "hist", "seed": SEED,
+                "objective": "reg:quantileerror", "quantile_alpha": alpha,
+                "tree_method": "hist", "device": "cuda", "seed": SEED,
             }
             booster = xgb.train(xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"])
             _log(f"quantile {name} trained in {time.perf_counter()-t0:.1f}s")
