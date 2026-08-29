@@ -107,15 +107,33 @@ def train_and_save(
     model = DemandLSTM().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
+    checkpoint_path = ARTIFACT_DIR / "lstm_checkpoint.pt"
+    start_epoch, loss_curve = 1, []
+    if checkpoint_path.exists():
+        ckpt = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(ckpt["model_state"])
+        optimizer.load_state_dict(ckpt["optimizer_state"])
+        start_epoch, loss_curve = ckpt["epoch"] + 1, ckpt["loss_curve"]
+        print(f"[{time.strftime('%H:%M:%S')}] resuming from checkpoint at epoch {start_epoch}", flush=True)
+
     print(f"[{time.strftime('%H:%M:%S')}] starting training ({epochs} epochs, device={device})", flush=True)
     t_train = time.time()
-    loss_curve = []
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         train_loss = _epoch(model, train_loader, device, optimizer)
         val_loss = _epoch(model, val_loader, device)
         loss_curve.append({"epoch": epoch, "train_mse_norm": train_loss, "val_mse_norm": val_loss})
         print(f"epoch {epoch}/{epochs}  train_mse={train_loss:.4f}  val_mse={val_loss:.4f}", flush=True)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+                "loss_curve": loss_curve,
+            },
+            checkpoint_path,
+        )
     print(f"[{time.strftime('%H:%M:%S')}] training complete in {time.time() - t_train:.1f}s", flush=True)
+    checkpoint_path.unlink(missing_ok=True)  # training finished cleanly, no resume needed
 
     # inference latency measured per-row on the test set, real forward passes
     model.eval()
