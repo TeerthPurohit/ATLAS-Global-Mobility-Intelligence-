@@ -79,20 +79,52 @@ class _ProgressCallback(xgb.callback.TrainingCallback):
     """Prints a timestamped line every `every` boosting rounds -- without
     this, a multi-hour CPU `xgb.train()` call for ~90M rows produces zero
     output between "training" and "trained in Xs", which is bad for anyone
-    monitoring a long-running background job."""
+    monitoring a long-running background job. `start_round` offsets the
+    reported round number when resuming from a mid-quantile checkpoint (see
+    `_CheckpointCallback`), so logs show the true absolute round out of 300,
+    not a count restarted at 0."""
 
-    def __init__(self, name: str, total_rounds: int, every: int = 25) -> None:
+    def __init__(self, name: str, total_rounds: int, every: int = 25, start_round: int = 0) -> None:
         self.name = name
         self.total_rounds = total_rounds
         self.every = every
+        self.start_round = start_round
         self._t0 = time.perf_counter()
 
     def after_iteration(self, model, epoch: int, evals_log: dict) -> bool:
-        round_num = epoch + 1
+        round_num = self.start_round + epoch + 1
         if round_num % self.every == 0 or round_num == self.total_rounds:
             pct = 100 * round_num / self.total_rounds
             elapsed = time.perf_counter() - self._t0
             _log(f"quantile {self.name}: round {round_num}/{self.total_rounds} ({pct:.1f}%), elapsed {elapsed:.0f}s")
+        return False  # False = keep training
+
+
+class _CheckpointCallback(xgb.callback.TrainingCallback):
+    """Saves the in-progress booster every `every` rounds so a crash mid-
+    quantile (300 rounds can be a long CPU run) resumes from the last
+    checkpoint instead of restarting that quantile from round 0 -- the
+    existing checkpoint only covered whole-quantile granularity, which is a
+    big unit of loss for a single multi-hour boosting call. Records the
+    absolute round reached in the shared _streaming_checkpoint.json under
+    "in_progress", keyed on XGB_PARAMS same as the per-quantile "done"
+    entries, so a params change doesn't silently resume a stale partial."""
+
+    def __init__(self, name: str, total_rounds: int, checkpoint_model_path: Path, start_round: int = 0, every: int = 50) -> None:
+        self.name = name
+        self.total_rounds = total_rounds
+        self.checkpoint_model_path = checkpoint_model_path
+        self.start_round = start_round
+        self.every = every
+
+    def after_iteration(self, model, epoch: int, evals_log: dict) -> bool:
+        round_num = self.start_round + epoch + 1
+        if round_num % self.every == 0 and round_num < self.total_rounds:
+            model.save_model(str(self.checkpoint_model_path))
+            state = _load_checkpoint()
+            state["in_progress"] = {"name": self.name, "round": round_num, "params": XGB_PARAMS}
+            _save_checkpoint(state)
+            _log(f"quantile {self.name}: mid-training checkpoint saved at round {round_num}/{self.total_rounds}")
         return False  # False = keep training
 
 
@@ -142,12 +174,24 @@ def _train_and_save_streaming() -> dict:
     # not DMatrix sharing. Training now runs on CPU, where this is safe again.)
     for name, alpha in QUANTILES.items():
         model_path = ARTIFACT_DIR / f"eta_{name}_model.json"
+        partial_path = ARTIFACT_DIR / f"_streaming_partial_{name}.json"
         booster = xgb.Booster()
         if state["done"].get(name) == XGB_PARAMS and model_path.exists():
             _log(f"quantile {name} (alpha={alpha}) -- resuming from checkpoint ({model_path.name})")
             booster.load_model(str(model_path))
         else:
-            _log(f"quantile {name} (alpha={alpha}) -- training")
+            in_progress = state.get("in_progress")
+            start_round = 0
+            xgb_model_arg = None
+            if (
+                in_progress and in_progress.get("name") == name
+                and in_progress.get("params") == XGB_PARAMS and partial_path.exists()
+            ):
+                start_round = in_progress["round"]
+                xgb_model_arg = str(partial_path)
+                _log(f"quantile {name} (alpha={alpha}) -- resuming mid-training from round {start_round}/{XGB_PARAMS['n_estimators']} ({partial_path.name})")
+            else:
+                _log(f"quantile {name} (alpha={alpha}) -- training")
             if dtrain_val is None:
                 t0 = time.perf_counter()
                 it = TrainDataIter(con, bounds, lookups, split="train_val", cache=False)
@@ -159,9 +203,13 @@ def _train_and_save_streaming() -> dict:
                 "objective": "reg:quantileerror", "quantile_alpha": alpha,
                 "tree_method": "hist", "seed": SEED,
             }
+            remaining_rounds = XGB_PARAMS["n_estimators"] - start_round
             booster = xgb.train(
-                xgb_params, dtrain_val, num_boost_round=XGB_PARAMS["n_estimators"],
-                callbacks=[_ProgressCallback(name, XGB_PARAMS["n_estimators"])],
+                xgb_params, dtrain_val, num_boost_round=remaining_rounds, xgb_model=xgb_model_arg,
+                callbacks=[
+                    _ProgressCallback(name, XGB_PARAMS["n_estimators"], start_round=start_round),
+                    _CheckpointCallback(name, XGB_PARAMS["n_estimators"], partial_path, start_round=start_round),
+                ],
             )
             _log(f"quantile {name} trained in {time.perf_counter()-t0:.1f}s")
             # Save immediately, before scoring -- same reasoning as
@@ -169,6 +217,8 @@ def _train_and_save_streaming() -> dict:
             # never be thrown away by a failure in the comparatively cheap
             # test-set prediction that follows.
             booster.save_model(str(model_path))
+            partial_path.unlink(missing_ok=True)
+            state.pop("in_progress", None)
             state["done"][name] = XGB_PARAMS
             _save_checkpoint(state)
             _log(f"quantile {name} model saved")
