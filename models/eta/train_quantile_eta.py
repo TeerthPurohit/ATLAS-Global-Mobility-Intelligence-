@@ -146,7 +146,14 @@ def train_quantile(train: pd.DataFrame, alpha: float) -> xgb.XGBRegressor:
     return model
 
 
-def _train_and_save_streaming() -> dict:
+def _train_and_save_streaming(quantiles: dict[str, float] | None = None) -> dict:
+    """`quantiles` restricts training to a subset of QUANTILES (e.g. {"p50": 0.5}
+    on one machine while another machine handles the rest) -- for splitting the
+    three independent quantile models across machines in parallel. Defaults to
+    all three. The returned metadata only covers the quantiles actually run
+    here; merging a full three-quantile eta_metadata.json is the caller's job
+    once all machines' outputs are collected."""
+    quantiles = quantiles if quantiles is not None else QUANTILES
     _log("connecting to warehouse")
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
     _log("computing split bounds + loading lookups")
@@ -172,7 +179,7 @@ def _train_and_save_streaming() -> dict:
     # 2026-08-29: rebuilding fresh per quantile produced byte-identical -- still broken --
     # results, so the bug was xgboost 3.2.0's reg:quantileerror + device=cuda on Kaggle,
     # not DMatrix sharing. Training now runs on CPU, where this is safe again.)
-    for name, alpha in QUANTILES.items():
+    for name, alpha in quantiles.items():
         model_path = ARTIFACT_DIR / f"eta_{name}_model.json"
         partial_path = ARTIFACT_DIR / f"_streaming_partial_{name}.json"
         booster = xgb.Booster()
@@ -232,10 +239,19 @@ def _train_and_save_streaming() -> dict:
         }
         _log(f"quantile {name} scored: pinball_loss={per_quantile_metrics[name]['pinball_loss']:.4f}")
 
-    actual = test_df[TARGET_COLUMN].to_numpy()
-    within_interval = (actual >= preds["p10"]) & (actual <= preds["p90"])
-    coverage = float(np.mean(within_interval))
-    ordering_violations = int(np.sum((preds["p10"] > preds["p50"]) | (preds["p50"] > preds["p90"])))
+    # Coverage/ordering need all three quantiles' predictions -- null them out
+    # when only a subset was trained here (e.g. one machine handling p50+p90
+    # while another handles p10 in parallel); the caller merges partial runs
+    # into a real three-quantile eta_metadata.json once everything's collected.
+    have_all_three = {"p10", "p50", "p90"} <= preds.keys()
+    if have_all_three:
+        actual = test_df[TARGET_COLUMN].to_numpy()
+        within_interval = (actual >= preds["p10"]) & (actual <= preds["p90"])
+        coverage = float(np.mean(within_interval))
+        ordering_violations = int(np.sum((preds["p10"] > preds["p50"]) | (preds["p50"] > preds["p90"])))
+    else:
+        coverage = None
+        ordering_violations = None
 
     metadata = {
         "seed": SEED,
@@ -250,7 +266,7 @@ def _train_and_save_streaming() -> dict:
         "features": FEATURE_COLUMNS,
         "target": TARGET_COLUMN,
         "hyperparameters": XGB_PARAMS,
-        "quantiles": QUANTILES,
+        "quantiles": quantiles,
         "metrics": per_quantile_metrics,
         "prediction_interval_coverage": {
             "nominal": 0.80,
@@ -265,16 +281,18 @@ def _train_and_save_streaming() -> dict:
         "library_versions": {"xgboost": xgb.__version__, "pandas": pd.__version__, "numpy": np.__version__},
     }
     (ARTIFACT_DIR / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
-    CHECKPOINT_PATH.unlink(missing_ok=True)  # full success -- resume state no longer needed
+    if have_all_three:
+        CHECKPOINT_PATH.unlink(missing_ok=True)  # full success -- resume state no longer needed
     _log("eta training complete")
     return metadata
 
 
 def train_and_save(
-    df: pd.DataFrame | None = None, sample_rows: int | None = 300_000, output_dir: Path = ARTIFACT_DIR
+    df: pd.DataFrame | None = None, sample_rows: int | None = 300_000, output_dir: Path = ARTIFACT_DIR,
+    quantiles: dict[str, float] | None = None,
 ) -> dict:
     if df is None and sample_rows is None:
-        return _train_and_save_streaming()
+        return _train_and_save_streaming(quantiles=quantiles)
 
     if df is None:
         con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
