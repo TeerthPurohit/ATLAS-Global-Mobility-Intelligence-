@@ -78,7 +78,7 @@ export function CompareCard({ vehicle, isPending, isError, error, data, winner }
     <Card
       className={cn(
         "flex min-w-[280px] flex-1 flex-col gap-1",
-        winner && "border-2 border-brass shadow-[0_0_0_1px_rgba(201,146,42,0.25),0_0_24px_rgba(201,146,42,0.15)]"
+        winner && "border-2 border-brass shadow-[0_0_0_1px_rgba(108,92,231,0.25),0_0_24px_rgba(108,92,231,0.15)]"
       )}
     >
       <div className="flex items-center justify-between">

@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { AppProvider } from "@/context/AppContext";
+import { AuthProvider } from "@/context/AuthContext";
 import { NavBar } from "@/components/layout/NavBar";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { SmoothScrollProvider } from "@/components/layout/SmoothScrollProvider";
+import { RequireAuth } from "@/components/layout/RequireAuth";
 
 export const metadata: Metadata = {
   title: "ATLAS | NYC Ride Intelligence",
@@ -13,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en" data-theme="light">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -25,13 +27,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen font-body-md bg-surface-0 text-ink-primary">
         <Providers>
           <SmoothScrollProvider>
-            <AppProvider>
-              <NavBar />
-              <CommandPalette />
-              <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
-                {children}
-              </main>
-            </AppProvider>
+            <AuthProvider>
+              <AppProvider>
+                <NavBar />
+                <CommandPalette />
+                <main className="min-h-[calc(100dvh-5rem)] w-full px-4 py-5 sm:px-8 sm:py-8 lg:px-10">
+                  <RequireAuth>{children}</RequireAuth>
+                </main>
+              </AppProvider>
+            </AuthProvider>
           </SmoothScrollProvider>
         </Providers>
       </body>

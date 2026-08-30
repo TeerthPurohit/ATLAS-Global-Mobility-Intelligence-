@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { JourneyForm } from "@/components/journey/JourneyForm";
 import { JourneyMap } from "@/components/journey/JourneyMap";
@@ -23,7 +23,31 @@ export default function JourneyPage() {
 
 function JourneyPageContent() {
   const containerRef = useGsapEntrance(".gsap-reveal", { stagger: 0.1, yOffset: 16 });
-  const [route, setRoute] = useState({ pickup: defaultPickup, dropoff: defaultDropoff });
+  const searchParams = useSearchParams();
+
+  // Landing-page map hands off a clicked zone as pickup (and optionally
+  // dropoff) via query params -- falls back to the Midtown/FiDi defaults
+  // when arriving at /journey directly.
+  const initialPickup = useMemo(() => {
+    const lat = searchParams.get("pickupLat");
+    const lon = searchParams.get("pickupLon");
+    const name = searchParams.get("pickupName");
+    if (!lat || !lon || !name) return undefined;
+    return { lat: Number(lat), lon: Number(lon), name };
+  }, [searchParams]);
+
+  const initialDropoff = useMemo(() => {
+    const lat = searchParams.get("dropoffLat");
+    const lon = searchParams.get("dropoffLon");
+    const name = searchParams.get("dropoffName");
+    if (!lat || !lon || !name) return undefined;
+    return { lat: Number(lat), lon: Number(lon), name };
+  }, [searchParams]);
+
+  const [route, setRoute] = useState({
+    pickup: initialPickup ?? defaultPickup,
+    dropoff: initialDropoff ?? defaultDropoff,
+  });
   const [journeyRequest, setJourneyRequest] = useState<JourneyRequest | null>(null);
 
   function handleSubmit(req: JourneyRequest) {
@@ -55,7 +79,12 @@ function JourneyPageContent() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[420px_1fr]">
         {/* Sidebar Form */}
         <div className="gsap-reveal flex flex-col gap-6">
-          <JourneyForm onSubmit={handleSubmit} isPending={false} />
+          <JourneyForm
+            onSubmit={handleSubmit}
+            isPending={false}
+            initialPickup={initialPickup}
+            initialDropoff={initialDropoff}
+          />
           <div className="border border-surface-border bg-surface-1 p-6 rounded-sm">
             <JourneyMap pickup={route.pickup} dropoff={route.dropoff} />
           </div>

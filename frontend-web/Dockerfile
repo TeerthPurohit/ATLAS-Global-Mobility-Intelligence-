@@ -7,11 +7,9 @@ RUN npm ci
 
 COPY . .
 
-# NEXT_PUBLIC_* vars are baked into the client bundle by `next build`, so this
-# has to be present as a build arg -- setting it at runtime has no effect.
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
-
+# BACKEND_URL is read server-side by next.config.js's rewrites() at process
+# startup (not baked in at build time like a NEXT_PUBLIC_* var) -- set it at
+# `docker run`/compose time, not here.
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NODE_ENV production
 ENV PORT 3000

@@ -38,13 +38,14 @@ services:
     build:
       context: ./frontend-web
       dockerfile: Dockerfile
-      args:
-        # NEXT_PUBLIC_* is inlined at build time, and this URL is resolved by the
-        # user's browser -- not from inside the container -- so it must be the
-        # host-published address, never http://backend:8000.
-        - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
     ports:
       - "3000:3000"
+    environment:
+      # Read server-side by next.config.js's rewrites() to proxy the browser's
+      # /api/* calls to the backend -- the Docker network hostname works here
+      # (unlike the old NEXT_PUBLIC_API_BASE_URL build arg) because this is
+      # resolved by the Next.js server inside the container, never the browser.
+      - BACKEND_URL=http://backend:8000
     depends_on:
       - backend
 

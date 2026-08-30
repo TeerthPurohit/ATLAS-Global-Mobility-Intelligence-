@@ -27,6 +27,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DEFAULT_DB_PATH, OPENAI_MODEL
+from prompts.insight_doc_prompt import TEMPLATE as SYSTEM_PROMPT, VERSION as PROMPT_VERSION
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -43,20 +44,6 @@ _LOOSE_NUMBER_MAX = 31
 _ALWAYS_ALLOWED = {2024}
 
 _NUMBER_RE = re.compile(r"-?\d[\d,]*\.?\d*")
-
-SYSTEM_PROMPT = """You write one short, plain-language paragraph (3-5 sentences) \
-describing a NYC ride-hailing pickup zone, for a chat answer.
-
-Rules, no exceptions:
-- Use ONLY the numbers given in the fact list below, and use them EXACTLY as \
-given (same digits, same rounding). Never round, convert, sum, average, or \
-otherwise compute a new number.
-- Do not introduce any statistic, ranking, date, or comparison that is not \
-explicitly in the fact list.
-- Write hours in 24-hour form exactly as given (e.g. "18:00"), never converted \
-to am/pm.
-- No markdown, no bullet points, no headers -- plain prose only.
-"""
 
 
 def _facts_for_zone(zone_id: int, zone_name: str, borough: str, hourly: pd.DataFrame,
@@ -189,6 +176,8 @@ def _phrase_with_llm(facts: dict) -> str | None:
             ],
             temperature=0.2,
             max_completion_tokens=250,
+            trace_name="generate_insight_docs.generate",
+            prompt_version=PROMPT_VERSION,
         )
         text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # noqa: BLE001

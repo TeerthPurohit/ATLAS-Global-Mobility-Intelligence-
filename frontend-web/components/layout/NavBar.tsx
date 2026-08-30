@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Compass } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Compass, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
+import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
   { href: "/", label: "Explore" },
@@ -18,9 +19,16 @@ const navLinks = [
 
 export function NavBar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
   // Explore's hero is a full-bleed map -- let the nav float translucent over it there.
   // Every other route keeps the original solid header untouched.
   const isHeroPage = pathname === "/";
+
+  async function handleLogout() {
+    await logout();
+    router.push("/login");
+  }
 
   return (
     <header
@@ -31,7 +39,7 @@ export function NavBar() {
           : "border-b border-surface-border bg-surface-0/95 backdrop-blur-sm"
       )}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
+      <div className="mx-auto flex w-full items-center justify-between px-4 py-4 sm:px-8 lg:px-10">
         {/* Logo & Brand */}
         <Link
           href="/"
@@ -76,7 +84,7 @@ export function NavBar() {
                 {isActive && (
                   <motion.div
                     layoutId="activeNavUnderline"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brass shadow-[0_0_6px_rgba(201,146,42,0.5)]"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brass shadow-[0_0_6px_rgba(108,92,231,0.5)]"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
@@ -85,6 +93,29 @@ export function NavBar() {
             );
           })}
         </nav>
+
+        {/* Auth */}
+        <div className="flex items-center gap-3">
+          {loading ? null : user ? (
+            <>
+              <span className="hidden sm:block font-body-sm text-ink-secondary">{user.email}</span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-2 font-section-md text-sm text-ink-secondary hover:text-ink-primary transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Log out</span>
+              </button>
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="px-3 py-2 font-section-md text-sm text-ink-secondary hover:text-ink-primary transition-colors"
+            >
+              Log in
+            </Link>
+          )}
+        </div>
       </div>
     </header>
   );

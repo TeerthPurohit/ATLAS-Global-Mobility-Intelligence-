@@ -7,6 +7,12 @@ pyarrow>=14.0,<16.0
 # ── dbt ─────────────────────────────────────────────
 dbt-core>=1.8,<2.0
 dbt-duckdb>=1.8,<2.0
+# dbt-core/dbt-common pin protobuf<7.0,>=6.0; langfuse's OpenTelemetry deps
+# (opentelemetry-proto) allow protobuf<8.0,>=5.0. Pinned explicitly into the
+# overlap so `pip install -r requirements.txt` can't land on protobuf 7.x
+# and break dbt -- verified by hitting this exact conflict installing
+# langfuse standalone (Phase 4, 2026-08-29).
+protobuf>=6.0,<7.0
 
 # ── ML / Forecasting ────────────────────────────────
 scikit-learn>=1.4,<2.0
@@ -29,6 +35,18 @@ qdrant-client>=1.9,<2.0
 # qdrant docker-compose service (port 6333).
 # .env loading for rag/config.py (OPENAI_API_KEY, OPENAI_MODEL).
 python-dotenv>=1.0,<2.0
+# LLM call tracing (Phase 4, rag/tracing.py) -- entirely a no-op when
+# LANGFUSE_PUBLIC_KEY is unset, but rag/llm_client.py imports it
+# unconditionally (same "hard dependency, optional at runtime" pattern as
+# openai/qdrant-client above), so it's a real install-time dependency.
+langfuse>=3.0,<4.0
+
+# ── MCP Server ──────────────────────────────────────
+# mcp_server/ wraps rag/nl_to_sql/'s QueryPlan pipeline as a stdio MCP
+# server for Claude Desktop/Code (SPEC-016) -- spawned as a local
+# subprocess, not part of the FastAPI serving image, so this is
+# requirements.txt only (not requirements-backend.txt).
+mcp>=1.0,<2.0
 
 # ── Backend ─────────────────────────────────────────
 fastapi>=0.110,<1.0
@@ -39,6 +57,10 @@ pydantic>=2.5,<3.0
 psycopg[binary]>=3.1,<4.0
 # ORM/engine layer over psycopg -- rag/db.py.
 sqlalchemy>=2.0,<3.0
+# Password hashing for backend/services/auth_service.py.
+bcrypt>=4.0,<5.0
+# Pydantic EmailStr validation (SignupRequest/LoginRequest in backend/schemas.py).
+email-validator>=2.0,<3.0
 
 # ── Testing / Dev ──────────────────────────────────
 pytest>=8.0,<9.0

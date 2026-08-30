@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Send, Bot, Sparkles, Database } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Send, Bot, Sparkles, Database, Plus, Trash2, Square, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
-import { getChatHistory, streamChat, type ChatMessage, type ChatRoute } from "@/lib/api";
+import {
+  getChatHistory,
+  streamChat,
+  createChatSession,
+  listChatSessions,
+  deleteChatSession,
+  type ChatMessage,
+  type ChatRoute,
+  type ChatSessionSummary,
+} from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
 import { useAppContext } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface Turn {
   role: "user" | "assistant";
@@ -34,15 +45,31 @@ function looksNumeric(text: string): boolean {
 
 export default function AnalystPage() {
   const { selectedCity } = useAppContext();
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [wsError, setWsError] = useState<string | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const closeRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem(SESSION_KEY) : null;
+    if (!authLoading && !user) router.push("/login");
+  }, [authLoading, user, router]);
+
+  const refreshSessions = useCallback(() => {
+    listChatSessions()
+      .then(setSessions)
+      .catch(() => {}); // history sidebar is a convenience -- a failed refresh just leaves the last-known list
+  }, []);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    refreshSessions();
+    const saved = localStorage.getItem(SESSION_KEY);
     if (!saved) return;
     setSessionId(saved);
     getChatHistory(saved)
@@ -60,7 +87,7 @@ export default function AnalystPage() {
         localStorage.removeItem(SESSION_KEY);
         setSessionId(undefined);
       });
-  }, []);
+  }, [authLoading, user, refreshSessions]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -68,10 +95,31 @@ export default function AnalystPage() {
 
   useEffect(() => () => closeRef.current?.(), []);
 
+  // Marks the in-progress assistant turn done with whatever content
+  // accumulated so far -- used both when the user hits Stop and whenever
+  // the stream socket closes without a "done" frame.
+  function finalizePending() {
+    setStreaming(false);
+    setTurns((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last?.pending) return prev;
+      const next = [...prev];
+      next[next.length - 1] = { ...last, pending: false };
+      return next;
+    });
+  }
+
+  function stopGenerating() {
+    closeRef.current?.();
+    closeRef.current = null;
+    finalizePending();
+  }
+
   function ask(question: string) {
     if (!question.trim()) return;
     setWsError(null);
     setInput("");
+    setStreaming(true);
     setTurns((prev) => [...prev, { role: "user", content: question }, { role: "assistant", content: "", pending: true }]);
 
     closeRef.current = streamChat(
@@ -79,6 +127,7 @@ export default function AnalystPage() {
       {
         onFrame: (frame) => {
           if ("error" in frame) {
+            setStreaming(false);
             setWsError(frame.error);
             setTurns((prev) => {
               const next = [...prev];
@@ -96,6 +145,7 @@ export default function AnalystPage() {
             });
           } else if (frame.type === "done") {
             const { payload } = frame;
+            setStreaming(false);
             if (payload.session_id && payload.session_id !== sessionId) {
               setSessionId(payload.session_id);
               localStorage.setItem(SESSION_KEY, payload.session_id);
@@ -110,9 +160,14 @@ export default function AnalystPage() {
               };
               return next;
             });
+            refreshSessions();
           }
         },
-        onError: () => setWsError("Connection to the analyst backend failed. Is the API running?"),
+        onError: () => {
+          setStreaming(false);
+          setWsError("Connection to the analyst backend failed. Is the API running?");
+        },
+        onClose: finalizePending,
       }
     );
   }
@@ -122,63 +177,185 @@ export default function AnalystPage() {
     ask(input);
   }
 
+  async function newChat() {
+    if (streaming) stopGenerating();
+    const { session_id } = await createChatSession();
+    setSessionId(session_id);
+    setTurns([]);
+    setWsError(null);
+    localStorage.setItem(SESSION_KEY, session_id);
+    refreshSessions();
+  }
+
+  async function selectSession(id: string) {
+    if (id === sessionId) return;
+    if (streaming) stopGenerating();
+    setSessionId(id);
+    localStorage.setItem(SESSION_KEY, id);
+    setWsError(null);
+    const history = await getChatHistory(id);
+    setTurns(
+      history.map((m: ChatMessage) => ({
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.content,
+        route: m.route,
+        sql: m.sql,
+      }))
+    );
+  }
+
+  async function handleDeleteSession(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm("Delete this conversation? This can't be undone.")) return;
+    await deleteChatSession(id);
+    if (id === sessionId) {
+      setSessionId(undefined);
+      setTurns([]);
+      localStorage.removeItem(SESSION_KEY);
+    }
+    refreshSessions();
+  }
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex h-full items-center justify-center py-24">
+        <p className="font-body-md text-ink-secondary">
+          {authLoading ? "Checking your session..." : "Redirecting to login..."}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-12 h-full">
-      {/* Header - only show when no conversation */}
-      {turns.length === 0 && (
-        <section className="flex flex-col gap-3">
-          <span className="font-label-sm text-brass tracking-wider">
-            Conversational Intelligence
-          </span>
-          <h1 className="font-display-lg text-ink-primary">
-            Ask the City
-          </h1>
-          <p className="font-body-md max-w-2xl text-ink-secondary">
-            Ask questions about fares, demand, patterns, and mobility trends. Numeric questions are answered with SQL queries; explanatory questions use retrieval-augmented generation.
-          </p>
-        </section>
-      )}
+    <div className="flex gap-8 h-full">
+      <SessionSidebar
+        sessions={sessions}
+        activeSessionId={sessionId}
+        onNewChat={newChat}
+        onSelect={selectSession}
+        onDelete={handleDeleteSession}
+      />
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col gap-6 min-h-0">
-        {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto pr-2">
-          {turns.length === 0 ? (
-            <EmptyState onPick={ask} />
-          ) : (
-            <div className="flex flex-col gap-6 py-6">
-              <AnimatePresence initial={false}>
-                {turns.map((turn, i) => (
-                  <TurnBubble key={i} turn={turn} />
-                ))}
-              </AnimatePresence>
-              <div ref={bottomRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Error Message */}
-        {wsError && (
-          <div className="rounded-sm border border-oxide/40 bg-oxide/5 px-4 py-3 font-body-sm text-oxide">
-            <p className="font-section-md mb-1">Connection Error</p>
-            <p>{wsError}</p>
-          </div>
+      <div className="flex flex-col gap-12 h-full flex-1 min-w-0">
+        {/* Header - only show when no conversation */}
+        {turns.length === 0 && (
+          <section className="flex flex-col gap-3">
+            <span className="font-label-sm text-brass tracking-wider">
+              Conversational Intelligence
+            </span>
+            <h1 className="font-display-lg text-ink-primary">
+              Ask the City
+            </h1>
+            <p className="font-body-md max-w-2xl text-ink-secondary">
+              Ask questions about fares, demand, patterns, and mobility trends. Numeric questions are answered with SQL queries; explanatory questions use retrieval-augmented generation.
+            </p>
+          </section>
         )}
 
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="flex gap-3 border-t border-surface-border pt-6">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about fares, demand, or patterns..."
-            className="flex-1 bg-surface-1 border-surface-border focus:border-brass/50 transition-colors font-body-md"
-          />
-          <Button type="submit" disabled={!input.trim()} className="px-6">
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col gap-6 min-h-0">
+          {/* Messages Container */}
+          <div className="flex-1 overflow-y-auto pr-2">
+            {turns.length === 0 ? (
+              <EmptyState onPick={ask} />
+            ) : (
+              <div className="flex flex-col gap-6 py-6">
+                <AnimatePresence initial={false}>
+                  {turns.map((turn, i) => (
+                    <TurnBubble key={i} turn={turn} />
+                  ))}
+                </AnimatePresence>
+                <div ref={bottomRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Error Message */}
+          {wsError && (
+            <div className="rounded-sm border border-oxide/40 bg-oxide/5 px-4 py-3 font-body-sm text-oxide">
+              <p className="font-section-md mb-1">Connection Error</p>
+              <p>{wsError}</p>
+            </div>
+          )}
+
+          {/* Input Form */}
+          <form onSubmit={handleSubmit} className="flex gap-3 border-t border-surface-border pt-6">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about fares, demand, or patterns..."
+              className="flex-1 bg-surface-1 border-surface-border focus:border-brass/50 transition-colors font-body-md"
+              disabled={streaming}
+            />
+            {streaming ? (
+              <Button type="button" variant="secondary" onClick={stopGenerating} className="px-6">
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button type="submit" disabled={!input.trim()} className="px-6">
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+          </form>
+        </div>
       </div>
     </div>
+  );
+}
+
+function SessionSidebar({
+  sessions,
+  activeSessionId,
+  onNewChat,
+  onSelect,
+  onDelete,
+}: {
+  sessions: ChatSessionSummary[];
+  activeSessionId: string | undefined;
+  onNewChat: () => void;
+  onSelect: (id: string) => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+}) {
+  return (
+    <aside className="hidden md:flex w-64 shrink-0 flex-col gap-3 h-full">
+      <Button variant="secondary" onClick={onNewChat} className="justify-start gap-2 w-full">
+        <Plus className="h-4 w-4" />
+        New Chat
+      </Button>
+
+      <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-1">
+        {sessions.length === 0 ? (
+          <p className="font-body-sm text-ink-secondary px-2 py-4">No past conversations yet.</p>
+        ) : (
+          sessions.map((s) => (
+            <button
+              key={s.session_id}
+              onClick={() => onSelect(s.session_id)}
+              className={cn(
+                "group flex items-start gap-2 rounded-sm px-3 py-2.5 text-left transition-colors",
+                s.session_id === activeSessionId
+                  ? "bg-brass/10 border border-brass/30"
+                  : "border border-transparent hover:bg-surface-1"
+              )}
+            >
+              <MessageSquare className="h-4 w-4 mt-0.5 shrink-0 text-ink-secondary" />
+              <span className="flex-1 min-w-0">
+                <span className="block truncate font-body-sm text-ink-primary">{s.title ?? "New conversation"}</span>
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => onDelete(s.session_id, e)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-ink-secondary hover:text-oxide shrink-0"
+                aria-label="Delete conversation"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </aside>
   );
 }
 

@@ -99,3 +99,4 @@ infra/cdk/cdk.out/
 # graphify extraction cache -- version-keyed build artifact, re-churns on every
 # graphify upgrade. The graph itself (graph.json/html, GRAPH_REPORT.md) is tracked.
 graphify-out/cache/
+kaggle.json

@@ -13,22 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import OPENAI_MODEL
 from insight_generation.generate_insight_docs import extract_numbers, validate_grounding
-
-SYSTEM_PROMPT = """You write one short recommendation (2-3 sentences) for a \
-ride-hailing journey estimate, for a chat/app answer.
-
-Rules, no exceptions:
-- Use ONLY the numbers given in the fact list below, and use them EXACTLY as \
-given (same digits, same rounding). Never round, convert, sum, average, or \
-otherwise compute a new number.
-- Do not introduce any statistic, price, or comparison that is not \
-explicitly in the fact list.
-- If a field's basis is "unavailable", do not mention a value for it -- you \
-may say it isn't available.
-- If a field's basis is "modeled_estimate", say "estimated" when referring \
-to it, never state it as a measured fact.
-- No markdown, no bullet points -- plain prose only.
-"""
+from prompts.journey_narrative_prompt import TEMPLATE as SYSTEM_PROMPT, VERSION as PROMPT_VERSION
 
 
 def _facts_from_components(components: dict) -> dict:
@@ -104,6 +89,8 @@ def _phrase_with_llm(facts: dict) -> str | None:
             ],
             temperature=0.2,
             max_completion_tokens=200,
+            trace_name="journey_narrative.generate",
+            prompt_version=PROMPT_VERSION,
         )
         text = (resp.choices[0].message.content or "").strip()
     except Exception:  # noqa: BLE001

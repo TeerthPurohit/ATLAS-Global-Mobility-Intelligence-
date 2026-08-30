@@ -17,6 +17,10 @@ this tier existed, just with one more (optional) link at the front.
 from __future__ import annotations
 
 import os
+import time
+
+import llm_usage
+import tracing
 
 LOCAL_MODEL_BASE_URL = os.environ.get("LOCAL_MODEL_BASE_URL", "")
 LOCAL_MODEL_API_KEY = os.environ.get("LOCAL_MODEL_API_KEY", "")
@@ -29,13 +33,94 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 from openai import OpenAI  # noqa: E402
 
 
-def chat_completion(*, model: str, **kwargs):
-    """Same call shape as `OpenAI().chat.completions.create(...)`. Tries the
-    local model first if configured, then DeepSeek if configured, falling
-    through to OpenAI with the caller's original `model` on any failure.
-    Callers still wrap this in their own try/except for the "no LLM
-    available at all" case -- this function only handles picking a
+def chat_completion(*, model: str, trace_name: str | None = None, prompt_version: str | None = None, **kwargs):
+    """Same call shape as `OpenAI().chat.completions.create(...)`, plus two
+    optional Phase 4 observability kwargs that never reach the OpenAI SDK:
+    `trace_name`/`prompt_version` tag a Langfuse generation trace (no-op if
+    Langfuse isn't configured, see tracing.py) and both are omitted by
+    callers that don't care about production observability. Token usage is
+    always recorded via llm_usage.py regardless of whether tracing is
+    configured, for the request-scoped cost logging in backend/main.py's
+    timing middleware -- streaming calls included: `stream=True` gets
+    `stream_options={"include_usage": True}` injected automatically (unless
+    the caller already set it) and the returned iterator is wrapped so
+    usage/tracing are recorded once the caller finishes consuming it,
+    exactly like the non-streaming path. Recording is centralized here
+    specifically so a future streaming call site can't forget to wire it up
+    the way `rag_pipeline.answer_stream()` originally did.
+
+    Tries the local model first if configured, then DeepSeek if configured,
+    falling through to OpenAI with the caller's original `model` on any
+    failure. Callers still wrap this in their own try/except for the "no
+    LLM available at all" case -- this function only handles picking a
     provider."""
+    start = time.monotonic()
+    streaming = bool(kwargs.get("stream"))
+    if streaming:
+        kwargs.setdefault("stream_options", {"include_usage": True})
+
+    resp = _dispatch_completion(model=model, **kwargs)
+
+    if streaming:
+        return _instrumented_stream(
+            resp, trace_name=trace_name, prompt_version=prompt_version,
+            messages=kwargs.get("messages", []), start=start,
+        )
+
+    latency_s = time.monotonic() - start
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        llm_usage.record(model=resp.model, prompt_tokens=usage.prompt_tokens, completion_tokens=usage.completion_tokens)
+    if trace_name:
+        tracing.log_generation(
+            name=trace_name,
+            model=resp.model,
+            prompt_version=prompt_version,
+            messages=kwargs.get("messages", []),
+            output=resp.choices[0].message.content or "",
+            prompt_tokens=usage.prompt_tokens if usage else None,
+            completion_tokens=usage.completion_tokens if usage else None,
+            latency_s=latency_s,
+        )
+    return resp
+
+
+def _instrumented_stream(stream, *, trace_name: str | None, prompt_version: str | None, messages: list[dict], start: float):
+    """Transparently re-yields every chunk from `stream` unchanged, so a
+    caller's existing `for chunk in stream:` loop needs no restructuring --
+    only accumulating usage/text on the side and recording once the caller
+    stops iterating (StopIteration or an early `break`/exception both hit
+    the `finally`)."""
+    accumulated_text = ""
+    resp_model = None
+    usage = None
+    try:
+        for chunk in stream:
+            if getattr(chunk, "model", None):
+                resp_model = chunk.model
+            if getattr(chunk, "usage", None):
+                usage = chunk.usage
+            if chunk.choices:
+                delta = chunk.choices[0].delta.content or ""
+                accumulated_text += delta
+            yield chunk
+    finally:
+        if usage is not None and resp_model is not None:
+            llm_usage.record(model=resp_model, prompt_tokens=usage.prompt_tokens, completion_tokens=usage.completion_tokens)
+        if trace_name:
+            tracing.log_generation(
+                name=trace_name,
+                model=resp_model or "unknown",
+                prompt_version=prompt_version,
+                messages=messages,
+                output=accumulated_text,
+                prompt_tokens=usage.prompt_tokens if usage else None,
+                completion_tokens=usage.completion_tokens if usage else None,
+                latency_s=time.monotonic() - start,
+            )
+
+
+def _dispatch_completion(*, model: str, **kwargs):
     if LOCAL_MODEL_BASE_URL:
         try:
             client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL)

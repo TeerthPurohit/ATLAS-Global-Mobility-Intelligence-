@@ -16,7 +16,12 @@ from loguru import logger
 
 from backend.services import platform_service
 
+# /health is intentionally on its own ungated router: it's the one endpoint
+# a load balancer, container healthcheck, or the pre-login nav bar needs to
+# reach without a session. Every other platform endpoint below requires
+# auth (see backend/main.py's include_router for router_protected).
 router = APIRouter(tags=["platform"])
+router_protected = APIRouter(tags=["platform"])
 
 
 @router.get("/health")
@@ -27,7 +32,7 @@ def health() -> dict:
     return result
 
 
-@router.get("/dashboard/summary")
+@router_protected.get("/dashboard/summary")
 def dashboard_summary() -> dict:
     logger.info("GET /dashboard/summary step=start")
     result = platform_service.get_dashboard_summary()
@@ -35,7 +40,7 @@ def dashboard_summary() -> dict:
     return result
 
 
-@router.get("/warehouse/stats")
+@router_protected.get("/warehouse/stats")
 def warehouse_stats() -> dict:
     logger.info("GET /warehouse/stats step=start")
     result = platform_service.get_warehouse_stats()
@@ -43,7 +48,7 @@ def warehouse_stats() -> dict:
     return result
 
 
-@router.get("/warehouse/tables")
+@router_protected.get("/warehouse/tables")
 def warehouse_tables() -> list[dict]:
     logger.info("GET /warehouse/tables step=start")
     result = platform_service.get_warehouse_tables()
@@ -51,7 +56,7 @@ def warehouse_tables() -> list[dict]:
     return result
 
 
-@router.get("/models/metrics")
+@router_protected.get("/models/metrics")
 def model_metrics() -> dict:
     logger.info("GET /models/metrics step=start")
     result = {
@@ -62,7 +67,7 @@ def model_metrics() -> dict:
     return result
 
 
-@router.get("/marts/zone_hourly_demand")
+@router_protected.get("/marts/zone_hourly_demand")
 def mart_zone_hourly_demand() -> list[dict]:
     logger.info("GET /marts/zone_hourly_demand step=start")
     result = platform_service.get_hourly_demand_profile()
@@ -70,7 +75,7 @@ def mart_zone_hourly_demand() -> list[dict]:
     return result
 
 
-@router.get("/marts/zone_demand_totals")
+@router_protected.get("/marts/zone_demand_totals")
 def mart_zone_demand_totals() -> list[dict]:
     logger.info("GET /marts/zone_demand_totals step=start")
     result = platform_service.get_zone_demand_totals()
@@ -78,7 +83,7 @@ def mart_zone_demand_totals() -> list[dict]:
     return result
 
 
-@router.get("/algorithms/benchmarks")
+@router_protected.get("/algorithms/benchmarks")
 def algorithm_benchmarks() -> dict:
     logger.info("GET /algorithms/benchmarks step=start")
     result = platform_service.get_algorithm_benchmarks()
@@ -86,7 +91,7 @@ def algorithm_benchmarks() -> dict:
     return result
 
 
-@router.get("/pipeline/status")
+@router_protected.get("/pipeline/status")
 def pipeline_status() -> dict:
     logger.info("GET /pipeline/status step=start")
     result = platform_service.get_pipeline_status()
@@ -94,7 +99,7 @@ def pipeline_status() -> dict:
     return result
 
 
-@router.get("/capabilities/summary")
+@router_protected.get("/capabilities/summary")
 def capability_summary() -> dict:
     """Per-capability supported/unsupported counts across every registered
     city, counted from the registries themselves -- never a hardcoded total."""
@@ -104,7 +109,17 @@ def capability_summary() -> dict:
     return result
 
 
-@router.get("/insights")
+@router_protected.get("/rag/metrics")
+def rag_metrics() -> dict:
+    """Semantic-cache hit rate + cumulative LLM token/cost since this
+    process started (Phase 4 observability)."""
+    logger.info("GET /rag/metrics step=start")
+    result = platform_service.get_rag_metrics()
+    logger.info("GET /rag/metrics step=done")
+    return result
+
+
+@router_protected.get("/insights")
 def insights(limit: int = Query(20, ge=1, le=100)) -> list[dict]:
     logger.info("GET /insights step=start limit={}", limit)
     result = platform_service.get_insight_docs(limit=limit)

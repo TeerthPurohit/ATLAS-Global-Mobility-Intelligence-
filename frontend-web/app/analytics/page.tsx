@@ -282,7 +282,7 @@ export default function AnalyticsPage() {
                     <h4 className="font-section-md capitalize">{metric.replace(/_/g, " ")}</h4>
                     <span className="font-label-sm text-ink-muted">{period}</span>
                   </div>
-                  <TrendSparkline data={data as number[]} color="#c9922a" />
+                  <TrendSparkline data={data as number[]} color="#6c5ce7" />
                   <div className="mt-4 flex justify-between font-body-sm text-ink-muted">
                     <span>{(data as number[])[0]?.toFixed(1) || "—"}</span>
                     <span>{(data as number[])[(data as number[]).length - 1]?.toFixed(1) || "—"}</span>

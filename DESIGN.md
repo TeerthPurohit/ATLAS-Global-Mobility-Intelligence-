@@ -17,6 +17,20 @@
 > never implemented and has been removed from the nav bar rather than left
 > as a non-functional stub; do not re-add it without also building it.
 
+> **2026-08-30 theme note**: Sections 04 (Visual Language), 10 (Color
+> Tokens), and 40 (Dark Theme) below describe a slate/obsidian dark
+> enterprise palette that was never actually shipped — the real token
+> system in `frontend-web/app/globals.css` was a "parchment/brass" theme,
+> dark by default. Per direct user request, the app was reskinned to a
+> **light-primary** theme: lavender canvas (`--surface-0`), white cards
+> (`--surface-1`), and an indigo/teal/coral accent triad (`--brass`
+> repurposed as the indigo primary accent `#6c5ce7`, `--verdigris` as teal
+> success `#14b8a6`, `--oxide` as coral danger `#f2545b`), plus
+> `--chart-sky` / `--chart-amber` / `--chart-pink` for bento-style KPI
+> tiles. Dark mode still exists as an opt-in fallback via
+> `data-theme="dark"`. `globals.css` is the source of truth; sections
+> 04/10/40's specific hex values below are historical and not current.
+
 ---
 
 ## Table of Contents

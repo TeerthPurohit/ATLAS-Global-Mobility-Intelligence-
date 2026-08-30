@@ -3,5 +3,5 @@ xgboost_demand_v1,demand,xgboost,v2,models/xgboost_model/xgb_model.json,2024-01/
 ewma_fallback_v1,demand,ewma,v1,models/ewma_baseline/ewma_baseline_metadata.json,2024-01/2024-03/2024-06,active,models/ewma_baseline/ewma_baseline_metadata.json
 xgboost_fare_v1,fare,xgboost,v1,models/fare_prediction/fare_xgb_model.json,2024-01/2024-03/2024-06,active,models/fare_prediction/fare_xgb_metadata.json
 journey_predictors_v1,journey,rule_based_ensemble,v1,backend/predictors/journey_predictors.py,n/a,active,docs/adr/ADR-007-predictor-basis-field.md
-xgboost_congestion_v1,congestion,xgboost,v1,models/congestion/congestion_model.json,2024-01/2026-03/2026-04,active,models/congestion/congestion_metadata.json
+xgboost_congestion_v1,congestion,xgboost,v1,models/congestion/congestion_model.json,(stream/2026-03/2026-04,active,models/congestion/congestion_metadata.json
 xgboost_eta_quantile_v1,eta,xgboost_quantile,v1,models/eta/eta_p50_model.json,2024-01/2026-03/2026-04,active,models/eta/eta_metadata.json

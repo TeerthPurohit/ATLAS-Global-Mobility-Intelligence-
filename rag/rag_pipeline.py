@@ -29,20 +29,10 @@ from llm_client import chat_completion
 from nl_to_sql import query_plan_agent, sql_agent
 from nl_to_sql.nyc_schema import NYC_SCHEMA
 from nl_to_sql.query_plan import CityMobilitySchema
+from prompts.synthesis_prompt import TEMPLATE as SYNTHESIS_SYSTEM_PROMPT, VERSION as SYNTHESIS_PROMPT_VERSION
 from router.query_classifier import EXPLANATORY, NUMERIC, classify
 import semantic_cache
 import session_store
-
-SYNTHESIS_SYSTEM_PROMPT = """Answer the user's question in 2-4 plain-language \
-sentences using ONLY facts and numbers that literally appear in the \
-retrieved context below. Do not calculate, round, infer, or add any number, \
-statistic, or comparison that isn't already stated in the context. If the \
-context doesn't fully answer the question, say plainly what it does cover \
-and note the rest isn't available -- never guess.
-
-Retrieved context:
-{context}
-"""
 
 
 _MONEY_COLS = ("fare", "amount", "price", "cost", "tip", "toll", "revenue")
@@ -129,6 +119,8 @@ def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
             ],
             temperature=0.2,
             max_completion_tokens=250,
+            trace_name="rag_pipeline.synthesize_explanatory",
+            prompt_version=SYNTHESIS_PROMPT_VERSION,
         )
         text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # noqa: BLE001
@@ -172,6 +164,7 @@ def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COL
 def answer(
     question: str, session_id: str | None = None, db_path: Path = DEFAULT_DB_PATH,
     schema: CityMobilitySchema = NYC_SCHEMA, allow_explanatory: bool = True, collection: str = DEFAULT_COLLECTION,
+    user_id: int | None = None,
 ) -> dict:
     active_session_id = session_id or str(uuid.uuid4())
     route = classify(question)
@@ -187,24 +180,24 @@ def answer(
         }
 
     res["session_id"] = active_session_id
-    session_store.save_message(active_session_id, "user", question)
-    session_store.save_message(active_session_id, "assistant", res["answer"], route=res["route"], sql=res.get("sql"))
+    session_store.save_message(active_session_id, "user", question, user_id=user_id)
+    session_store.save_message(active_session_id, "assistant", res["answer"], route=res["route"], sql=res.get("sql"), user_id=user_id)
     return res
 
 
 def answer_stream(
-    question: str, session_id: str | None = None, collection: str = DEFAULT_COLLECTION,
+    question: str, session_id: str | None = None, collection: str = DEFAULT_COLLECTION, user_id: int | None = None,
 ) -> Generator[dict, None, None]:
     """Streaming generator variant yielding tokens/chunks and final complete payload."""
     active_session_id = session_id or str(uuid.uuid4())
     route = classify(question)
 
-    session_store.save_message(active_session_id, "user", question)
+    session_store.save_message(active_session_id, "user", question, user_id=user_id)
 
     if route == NUMERIC:
         res = _answer_numeric(question)
         res["session_id"] = active_session_id
-        session_store.save_message(active_session_id, "assistant", res["answer"], route=NUMERIC, sql=res.get("sql"))
+        session_store.save_message(active_session_id, "assistant", res["answer"], route=NUMERIC, sql=res.get("sql"), user_id=user_id)
         yield {"type": "chunk", "text": res["answer"]}
         yield {"type": "done", "payload": res}
         return
@@ -222,7 +215,7 @@ def answer_stream(
             "sources": [],
             "session_id": active_session_id,
         }
-        session_store.save_message(active_session_id, "assistant", fallback_ans, route=EXPLANATORY)
+        session_store.save_message(active_session_id, "assistant", fallback_ans, route=EXPLANATORY, user_id=user_id)
         yield {"type": "chunk", "text": fallback_ans}
         yield {"type": "done", "payload": payload}
         return
@@ -241,8 +234,16 @@ def answer_stream(
             temperature=0.2,
             max_completion_tokens=250,
             stream=True,
+            trace_name="rag_pipeline.synthesize_explanatory_stream",
+            prompt_version=SYNTHESIS_PROMPT_VERSION,
         )
         for chunk in stream:
+            if not chunk.choices:
+                # The final chunk of a stream_options={"include_usage": True}
+                # response carries usage with an empty choices list (llm_client.py
+                # injects this automatically now for token/cost recording) --
+                # skip it here rather than indexing into an empty list.
+                continue
             token = chunk.choices[0].delta.content or ""
             if token:
                 accumulated_text += token
@@ -266,7 +267,7 @@ def answer_stream(
         "sources": [_hit_source(h) for h in hits],
         "session_id": active_session_id,
     }
-    session_store.save_message(active_session_id, "assistant", final_text, route=EXPLANATORY)
+    session_store.save_message(active_session_id, "assistant", final_text, route=EXPLANATORY, user_id=user_id)
     yield {"type": "done", "payload": payload}
 
 

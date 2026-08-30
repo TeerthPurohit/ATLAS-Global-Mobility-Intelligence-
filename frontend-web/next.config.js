@@ -14,6 +14,20 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "@tanstack/react-query"],
   },
+  // Reverse-proxies the browser's /api/* calls (incl. the /api/chat/stream
+  // WebSocket -- Next's rewrite proxy supports upgrade requests for
+  // external destinations) to the FastAPI backend server-side, so the
+  // backend's real host/port is never sent to the browser. BACKEND_URL is
+  // read here (server-only, no NEXT_PUBLIC_ prefix) -- never inlined into
+  // the client bundle.
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${process.env.BACKEND_URL ?? "http://localhost:8000"}/:path*`,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

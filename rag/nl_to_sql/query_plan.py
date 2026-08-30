@@ -69,7 +69,25 @@ class QueryPlan:
 
     @staticmethod
     def from_dict(data: dict) -> "QueryPlan":  # noqa: UP037
+        """Raises ValueError uniformly for a malformed plan *shape* (missing
+        required key, wrong-typed field) rather than letting a KeyError/
+        AttributeError/TypeError leak from whatever line first touches the
+        bad value -- this is the one place every untrusted-dict caller
+        (sql_agent.py, query_plan_agent.py, mcp_server/server.py) builds a
+        QueryPlan, so the check belongs here once, not in each caller."""
+        if not isinstance(data, dict):
+            raise ValueError(f"QueryPlan data must be a dict, got {type(data).__name__}")
+        missing = [k for k in ("intent", "metric") if k not in data]
+        if missing:
+            raise ValueError(f"QueryPlan data missing required key(s): {missing}")
+        for key in ("intent", "metric", "group_by"):
+            value = data.get(key)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"QueryPlan {key!r} must be a string, got {type(value).__name__}")
+
         filters_data = data.get("filters") or {}
+        if not isinstance(filters_data, dict):
+            raise ValueError(f"QueryPlan 'filters' must be a dict, got {type(filters_data).__name__}")
         date_range = filters_data.get("date_range")
         filters = QueryFilters(
             hour=filters_data.get("hour"),

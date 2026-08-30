@@ -21,6 +21,7 @@ from loguru import logger
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from backend.registry import cities as cities_registry
 from backend.schemas import (
     AnalyticsHistoryResponse,
     AnalyticsInsightsResponse,
@@ -65,10 +66,23 @@ def _response_payload(row: dict) -> dict:
 
 @router.get("/summary", response_model=AnalyticsSummaryResponse)
 def summary() -> AnalyticsSummaryResponse:
-    """Analytics summary from real prediction log rows."""
+    """Analytics summary from real prediction log rows.
+
+    `cities_served`/`top_cities` are scoped to the city registry actually
+    seeded today (one row, `nyc` -- ADR-012/013), not to every distinct
+    `city_id` ever logged: the prediction_log table predates the collapse
+    to NYC-only and still carries a handful of rows from the removed
+    multi-city layer (e.g. `FR_MARSEILLE`, `IN_MUMBAI`). Counting those
+    made an NYC-only platform report "3 cities served" -- real log rows,
+    but stale product state. `total_predictions` still counts every row;
+    that field is a lifetime request count, not a claim about current
+    coverage, so the pre-migration rows stay real history there.
+    """
     logger.info("GET /api/analytics/summary step=start")
     history = prediction_log.get_recent_predictions(limit=_HISTORY_SCAN_LIMIT)
     total_predictions = len(history)
+    registered_city = cities_registry.get_city()
+    current_city_id = registered_city.get("id") if registered_city else None
 
     cities: dict[str, int] = {}
     parsed_dates = []
@@ -89,15 +103,19 @@ def summary() -> AnalyticsSummaryResponse:
             "end": max(parsed_dates).isoformat(),
         }
 
+    current_cities = {cid: count for cid, count in cities.items() if cid == current_city_id} if current_city_id else cities
     top_cities = [
         {"city_id": city_id, "predictions": count}
-        for city_id, count in sorted(cities.items(), key=lambda kv: kv[1], reverse=True)[:10]
+        for city_id, count in sorted(current_cities.items(), key=lambda kv: kv[1], reverse=True)[:10]
     ]
 
-    logger.info("GET /api/analytics/summary step=done total_predictions={} cities_served={}", total_predictions, len(cities))
+    logger.info(
+        "GET /api/analytics/summary step=done total_predictions={} cities_served={} stale_city_rows_excluded={}",
+        total_predictions, len(current_cities), len(cities) - len(current_cities),
+    )
     return AnalyticsSummaryResponse(
         total_predictions=total_predictions,
-        cities_served=len(cities),
+        cities_served=len(current_cities),
         date_range=date_range,
         top_cities=top_cities,
     )

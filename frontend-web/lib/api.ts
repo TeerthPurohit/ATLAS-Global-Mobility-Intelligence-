@@ -3,7 +3,10 @@
 // optional: every field on JourneyEstimate is a PredictionOut, and UI code
 // must branch on `basis`, never assume `value` is present/trustworthy.
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// Same-origin, relative -- every call in this file is proxied server-side to
+// the FastAPI backend by next.config.js's rewrites(). The browser never sees
+// the backend's real host/port (no NEXT_PUBLIC_* env var here on purpose).
+export const API_BASE_URL = "/api";
 
 export type Basis = "computed" | "modeled_estimate" | "unavailable";
 
@@ -152,6 +155,7 @@ export async function sendChatMessage(req: ChatRequest): Promise<ChatResponse> {
   const resp = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(req),
   });
   if (!resp.ok) {
@@ -161,11 +165,43 @@ export async function sendChatMessage(req: ChatRequest): Promise<ChatResponse> {
 }
 
 export async function getChatHistory(sessionId: string): Promise<ChatMessage[]> {
-  const resp = await fetch(`${API_BASE_URL}/chat/history/${sessionId}`);
+  const resp = await fetch(`${API_BASE_URL}/chat/history/${sessionId}`, { credentials: "include" });
   if (!resp.ok) {
     throw new Error(`chat/history failed: ${resp.status} ${await resp.text()}`);
   }
   return resp.json();
+}
+
+export interface ChatSessionSummary {
+  session_id: string;
+  title: string | null;
+  last_activity: string;
+  message_count: number;
+}
+
+// Creates a new chat session, or reuses the caller's existing empty one --
+// mirrors ChatGPT/Claude's "New Chat" not piling up blank conversations.
+export async function createChatSession(): Promise<{ session_id: string }> {
+  const resp = await fetch(`${API_BASE_URL}/chat/sessions`, { method: "POST", credentials: "include" });
+  if (!resp.ok) {
+    throw new Error(`chat/sessions create failed: ${resp.status} ${await resp.text()}`);
+  }
+  return resp.json();
+}
+
+export async function listChatSessions(): Promise<ChatSessionSummary[]> {
+  const resp = await fetch(`${API_BASE_URL}/chat/sessions`, { credentials: "include" });
+  if (!resp.ok) {
+    throw new Error(`chat/sessions list failed: ${resp.status} ${await resp.text()}`);
+  }
+  return resp.json();
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const resp = await fetch(`${API_BASE_URL}/chat/sessions/${sessionId}`, { method: "DELETE", credentials: "include" });
+  if (!resp.ok) {
+    throw new Error(`chat/sessions delete failed: ${resp.status} ${await resp.text()}`);
+  }
 }
 
 // Frame shapes yielded by WS /chat/stream (backend/routers/chat.py, rag/rag_pipeline.py):
@@ -228,7 +264,10 @@ export function streamChat(
   req: ChatRequest,
   handlers: { onFrame: (frame: ChatStreamFrame) => void; onError?: (err: Event) => void; onClose?: () => void }
 ): () => void {
-  const wsUrl = `${API_BASE_URL.replace(/^http/, "ws")}/chat/stream`;
+  // API_BASE_URL is a relative path now (proxied), so build the ws(s):// URL
+  // from the current page's own origin instead of string-swapping http->ws.
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${wsProtocol}//${window.location.host}${API_BASE_URL}/chat/stream`;
   const ws = new WebSocket(wsUrl);
   ws.onopen = () => ws.send(JSON.stringify(req));
   ws.onmessage = (evt) => handlers.onFrame(JSON.parse(evt.data));
@@ -475,10 +514,59 @@ export interface AnalyticsTrendsResponse {
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(`${API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
+    credentials: "include",
     ...init,
   });
   if (!resp.ok) {
     throw new Error(`${path} failed: ${resp.status} ${await resp.text()}`);
+  }
+  return resp.json();
+}
+
+// --- Auth (backend/routers/auth.py) ---
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  created_at: string;
+}
+
+// backend/errors.py's DomainError handler always returns {"error": {"code", "message"}} --
+// surface .message directly rather than the generic fetchJson error text, so
+// the login/signup forms can show "Invalid email or password" instead of a raw HTTP error.
+async function postAuth(path: "/auth/signup" | "/auth/login", email: string, password: string): Promise<AuthUser> {
+  const resp = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => null);
+    throw new Error(body?.error?.message ?? `${path} failed: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+export async function signup(email: string, password: string): Promise<AuthUser> {
+  return postAuth("/auth/signup", email, password);
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  return postAuth("/auth/login", email, password);
+}
+
+export async function logout(): Promise<void> {
+  await fetchJson("/auth/logout", { method: "POST" });
+}
+
+// Returns null if not logged in (401) rather than throwing -- that's the
+// expected, non-error state on first load / after logout.
+export async function getMe(): Promise<AuthUser | null> {
+  const resp = await fetch(`${API_BASE_URL}/auth/me`, { credentials: "include" });
+  if (resp.status === 401) return null;
+  if (!resp.ok) {
+    throw new Error(`auth/me failed: ${resp.status} ${await resp.text()}`);
   }
   return resp.json();
 }

@@ -1,6 +1,7 @@
 """One happy-path test per backend route (standards.md testing bar)."""
 
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,16 @@ pytestmark = pytest.mark.skipif(not WAREHOUSE_PATH.exists(), reason="warehouse n
 def client():
     with TestClient(app) as c:  # triggers the startup event once
         yield c
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _logged_in(client):
+    # /chat* requires login (backend/routers/chat.py). TestClient's cookie
+    # jar persists across calls on this shared client instance, so signing
+    # up once here covers every chat test below.
+    email = f"test-{uuid.uuid4()}@example.com"
+    resp = client.post("/auth/signup", json={"email": email, "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
 
 
 def test_predict_demand_happy_path(client):
@@ -57,6 +68,107 @@ def test_predict_fare_happy_path(client):
     body = resp.json()
     assert body["predicted_fare"] > 0
     assert body["model"]
+
+
+# ── /models/* -- raw-feature wrappers over each trained model artifact ──
+
+
+def test_models_demand_happy_path(client):
+    resp = client.get(
+        "/models/demand",
+        params={
+            "hour": 8, "day_of_week": 1, "is_weekend": 0, "lag_1h": 50, "lag_24h": 45,
+            "lag_168h": 48, "ewma": 47, "rolling_7d_avg": 46, "temperature_c": 18, "precipitation_mm": 0,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["predicted_trips_per_hour"] > 0
+    assert body["model"] == "xgboost_demand_v1"
+
+
+def test_models_congestion_happy_path(client):
+    resp = client.get(
+        "/models/congestion",
+        params={
+            "trip_distance": 3.2, "free_flow_duration_min": 12, "hour": 17, "day_of_week": 4,
+            "is_holiday": 0, "temperature_c": 18, "precipitation_mm": 0, "demand_index": 6,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["predicted_multiplier"] > 0
+    assert body["model"] == "xgboost_congestion_v1"
+
+
+def test_models_fare_happy_path(client):
+    resp = client.get(
+        "/models/fare",
+        params={
+            "pickup_location_id": 132, "dropoff_location_id": 230, "pickup_hour": 8,
+            "pickup_day_of_week": 1, "trip_distance": 12.5,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["predicted_fare"] > 0
+    assert body["model"] == "xgboost_fare_v1"
+
+
+def test_models_fare_unknown_zone_is_prediction_failed(client):
+    resp = client.get(
+        "/models/fare",
+        params={
+            "pickup_location_id": 999999, "dropoff_location_id": 230, "pickup_hour": 8,
+            "pickup_day_of_week": 1, "trip_distance": 5,
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "PREDICTION_FAILED"
+
+
+def test_models_eta_happy_path(client):
+    # Known-broken model (near-zero measured p10-p90 coverage, tracked
+    # separately) -- this only asserts the endpoint wires through to real
+    # booster predictions and surfaces the real measured coverage, not that
+    # the range is currently well-calibrated.
+    resp = client.get(
+        "/models/eta",
+        params={
+            "trip_distance": 3.2, "free_flow_duration_min": 12, "hour": 17, "day_of_week": 4,
+            "is_holiday": 0, "temperature_c": 18, "precipitation_mm": 0, "demand_index": 6,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["model"] == "xgboost_quantile_eta_v1"
+    assert isinstance(body["eta_p50_minutes"], float)
+    assert body["measured_p10_p90_coverage"] is not None
+
+
+_HOURLY_WINDOW = [30, 32, 35, 40, 45, 50, 55, 60, 65, 60, 55, 50, 45, 42, 40, 38, 35, 33, 31, 30, 28, 26, 25, 27]
+
+
+def test_models_demand_lstm_happy_path(client):
+    resp = client.post("/models/demand/lstm", json={"hourly_trip_counts": _HOURLY_WINDOW})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["predicted_next_hour_trips"] > 0
+    assert body["model"] == "lstm_demand_v1"
+
+
+def test_models_demand_transformer_happy_path(client):
+    resp = client.post("/models/demand/transformer", json={"hourly_trip_counts": _HOURLY_WINDOW})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["predicted_next_hour_trips"] > 0
+    assert body["model"] == "transformer_demand_v1"
+
+
+def test_models_demand_lstm_wrong_window_length_is_invalid_request(client):
+    resp = client.post("/models/demand/lstm", json={"hourly_trip_counts": [1, 2, 3]})
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_list_zones_happy_path(client):

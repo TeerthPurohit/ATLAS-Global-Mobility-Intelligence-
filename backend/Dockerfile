@@ -17,7 +17,6 @@ RUN pip install --no-cache-dir -r requirements-backend.txt
 # Copy application code (data/models/backend/rag are bind-mounted by docker-compose.yml at runtime)
 COPY backend ./backend
 COPY rag ./rag
-COPY models ./models
 COPY algorithms ./algorithms
 COPY dbt_project ./dbt_project
 

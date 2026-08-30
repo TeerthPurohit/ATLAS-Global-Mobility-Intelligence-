@@ -34,7 +34,7 @@ def _public_route(route: str) -> str:
     return route if route in _PUBLIC_ROUTES else "explanatory"
 
 
-def answer_question(question: str, session_id: str | None = None) -> dict[str, Any]:
+def answer_question(question: str, session_id: str | None = None, user_id: int | None = None) -> dict[str, Any]:
     tier = cities_registry.get_chat_tier()
     logger.info("rag_service.answer_question step=routed tier={}", tier)
     res = rag_pipeline.answer(
@@ -43,12 +43,15 @@ def answer_question(question: str, session_id: str | None = None) -> dict[str, A
         schema=NYC_SCHEMA,
         allow_explanatory=(tier == "full_rag"),
         collection=rag_pipeline.DEFAULT_COLLECTION,
+        user_id=user_id,
     )
     res["route"] = _public_route(res["route"])
     return res
 
 
-def stream_answer(question: str, session_id: str | None = None) -> Generator[dict[str, Any], None, None]:
+def stream_answer(
+    question: str, session_id: str | None = None, user_id: int | None = None
+) -> Generator[dict[str, Any], None, None]:
     """Streaming twin of answer_question -- same tier dispatch, so WS
     /chat/stream and POST /chat behave identically.
 
@@ -64,6 +67,7 @@ def stream_answer(question: str, session_id: str | None = None) -> Generator[dic
             db_path=rag_pipeline.DEFAULT_DB_PATH,
             schema=NYC_SCHEMA,
             allow_explanatory=False,
+            user_id=user_id,
         )
         res["route"] = _public_route(res["route"])
         yield {"type": "chunk", "text": res["answer"]}
@@ -72,10 +76,19 @@ def stream_answer(question: str, session_id: str | None = None) -> Generator[dic
     yield from rag_pipeline.answer_stream(
         question=question, session_id=session_id,
         collection=rag_pipeline.DEFAULT_COLLECTION,
+        user_id=user_id,
     )
 
 
-def get_history(session_id: str) -> list[dict[str, Any]] | None:
-    if not session_store.session_exists(session_id):
+def get_history(session_id: str, user_id: int | None = None) -> list[dict[str, Any]] | None:
+    if not session_store.session_exists(session_id, user_id=user_id):
         return None
-    return session_store.get_session_history(session_id)
+    return session_store.get_session_history(session_id, user_id=user_id)
+
+
+def list_sessions(user_id: int) -> list[dict[str, Any]]:
+    return session_store.list_sessions(user_id=user_id)
+
+
+def delete_history(session_id: str, user_id: int) -> bool:
+    return session_store.delete_session(session_id, user_id=user_id)

@@ -5,6 +5,7 @@ __pycache__
 *.pyc
 node_modules
 data
+models
 notebooks
 frontend/dist
 frontend/node_modules

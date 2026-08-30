@@ -16,7 +16,7 @@ export function Badge({ className, basis, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-sm px-3 py-1 font-label-sm",
+        "inline-flex items-center rounded-full px-3 py-1 font-label-sm",
         basis ? basisClasses[basis] : "bg-surface-2 text-ink-secondary border border-surface-border",
         className
       )}

@@ -42,6 +42,31 @@ EMBED_DIM = 1536  # matches embeddings/build_vector_store.py's OpenAI model
 SIMILARITY_THRESHOLD = 0.97
 TTL_SECONDS = 24 * 60 * 60
 
+# Process-local hit/miss counters (Phase 4) -- not Redis-backed, so this is
+# "hit rate since this process started," not a historical/cross-instance
+# metric (rule 7: no shared-counter infra for a solo free-tier project).
+_HITS = 0
+_MISSES = 0
+
+
+def _record_hit() -> None:
+    global _HITS
+    _HITS += 1
+
+
+def _record_miss() -> None:
+    global _MISSES
+    _MISSES += 1
+
+
+def get_stats() -> dict:
+    total = _HITS + _MISSES
+    return {
+        "hits": _HITS,
+        "misses": _MISSES,
+        "hit_rate": (_HITS / total) if total else None,
+    }
+
 
 _EMBED_RETRY_ATTEMPTS = 4
 _EMBED_RETRY_BASE_DELAY_S = 2.0
@@ -114,15 +139,18 @@ def get(question: str, namespace: str, url: str = QDRANT_URL) -> dict[str, Any] 
         score_threshold=SIMILARITY_THRESHOLD,
     ).points
     if not hits:
+        _record_miss()
         return None
 
     payload = hits[0].payload
     if time.time() - payload["cached_at"] > TTL_SECONDS:
+        _record_miss()
         return None  # expired hit treated as a miss, not silently served
 
     result = dict(payload["result"])
     result["cache_hit"] = True
     result["cache_similarity"] = float(hits[0].score)
+    _record_hit()
     return result
 
 

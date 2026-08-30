@@ -39,6 +39,7 @@ def _generate_paraphrases(question: str, n: int) -> list[str]:
             {"role": "user", "content": question},
         ],
         max_completion_tokens=300,
+        trace_name="augment_training_data.generate_paraphrases",
     )
     text = (resp.choices[0].message.content or "").strip()
     lines = [line.strip() for line in text.splitlines() if line.strip()]

@@ -16,6 +16,13 @@ from loguru import logger
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+RAG_DIR = REPO_ROOT / "rag"
+if str(RAG_DIR) not in sys.path:
+    sys.path.insert(0, str(RAG_DIR))
+
+import llm_usage  # noqa: E402
+import semantic_cache  # noqa: E402
+
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 DBT_TARGET = REPO_ROOT / "dbt_project" / "target"
 
@@ -124,6 +131,21 @@ def get_algorithm_benchmarks() -> dict:
     return {
         "kdtree": _artifacts.get("kdtree_benchmark"),
         "pagerank": _artifacts.get("pagerank_hubs"),
+    }
+
+
+def get_rag_metrics() -> dict:
+    """Semantic-cache hit rate + cumulative LLM token/cost (Phase 4). Both
+    are process-local counters (rule 7: no Redis/shared-counter infra for a
+    solo free-tier project) -- "since this backend process started," not a
+    historical total across restarts. Uses `llm_usage.lifetime_summary()`,
+    not `summary()` -- the latter is a per-request counter that
+    backend/main.py's timing middleware resets at the start of every
+    request, including this endpoint's own, so it would always read back
+    empty from in here."""
+    return {
+        "semantic_cache": semantic_cache.get_stats(),
+        "llm_usage": llm_usage.lifetime_summary(),
     }
 
 

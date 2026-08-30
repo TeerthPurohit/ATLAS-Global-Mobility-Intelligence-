@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class DemandPrediction(BaseModel):
@@ -24,6 +24,61 @@ class FarePrediction(BaseModel):
     hour: int
     predicted_fare: float
     model: str
+
+
+class DemandFeaturesPrediction(BaseModel):
+    """Raw-feature surface over the same demand model `/predict/demand`
+    uses -- caller supplies the exact lag/EWMA/rolling features directly
+    instead of a zone_id the service resolves them from."""
+
+    predicted_trips_per_hour: float
+    model: str
+    test_rmse: float | None = None
+
+
+class CongestionPrediction(BaseModel):
+    """Multiplier applied to free-flow travel time to get expected real
+    duration (actual_duration ~= free_flow_duration_min * multiplier)."""
+
+    predicted_multiplier: float
+    model: str
+    test_rmse: float | None = None
+
+
+class FareFeaturesPrediction(BaseModel):
+    """Raw-feature surface over the same fare model `/predict/fare` uses --
+    caller supplies `trip_distance` directly instead of pickup/dropoff
+    lat/lon the service derives it from."""
+
+    predicted_fare: float
+    model: str
+    test_rmse: float | None = None
+
+
+class EtaRangePrediction(BaseModel):
+    """p10/p50/p90 trip-duration minutes. `measured_p10_p90_coverage` is the
+    real measured interval coverage on held-out data -- currently far below
+    its 0.8 nominal target (a known, separately-tracked training bug), never
+    hidden from the response."""
+
+    eta_p10_minutes: float
+    eta_p50_minutes: float
+    eta_p90_minutes: float
+    model: str
+    measured_p10_p90_coverage: float | None = None
+
+
+class DemandSequenceRequest(BaseModel):
+    """Last `window` (24) hourly trip counts, oldest first, for the LSTM/
+    Transformer next-hour demand endpoints."""
+
+    hourly_trip_counts: list[float]
+
+
+class DemandSequencePrediction(BaseModel):
+    predicted_next_hour_trips: float
+    model: str
+    test_rmse: float | None = None
 
 
 class Zone(BaseModel):
@@ -133,6 +188,36 @@ class ChatMessage(BaseModel):
     timestamp: str
 
 
+class NewSessionResponse(BaseModel):
+    session_id: str
+
+
+class ChatSessionSummary(BaseModel):
+    session_id: str
+    title: str | None = None
+    last_activity: str
+    message_count: int
+
+
+# ── Auth (backend/routers/auth.py, backend/services/auth_service.py) ───────
+
+
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    created_at: datetime
+
+
 # ── Global Mobility Domain Model (SPEC-013 FR-8/FR-9) ──────────────────────
 
 
@@ -149,6 +234,9 @@ class ErrorCode(str, Enum):
     CHAT_FAILED = "CHAT_FAILED"
     SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
     INVALID_REQUEST = "INVALID_REQUEST"
+    AUTH_EMAIL_TAKEN = "AUTH_EMAIL_TAKEN"
+    AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
+    AUTH_NOT_AUTHENTICATED = "AUTH_NOT_AUTHENTICATED"
 
 
 class ErrorDetail(BaseModel):

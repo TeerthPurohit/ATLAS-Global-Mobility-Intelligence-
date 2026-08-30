@@ -6,11 +6,18 @@ from __future__ import annotations
 import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
 from loguru import logger
 
 load_dotenv()  # API keys must be set before adapters read os.environ at import time
+
+RAG_DIR = Path(__file__).resolve().parent.parent / "rag"
+if str(RAG_DIR) not in sys.path:
+    sys.path.insert(0, str(RAG_DIR))
+
+import llm_usage  # noqa: E402
 
 # Structured logging (SPEC-013 FR-14 + logging rule: every API logs the steps
 # it goes through and which step it fails). loguru's default sink already
@@ -19,7 +26,7 @@ load_dotenv()  # API keys must be set before adapters read os.environ at import 
 logger.remove()
 logger.add(sys.stderr, level="INFO", format="{time:YYYY-MM-DD HH:mm:ss} {level} {name}: {message}")
 
-from fastapi import FastAPI  # noqa: E402, I001
+from fastapi import Depends, FastAPI  # noqa: E402, I001
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 
@@ -27,8 +34,8 @@ from backend.errors import DomainError  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.routers import chat, city, context, journey, platform, predictions, zones, mobility, analytics  # noqa: E402
-from backend.services import journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
+from backend.routers import auth, chat, city, context, journey, model_predictions, platform, predictions, zones, mobility, analytics  # noqa: E402
+from backend.services import auth_service, journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
 
 # One missing artifact used to take down the whole API: these ran unguarded, so a
@@ -90,6 +97,7 @@ async def log_requests(request, call_next):
     request-start and request-end line, so an error here plus the last step
     line logged inside the handler pinpoints exactly which step failed."""
     start = time.monotonic()
+    llm_usage.reset()
     logger.info("-> {} {}", request.method, request.url.path)
     try:
         response = await call_next(request)
@@ -98,19 +106,37 @@ async def log_requests(request, call_next):
         logger.exception("<- {} {} failed after {:.1f}ms", request.method, request.url.path, elapsed_ms)
         raise
     elapsed_ms = (time.monotonic() - start) * 1000
-    logger.info("<- {} {} {} ({:.1f}ms)", request.method, request.url.path, response.status_code, elapsed_ms)
+    usage = llm_usage.summary()
+    if usage["llm_calls"]:
+        logger.info(
+            "<- {} {} {} ({:.1f}ms, llm_calls={} tokens={} cost_usd={})",
+            request.method, request.url.path, response.status_code, elapsed_ms,
+            usage["llm_calls"], usage["total_tokens"], usage["cost_usd"],
+        )
+    else:
+        logger.info("<- {} {} {} ({:.1f}ms)", request.method, request.url.path, response.status_code, elapsed_ms)
     return response
 
 
-app.include_router(predictions.router)
-app.include_router(zones.router)
-app.include_router(chat.router)
+# auth.router (signup/login/logout/me) and platform.router (just /health)
+# are the only endpoints reachable without a session -- everything else is
+# real ride/demand/fare data and must not be callable by an unauthenticated
+# client, so every other router is gated behind the same session-cookie
+# dependency `GET /auth/me` already uses.
+_REQUIRE_SESSION = [Depends(auth_service.get_current_user)]
+
+app.include_router(auth.router)
 app.include_router(platform.router)
-app.include_router(journey.router)
-app.include_router(city.router)
-app.include_router(mobility.router)
-app.include_router(context.router)
-app.include_router(analytics.router)
+app.include_router(predictions.router, dependencies=_REQUIRE_SESSION)
+app.include_router(model_predictions.router, dependencies=_REQUIRE_SESSION)
+app.include_router(zones.router, dependencies=_REQUIRE_SESSION)
+app.include_router(chat.router, dependencies=_REQUIRE_SESSION)
+app.include_router(platform.router_protected, dependencies=_REQUIRE_SESSION)
+app.include_router(journey.router, dependencies=_REQUIRE_SESSION)
+app.include_router(city.router, dependencies=_REQUIRE_SESSION)
+app.include_router(mobility.router, dependencies=_REQUIRE_SESSION)
+app.include_router(context.router, dependencies=_REQUIRE_SESSION)
+app.include_router(analytics.router, dependencies=_REQUIRE_SESSION)
 
 
 # Alternate API-playground UIs alongside FastAPI's default /docs (Swagger) and

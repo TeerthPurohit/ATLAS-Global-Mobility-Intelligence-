@@ -98,7 +98,7 @@ const ROUTE_LINE_LAYER: maplibregl.AddLayerObject = {
   source: "route-source",
   layout: { "line-join": "round", "line-cap": "round" },
   paint: {
-    "line-color": "#c9922a",
+    "line-color": "#6c5ce7",
     "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 6, 18, 10],
     "line-opacity": 0.9,
     "line-dasharray": [8, 4],
@@ -189,7 +189,7 @@ export function JourneyMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+      style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
       center: [center.longitude, center.latitude],
       zoom: 11,
       attributionControl: false,
@@ -266,8 +266,8 @@ export function JourneyMap({
 
   const PickupMarker = () => (
     <div className="flex flex-col items-center" role="img" aria-label={`Pickup: ${pickupName}`}>
-      <div className="w-3 h-3 rounded-full bg-brass border-2 border-surface-0 shadow-lg animate-pulse" />
-      <div className="mt-1 max-w-[140px] text-center text-[10px] font-medium text-ink-primary bg-surface-0/95 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-md leading-tight">
+      <div className="w-3 h-3 rounded-full bg-brass border-2 border-surface-1 shadow-lg animate-pulse" />
+      <div className="mt-1 max-w-[140px] text-center text-[10px] font-medium text-ink-primary bg-surface-1/95 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-md leading-tight">
         <span className="block text-brass text-[9px] font-semibold uppercase tracking-wide">Pickup</span>
         <span className="block truncate">{pickupName}</span>
       </div>
@@ -276,8 +276,8 @@ export function JourneyMap({
 
   const DropoffMarker = () => (
     <div className="flex flex-col items-center" role="img" aria-label={`Dropoff: ${dropoffName}`}>
-      <div className="w-3 h-3 rounded-full bg-verdigris border-2 border-surface-0 shadow-lg" />
-      <div className="mt-1 max-w-[140px] text-center text-[10px] font-medium text-ink-primary bg-surface-0/95 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-md leading-tight">
+      <div className="w-3 h-3 rounded-full bg-verdigris border-2 border-surface-1 shadow-lg" />
+      <div className="mt-1 max-w-[140px] text-center text-[10px] font-medium text-ink-primary bg-surface-1/95 backdrop-blur-sm px-1.5 py-0.5 rounded shadow-md leading-tight">
         <span className="block text-verdigris text-[9px] font-semibold uppercase tracking-wide">Dropoff</span>
         <span className="block truncate">{dropoffName}</span>
       </div>
@@ -295,7 +295,7 @@ export function JourneyMap({
         {/* Map card */}
         <Card
           className={cn(
-            "overflow-hidden border-2 border-brass/40 p-0 shadow-[0_0_0_1px_rgba(201,146,42,0.15)]",
+            "overflow-hidden border-2 border-brass/40 p-0 shadow-[0_0_0_1px_rgba(108,92,231,0.15)]",
             isFullScreen ? "fixed inset-0 z-50 rounded-none border-0" : "",
             className
           )}
@@ -305,7 +305,7 @@ export function JourneyMap({
             <Map
               key={mapKeyValue}
               initialViewState={{ ...center, zoom: 11 }}
-              mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+              mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
               style={{ width: "100%", height: "100%" }}
               onLoad={() => setMapLoaded(true)}
             >
@@ -364,14 +364,14 @@ export function JourneyMap({
   // Desktop/tablet layout
   return (
     <Card
-      className={cn("overflow-hidden border-2 border-brass/40 p-0 shadow-[0_0_0_1px_rgba(201,146,42,0.15)]", className)}
+      className={cn("overflow-hidden border-2 border-brass/40 p-0 shadow-[0_0_0_1px_rgba(108,92,231,0.15)]", className)}
       style={{ height: mapHeight }}
     >
       <div ref={containerRef} className="h-full w-full" style={{ width: "100%", height: "100%" }}>
         <Map
           key={mapKeyValue}
           initialViewState={{ ...center, zoom: 11 }}
-          mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+          mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
           style={{ width: "100%", height: "100%" }}
           onLoad={() => setMapLoaded(true)}
         >

@@ -121,7 +121,8 @@ export default function SettingsPage() {
             {API_BASE_URL}
           </div>
           <p className="font-body-sm text-ink-secondary mt-1">
-            Read-only. Set <span className="font-mono text-brass">NEXT_PUBLIC_API_BASE_URL</span> environment variable and restart to change.
+            Requests are proxied server-side to the backend -- its real address is never sent to the browser.
+            Read-only. Set <span className="font-mono text-brass">BACKEND_URL</span> in the server environment and restart to change.
           </p>
         </div>
       </Card>

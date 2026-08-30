@@ -18,10 +18,10 @@ export function PulsingStatusDot({ status = "live", className, size = 8 }: Pulsi
   });
 
   const colorMap = {
-    live: "bg-verdigris shadow-[0_0_8px_#6b8f84]",
-    observed: "bg-brass shadow-[0_0_8px_#c9922a]",
+    live: "bg-verdigris shadow-[0_0_8px_#14b8a6]",
+    observed: "bg-brass shadow-[0_0_8px_#6c5ce7]",
     transfer: "bg-sky-400 shadow-[0_0_8px_#38bdf8]",
-    offline: "bg-oxide shadow-[0_0_8px_#8c4a3c]",
+    offline: "bg-oxide shadow-[0_0_8px_#f2545b]",
   };
 
   return (

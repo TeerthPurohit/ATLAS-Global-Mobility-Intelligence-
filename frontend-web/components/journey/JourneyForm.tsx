@@ -29,19 +29,21 @@ const NYC_DROPOFF = { lat: 40.7061, lon: -74.0088, name: "Financial District, Ne
 interface JourneyFormProps {
   onSubmit: (req: JourneyRequest) => void;
   isPending: boolean;
+  initialPickup?: { lat: number; lon: number; name: string };
+  initialDropoff?: { lat: number; lon: number; name: string };
 }
 
-export function JourneyForm({ onSubmit, isPending }: JourneyFormProps) {
+export function JourneyForm({ onSubmit, isPending, initialPickup, initialDropoff }: JourneyFormProps) {
   // Coordinates are stored as plain state — AddressSearch sets them on selection.
   // The form registers them as hidden inputs for validation.
-  const [pickup, setPickup] = useState(NYC_PICKUP);
-  const [dropoff, setDropoff] = useState(NYC_DROPOFF);
+  const [pickup, setPickup] = useState(initialPickup ?? NYC_PICKUP);
+  const [dropoff, setDropoff] = useState(initialDropoff ?? NYC_DROPOFF);
   const [coordError, setCoordError] = useState<string | null>(null);
   // Whether the picked pickup point is inside the served city's zone
   // coverage, from the address's own coordinates -- not user free-text.
   // False means every zone-keyed card degrades honestly rather than
   // pretending the point is in the city.
-  const [inCoverage, setInCoverage] = useState(true);  // the defaults below are in-coverage
+  const [inCoverage, setInCoverage] = useState(isInCoverage(pickup.lat, pickup.lon));
 
   const {
     register,
@@ -50,10 +52,10 @@ export function JourneyForm({ onSubmit, isPending }: JourneyFormProps) {
     formState: { errors },
   } = useForm<FormValues>({
     defaultValues: {
-      pickup_lat:  NYC_PICKUP.lat,
-      pickup_lon:  NYC_PICKUP.lon,
-      dropoff_lat: NYC_DROPOFF.lat,
-      dropoff_lon: NYC_DROPOFF.lon,
+      pickup_lat:  pickup.lat,
+      pickup_lon:  pickup.lon,
+      dropoff_lat: dropoff.lat,
+      dropoff_lon: dropoff.lon,
       departure_time: new Date().toISOString().slice(0, 16),
       vehicle_type: "sedan",
     },

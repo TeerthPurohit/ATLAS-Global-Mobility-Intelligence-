@@ -2,15 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Navigational-instrument token system (design pass, see task brief):
-   dark chart-table palette is the primary, designed-for mode. Light mode is
-   a parchment-dominant fallback, not a polished second identity. */
+/* Aerial-instrument token system (design pass 2026-08-30, see task brief):
+   light lavender/white is the primary, designed-for mode -- a map-first
+   SaaS-analytics look (soft periwinkle canvas, white cards, indigo/teal/
+   coral accents). Dark is now the fallback for users who opt into it. */
 :root {
+  --surface-0: #e7e5fa;
+  --surface-1: #ffffff;
+  --surface-2: #f3f2fc;
+  --surface-border: #e1def6;
+  --parchment: #f4efe4;
+  --ink-primary: #1c1b33;
+  --ink-secondary: #5f5d7a;
+  --ink-muted: #9491ac;
+  --brass: #6c5ce7;
+  --brass-fg: #ffffff;
+  --verdigris: #14b8a6;
+  --oxide: #f2545b;
+  --success: var(--verdigris);
+  --warning: #f5a623;
+  --danger: var(--oxide);
+  /* back-compat alias: components still reference `accent`/`accent-fg` */
+  --accent: var(--brass);
+  --accent-fg: var(--brass-fg);
+  /* extra chart/tile accents for bento-style KPI tiles and badges */
+  --chart-sky: #3b9ee5;
+  --chart-amber: #fb923c;
+  --chart-pink: #f45da8;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+/* Dark fallback -- available via data-theme="dark", no longer the default. */
+:root[data-theme="dark"] {
   --surface-0: #000000;
   --surface-1: #0a0a0a;
   --surface-2: #141414;
   --surface-border: #1f1f1f;
-  --parchment: #f4efe4;
   --ink-primary: #f4efe4;
   --ink-secondary: #b8bfd1;
   --ink-muted: #6e7791;
@@ -18,47 +47,25 @@
   --brass-fg: #1b1002;
   --verdigris: #6b8f84;
   --oxide: #8c4a3c;
-  --success: var(--verdigris);
   --warning: var(--brass);
-  --danger: var(--oxide);
-  /* back-compat alias: components still reference `accent`/`accent-fg` */
-  --accent: var(--brass);
-  --accent-fg: var(--brass-fg);
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-display: "Outfit", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
-}
-
-/* Light fallback -- deliberately not the primary design target. */
-:root[data-theme="light"] {
-  --surface-0: #f4efe4;
-  --surface-1: #ece4d2;
-  --surface-2: #e2d6bc;
-  --surface-border: #cbb98f;
-  --ink-primary: #1b1a17;
-  --ink-secondary: #4a4640;
-  --ink-muted: #7a7466;
-  --brass: #a3701c;
-  --brass-fg: #f4efe4;
-  --verdigris: #4f6b62;
-  --oxide: #7a3d31;
   --accent: var(--brass);
   --accent-fg: var(--brass-fg);
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --surface-0: #f4efe4;
-    --surface-1: #ece4d2;
-    --surface-2: #e2d6bc;
-    --surface-border: #cbb98f;
-    --ink-primary: #1b1a17;
-    --ink-secondary: #4a4640;
-    --ink-muted: #7a7466;
-    --brass: #a3701c;
-    --brass-fg: #f4efe4;
-    --verdigris: #4f6b62;
-    --oxide: #7a3d31;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface-0: #000000;
+    --surface-1: #0a0a0a;
+    --surface-2: #141414;
+    --surface-border: #1f1f1f;
+    --ink-primary: #f4efe4;
+    --ink-secondary: #b8bfd1;
+    --ink-muted: #6e7791;
+    --brass: #c9922a;
+    --brass-fg: #1b1002;
+    --verdigris: #6b8f84;
+    --oxide: #8c4a3c;
+    --warning: var(--brass);
     --accent: var(--brass);
     --accent-fg: var(--brass-fg);
   }

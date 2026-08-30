@@ -73,6 +73,10 @@ def generate_plan(question: str, schema: CityMobilitySchema, model: str) -> Quer
         ],
         temperature=0,
         max_completion_tokens=300,
+        trace_name="query_plan_agent.generate_plan",
+        # No prompt_version: the system content is schema.describe(), a
+        # dynamic per-schema dump rather than a hand-authored rag/prompts/
+        # template -- nothing to version here.
     )
     text = _strip_fences(resp.choices[0].message.content or "")
     return QueryPlan.from_dict(json.loads(text))

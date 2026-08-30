@@ -1,0 +1,77 @@
+{
+  "seed": 42,
+  "zone_ids": null,
+  "date_range": {
+    "train": [
+      "2024-01-02 00:00:00",
+      "2026-01-30 18:00:00"
+    ],
+    "val": [
+      "2026-01-30 19:00:00",
+      "2026-03-31 23:00:00"
+    ],
+    "test": [
+      "2026-04-02 00:00:00",
+      "2026-04-30 23:00:00"
+    ]
+  },
+  "n_rows": {
+    "train": 1099844,
+    "val": 194932,
+    "test": 181367
+  },
+  "window": 24,
+  "hyperparameters": {
+    "d_model": 64,
+    "num_heads": 4,
+    "num_layers": 2,
+    "dim_feedforward": 256,
+    "dropout": 0.1,
+    "batch_size": 512,
+    "epochs": 5,
+    "learning_rate": 0.001
+  },
+  "training_device": "cpu",
+  "training_time_s": 2838.2475621999984,
+  "loss_curve": [
+    {
+      "epoch": 1,
+      "train_mse_norm": 0.06143371479409034,
+      "val_mse_norm": 0.09080763088148887
+    },
+    {
+      "epoch": 2,
+      "train_mse_norm": 0.04730736193634797,
+      "val_mse_norm": 0.0971177427937383
+    },
+    {
+      "epoch": 3,
+      "train_mse_norm": 0.04454362280661815,
+      "val_mse_norm": 0.08812848778089415
+    },
+    {
+      "epoch": 4,
+      "train_mse_norm": 0.04387995749433028,
+      "val_mse_norm": 0.09118544499710907
+    },
+    {
+      "epoch": 5,
+      "train_mse_norm": 0.04295652301636499,
+      "val_mse_norm": 0.08873535274258831
+    }
+  ],
+  "target_scaling": {
+    "mean": 60.28224563598633,
+    "std": 95.9338607788086
+  },
+  "metrics": {
+    "test_rmse": 26.161840427065716,
+    "test_mae": 14.922487258911133,
+    "test_inference_latency_ms_per_row": 0.08771447506988227
+  },
+  "library_versions": {
+    "torch": "2.11.0+cpu",
+    "pandas": "2.2.3",
+    "numpy": "1.26.4"
+  }
+}

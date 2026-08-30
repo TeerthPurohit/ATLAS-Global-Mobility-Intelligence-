@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import DEFAULT_DB_PATH, OPENAI_MODEL
 from nyc_schema import NYC_SCHEMA
+from prompts.sql_agent_prompt import TEMPLATE as SYSTEM_PROMPT_TEMPLATE, VERSION as PROMPT_VERSION
 from query_plan import CityMobilitySchema, QueryPlan
 from query_plan_compiler import compile as compile_plan
 
@@ -45,36 +46,6 @@ _FORBIDDEN_KEYWORDS = re.compile(
 _STARTS_SELECT = re.compile(r"^\s*(with|select)\b", re.IGNORECASE)
 _CTE_NAME_RE = re.compile(r"\b(\w+)\s+as\s*\(", re.IGNORECASE)
 _TABLE_REF_RE = re.compile(r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
-
-SYSTEM_PROMPT_TEMPLATE = """You are a query planner for a {city_name} mobility data \
-platform. Given a user's question, respond with ONLY a JSON object matching \
-this shape -- never SQL, never markdown, never an explanation:
-
-{{"intent": "area_ranking"|"metric_lookup"|"top_n"|"comparison"|"hourly_pattern", \
-"metric": "demand"|"fare"|"flow", \
-"filters": {{"hour": <int or null>, "area": <value or null>, "dest_area": <value or null>, \
-"date_range": <[string,string] or null>}}, \
-"aggregation": "count"|"avg"|"sum"|"max"|"min", "group_by": <string or null>, \
-"order": "asc"|"desc"|null, "limit": <int or null>}}
-
-"area" is the origin/single zone a question is about; "dest_area" is ONLY for \
-a question that names a SECOND, destination zone (e.g. "trips FROM JFK TO \
-Times Square" -> area="JFK Airport", dest_area="Times Sq/Theatre District"). \
-Omit dest_area entirely for a question about just one zone -- never fill it \
-with a guess.
-
-Only reference fields this schema actually resolves for the metric you pick \
-(the schema below states each field's real value type -- output area/dest_area \
-as a JSON number, unquoted, when its type says numeric, never as a numeric \
-string like "161"):
-
-{schema}
-
-If the question asks for a filter a metric has no column for (e.g. an \
-hour-of-day filter on a metric with no hour column), omit that filter from \
-the JSON -- never invent one.
-"""
-
 
 def _strip_fences(text: str) -> str:
     text = text.strip()
@@ -119,6 +90,8 @@ def generate_plan(question: str, schema: CityMobilitySchema = NYC_SCHEMA, model:
         ],
         temperature=0,
         max_completion_tokens=300,
+        trace_name="sql_agent.generate_plan",
+        prompt_version=PROMPT_VERSION,
     )
     text = _strip_fences(resp.choices[0].message.content or "")
     return QueryPlan.from_json(text)
