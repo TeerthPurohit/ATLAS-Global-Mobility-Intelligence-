@@ -105,7 +105,7 @@ def _booster_importances(booster: xgb.Booster) -> dict[str, float]:
     return {f: raw.get(f, 0.0) / total for f in FEATURE_COLUMNS}
 
 
-def _tune_streaming(con, bounds, lookups, state: dict) -> tuple[dict, list[dict]]:
+def _tune_streaming(con, bounds, lookups, state: dict, device: str = "cpu") -> tuple[dict, list[dict]]:
     _log("materializing val split")
     val_df = materialize_split(con, "val", bounds, lookups)
     _log(f"val split ready: {len(val_df)} rows")
@@ -119,11 +119,11 @@ def _tune_streaming(con, bounds, lookups, state: dict) -> tuple[dict, list[dict]
             result = done_by_params[key]["result"]
             _log(f"grid candidate {i}/{len(GRID)} {params} -- resumed from checkpoint, val_rmse={result['val_rmse']:.4f}")
         else:
-            _log(f"grid candidate {i}/{len(GRID)} {params} -- training")
+            _log(f"grid candidate {i}/{len(GRID)} {params} -- training on {device}")
             t0 = time.perf_counter()
             it = TrainDataIter(con, bounds, lookups, split="train")
             dtrain = xgb.DMatrix(it)
-            xgb_params = {"tree_method": "hist", "seed": SEED, "max_depth": params["max_depth"], "learning_rate": params["learning_rate"]}
+            xgb_params = {"tree_method": "hist", "device": device, "seed": SEED, "max_depth": params["max_depth"], "learning_rate": params["learning_rate"]}
             booster = xgb.train(xgb_params, dtrain, num_boost_round=params["n_estimators"])
             preds = booster.predict(xgb.DMatrix(val_df[FEATURE_COLUMNS]))
             rmse, mae = rmse_mae(val_df[TARGET_COLUMN], preds)
@@ -137,7 +137,7 @@ def _tune_streaming(con, bounds, lookups, state: dict) -> tuple[dict, list[dict]
     return best, results, val_df
 
 
-def _train_and_save_streaming() -> dict:
+def _train_and_save_streaming(device: str = "cpu") -> dict:
     _log("connecting to warehouse")
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
     state = _load_checkpoint()
@@ -150,7 +150,7 @@ def _train_and_save_streaming() -> dict:
     train_end, val_start, test_start = bounds
     _log(f"bounds/lookups ready in {time.perf_counter()-t0:.1f}s: train_end={train_end} val_start={val_start} test_start={test_start}")
 
-    best, grid_results, val_df = _tune_streaming(con, bounds, lookups, state)
+    best, grid_results, val_df = _tune_streaming(con, bounds, lookups, state, device)
     final_params = {k: best[k] for k in ("max_depth", "learning_rate", "n_estimators")}
     _log(f"grid search complete, best={final_params}")
 
@@ -160,11 +160,11 @@ def _train_and_save_streaming() -> dict:
         booster = xgb.Booster()
         booster.load_model(str(model_path))
     else:
-        _log("training final refit on train+val")
+        _log(f"training final refit on train+val ({device})")
         t0 = time.perf_counter()
         it = TrainDataIter(con, bounds, lookups, split="train_val")
         dtrain_val = xgb.DMatrix(it)
-        xgb_params = {"tree_method": "hist", "seed": SEED, "max_depth": final_params["max_depth"], "learning_rate": final_params["learning_rate"]}
+        xgb_params = {"tree_method": "hist", "device": device, "seed": SEED, "max_depth": final_params["max_depth"], "learning_rate": final_params["learning_rate"]}
         booster = xgb.train(xgb_params, dtrain_val, num_boost_round=final_params["n_estimators"])
         _log(f"final refit done in {time.perf_counter()-t0:.1f}s")
 
@@ -191,7 +191,7 @@ def _train_and_save_streaming() -> dict:
     metadata = {
         "seed": SEED,
         "sample_rows": None,
-        "training_mode": "streaming_external_memory",
+        "training_mode": f"streaming_external_memory_{device}",
         "free_flow_source": "estimated",
         "free_flow_methodology": (
             f"per-distance-bucket ({FEATURE_COLUMNS[0]} bucketed at 0.5mi) "
@@ -215,7 +215,7 @@ def _train_and_save_streaming() -> dict:
         },
         "features": FEATURE_COLUMNS,
         "target": TARGET_COLUMN,
-        "hyperparameters": final_params,
+        "hyperparameters": {**final_params, "device": device},
         "hyperparameter_search": grid_results,
         "feature_importances": importances,
         "metrics": {
@@ -232,9 +232,9 @@ def _train_and_save_streaming() -> dict:
     return metadata
 
 
-def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300_000) -> dict:
+def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300_000, device: str = "cpu") -> dict:
     if df is None and sample_rows is None:
-        return _train_and_save_streaming()
+        return _train_and_save_streaming(device)
 
     if df is None:
         con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
@@ -293,7 +293,12 @@ def train_and_save(df: pd.DataFrame | None = None, sample_rows: int | None = 300
 
 
 if __name__ == "__main__":
-    meta = train_and_save()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--device", default="cpu", help="'cpu' or 'cuda'")
+    args = parser.parse_args()
+    meta = train_and_save(device=args.device)
     print(f"chosen hyperparameters: {meta['hyperparameters']}")
     print(f"val   RMSE={meta['metrics']['val_rmse']:.4f}  MAE={meta['metrics']['val_mae']:.4f}")
     print(f"test  RMSE={meta['metrics']['test_rmse']:.4f}  MAE={meta['metrics']['test_mae']:.4f}")
