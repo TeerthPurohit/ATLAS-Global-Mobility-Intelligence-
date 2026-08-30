@@ -129,23 +129,27 @@ export function AddressSearch({
 
       {/* Dropdown */}
       {isOpen && results.length > 0 && (
-        <ul className="absolute top-full left-0 right-0 z-50 mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-surface-border bg-surface-0 shadow-2xl">
-          {results.map((place, i) => (
-            <li key={i}>
-              <button
-                type="button"
-                onClick={() => handleSelect(place)}
-                className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-surface-1 transition-colors"
-              >
-                <MapPin className={cn("mt-0.5 h-4 w-4 shrink-0", accentClass)} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink-primary truncate">{place.shortName}</p>
-                  <p className="mt-0.5 text-xs text-ink-muted truncate">{place.displayName}</p>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="absolute top-full left-0 right-0 z-50 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-surface-border bg-surface-1/95 p-1.5 shadow-[0_16px_40px_-12px_rgba(28,27,51,0.25)] backdrop-blur-xl">
+          <ul className="flex flex-col gap-1">
+            {results.map((place, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(place)}
+                  className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-surface-0 transition-colors group"
+                >
+                  <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-0 border border-surface-border/80 group-hover:border-brass/40", accentClass)}>
+                    <MapPin className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-ink-primary truncate">{place.shortName}</p>
+                    <p className="text-[11px] text-ink-muted truncate">{place.displayName}</p>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

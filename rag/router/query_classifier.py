@@ -22,6 +22,10 @@ from prompts.classifier_prompt import TEMPLATE as SYSTEM_PROMPT, VERSION as PROM
 NUMERIC = "numeric"
 EXPLANATORY = "explanatory"
 
+_GREETING_HINTS = re.compile(
+    r"^\s*(h+e+y+|h+i+|h+e+l+o+|y+o+|sup|howdy|greetings|good\s+(morning|afternoon|evening)|who\s+are\s+you|what\s+can\s+you\s+do|help)[\s!?.]*$",
+    re.IGNORECASE,
+)
 _EXPLANATORY_HINTS = re.compile(
     r"\bwhy\b|\bexplains?\b|how come|what causes|what drives|what makes|reasons? (for|why)", re.IGNORECASE
 )
@@ -33,6 +37,8 @@ _NUMERIC_HINTS = re.compile(
 
 
 def _heuristic_classify(question: str) -> str:
+    if _GREETING_HINTS.search(question.strip()):
+        return EXPLANATORY
     if _EXPLANATORY_HINTS.search(question):
         return EXPLANATORY
     if _NUMERIC_HINTS.search(question):
@@ -42,6 +48,8 @@ def _heuristic_classify(question: str) -> str:
 
 
 def classify(question: str, model: str = OPENAI_MODEL) -> str:
+    if _GREETING_HINTS.search(question.strip()):
+        return EXPLANATORY
     try:
         from llm_client import chat_completion
 

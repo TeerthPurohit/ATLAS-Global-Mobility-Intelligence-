@@ -34,6 +34,7 @@ NYC_SCHEMA = CityMobilitySchema(
             value=FieldMapping("total_trips", "count of trips picked up"),
             filters={
                 "area": FieldMapping("pickup_location_id", "pickup zone id", is_text=False),
+                "borough": FieldMapping("pickup_borough", "pickup borough name", is_text=True),
                 "hour": FieldMapping("pickup_hour", "hour of day pickup occurred, 0-23"),
                 "date_range": FieldMapping("pickup_date", "pickup calendar date"),
             },
@@ -43,6 +44,40 @@ NYC_SCHEMA = CityMobilitySchema(
             value=FieldMapping("avg_fare", "average fare amount"),
             filters={
                 "area": FieldMapping("pickup_zone", "pickup zone name", is_text=True),
+                "borough": FieldMapping("pickup_borough", "pickup borough name", is_text=True),
+                "dest_area": FieldMapping("dropoff_zone", "dropoff zone name", is_text=True),
+                "dest_borough": FieldMapping("dropoff_borough", "dropoff borough name", is_text=True),
+            },
+        ),
+        "distance": MetricSchema(
+            table="zone_fare_stats",
+            value=FieldMapping("avg_distance", "average trip distance in miles"),
+            filters={
+                "area": FieldMapping("pickup_zone", "pickup zone name", is_text=True),
+                "borough": FieldMapping("pickup_borough", "pickup borough name", is_text=True),
+                "dest_area": FieldMapping("dropoff_zone", "dropoff zone name", is_text=True),
+                "dest_borough": FieldMapping("dropoff_borough", "dropoff borough name", is_text=True),
+            },
+        ),
+        "duration": MetricSchema(
+            table="zone_fare_stats",
+            value=FieldMapping("avg_duration_min", "average trip duration in minutes"),
+            filters={
+                "area": FieldMapping("pickup_zone", "pickup zone name", is_text=True),
+                "borough": FieldMapping("pickup_borough", "pickup borough name", is_text=True),
+                "dest_area": FieldMapping("dropoff_zone", "dropoff zone name", is_text=True),
+                "dest_borough": FieldMapping("dropoff_borough", "dropoff borough name", is_text=True),
+            },
+        ),
+        "speed": MetricSchema(
+            table="zone_pair_flows",
+            value=FieldMapping("avg_speed_mph", "average speed in miles per hour"),
+            filters={
+                "area": FieldMapping("pickup_zone", "pickup zone name", is_text=True),
+                "borough": FieldMapping("pickup_borough", "pickup borough name", is_text=True),
+                "dest_area": FieldMapping("dropoff_zone", "dropoff zone name", is_text=True),
+                "dest_borough": FieldMapping("dropoff_borough", "dropoff borough name", is_text=True),
+                "date_range": FieldMapping("pickup_date", "pickup calendar date"),
             },
         ),
         "flow": MetricSchema(
@@ -50,7 +85,9 @@ NYC_SCHEMA = CityMobilitySchema(
             value=FieldMapping("trip_count", "count of trips between a pickup/dropoff zone pair"),
             filters={
                 "area": FieldMapping("pickup_zone", "pickup zone name", is_text=True),
+                "borough": FieldMapping("pickup_borough", "pickup borough name", is_text=True),
                 "dest_area": FieldMapping("dropoff_zone", "dropoff zone name", is_text=True),
+                "dest_borough": FieldMapping("dropoff_borough", "dropoff borough name", is_text=True),
                 "date_range": FieldMapping("pickup_date", "pickup calendar date"),
             },
         ),

@@ -556,6 +556,21 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   return postAuth("/auth/login", email, password);
 }
 
+export async function loginAsDemo(): Promise<AuthUser> {
+  const demoEmail = "analyst@atlas.nyc";
+  const demoPassword = "atlas_demo_pass_2026";
+  try {
+    return await login(demoEmail, demoPassword);
+  } catch {
+    // If demo user does not exist in fresh DB, auto-register it
+    try {
+      return await signup(demoEmail, demoPassword);
+    } catch {
+      return await login(demoEmail, demoPassword);
+    }
+  }
+}
+
 export async function logout(): Promise<void> {
   await fetchJson("/auth/logout", { method: "POST" });
 }
@@ -705,3 +720,8 @@ export async function getAnalyticsHistory(limit = 100, offset = 0): Promise<Anal
 export async function getAnalyticsTrends(period = "30d"): Promise<AnalyticsTrendsResponse> {
   return fetchJson<AnalyticsTrendsResponse>(`/api/analytics/trends?period=${period}`);
 }
+
+export async function getDocsSpec(): Promise<any> {
+  return fetchJson<any>("/api/docs/spec");
+}
+

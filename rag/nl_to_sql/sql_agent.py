@@ -94,7 +94,14 @@ def generate_plan(question: str, schema: CityMobilitySchema = NYC_SCHEMA, model:
         prompt_version=PROMPT_VERSION,
     )
     text = _strip_fences(resp.choices[0].message.content or "")
-    return QueryPlan.from_json(text)
+    try:
+        import json
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return QueryPlan.from_dict(data)
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        raise ValueError(f"Model returned non-JSON QueryPlan: {text!r}") from exc
+    raise ValueError(f"Model output did not match QueryPlan dict schema: {text!r}")
 
 
 def answer(

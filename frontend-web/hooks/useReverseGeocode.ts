@@ -32,25 +32,27 @@ interface NominatimResult {
   address: NominatimAddress;
 }
 
-/** Returns the most readable short label for a coordinate pair. */
 function formatPlaceName(result: NominatimResult): string {
   const addr = result.address;
+  const rawParts = (result.display_name || "").split(",").map((s) => s.trim());
 
-  // Level 1: sub-city area (most specific meaningful label)
-  const area =
-    addr.suburb ||
+  // Specific spot / neighborhood / POI
+  const specific =
     addr.neighbourhood ||
     addr.quarter ||
+    addr.suburb ||
     addr.city_district ||
-    addr.borough;
+    (rawParts.length > 0 && rawParts[0] !== addr.city && rawParts[0] !== addr.state ? rawParts[0] : undefined);
 
-  // Level 2: city/town
-  const city = addr.city || addr.town || addr.village || addr.county;
+  const borough = addr.borough;
+  const city = addr.city || addr.town || addr.village || addr.county || "New York";
 
-  if (area && city) return `${area}, ${city}`;
-  if (area) return area;
+  if (specific && borough && specific !== borough) return `${specific}, ${borough}`;
+  if (specific && city && specific !== city) return `${specific}, ${city}`;
+  if (borough && city && borough !== city) return `${borough}, ${city}`;
+  if (specific) return specific;
   if (city) return city;
-  return result.display_name?.split(",")[0] ?? "Unknown location";
+  return rawParts.slice(0, 2).join(", ") || "NYC Zone";
 }
 
 const cache = new Map<string, string>();

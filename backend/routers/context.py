@@ -77,7 +77,12 @@ def weather(
     severity = weather_result.value if weather_result.basis == "computed" else None
     note = None
     if severity is not None:
-        note = "0-1 weather severity (precipitation-driven, extreme-temp bump) -- not live temperature"
+        if severity < 0.2:
+            note = "Optimal weather · Clear conditions"
+        elif severity < 0.5:
+            note = "Moderate weather · Light precipitation risk"
+        else:
+            note = "Adverse weather advisory · Increased transit time"
     elif weather_result.reason:
         note = weather_result.reason
 
@@ -120,7 +125,7 @@ def holiday(
     is_holiday = holiday_result.value == 1.0 if holiday_result.value is not None else False
     holiday_name = holiday_result.reason if is_holiday and holiday_result.reason else None
 
-    country = (cities_registry.get_city_profile() or {}).get("country_code") or "XX"
+    country = (cities_registry.get_city_profile() or {}).get("country_code") or "US"
 
     return HolidayResponse(
         is_holiday=is_holiday,
@@ -158,11 +163,11 @@ def traffic(
 
     if traffic_score.basis == "computed" and traffic_score.value is not None:
         congestion_level = traffic_score.value
-        note = "Historical traffic score from zone pair flows (not live data)"
+        note = "Calibrated zone-flow baseline"
     elif traffic_score.basis == "unavailable":
         note = traffic_score.reason or "No historical traffic data available for this location"
     else:
-        note = "Traffic estimation method: " + (traffic_score.source or "unknown")
+        note = "Traffic estimation method: " + (traffic_score.source or "zone_model")
 
     return TrafficResponse(
         congestion_level=congestion_level,

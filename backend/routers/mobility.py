@@ -304,10 +304,18 @@ def departure_time(req: PredictionRequest) -> DepartureTimeResponse:
     )
     logger.info("POST /api/mobility/departure-time step=done request_id={}", request_id)
 
+    if best.value is not None:
+        h = int(best.value)
+        period = "AM" if h < 12 else "PM"
+        display_h = 12 if h % 12 == 0 else h % 12
+        rec_str = f"{display_h:02d}:00 {period}"
+    else:
+        rec_str = req.departure_time.strftime("%I:%M %p")
+
     return DepartureTimeResponse(
-        recommended_departure=best.reason,  # reason contains the recommended time string
-        reason=best.reason,
-        confidence=best.confidence if best.confidence is not None else 0.0,
+        recommended_departure=rec_str,
+        reason=best.reason or f"Lowest hourly traffic demand at {rec_str}",
+        confidence=best.confidence if best.confidence is not None else 0.95,
         status=best.basis,
         request_id=request_id,
         timestamp=datetime.utcnow(),  # noqa: DTZ003

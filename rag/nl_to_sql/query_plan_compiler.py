@@ -93,6 +93,9 @@ def validate_plan(plan: QueryPlan, schema: CityMobilitySchema) -> None:
         raise ValueError(f"limit must be a positive integer, got {plan.limit!r}")
 
 
+_NYC_BOROUGHS = {"manhattan", "brooklyn", "queens", "bronx", "staten island", "ewr"}
+
+
 def compile(plan: QueryPlan, schema: CityMobilitySchema) -> str:
     validate_plan(plan, schema)
     metric_schema = schema.resolve_metric(plan.metric)
@@ -100,13 +103,20 @@ def compile(plan: QueryPlan, schema: CityMobilitySchema) -> str:
 
     where_clauses: list[str] = []
     for canonical_field, value in plan.filters.active().items():
-        field_map = schema.resolve_field(plan.metric, canonical_field)
         if canonical_field == "date_range":
+            field_map = schema.resolve_field(plan.metric, canonical_field)
             start, end = value
             where_clauses.append(
                 f"{field_map.column} BETWEEN {_sql_literal(start, True)} AND {_sql_literal(end, True)}"
             )
+        elif canonical_field == "area" and isinstance(value, str) and value.strip().lower() in _NYC_BOROUGHS and schema.has_field(plan.metric, "borough"):
+            borough_map = schema.resolve_field(plan.metric, "borough")
+            where_clauses.append(f"{borough_map.column} = {_sql_literal(value.strip().title(), True)}")
+        elif canonical_field == "dest_area" and isinstance(value, str) and value.strip().lower() in _NYC_BOROUGHS and schema.has_field(plan.metric, "dest_borough"):
+            borough_map = schema.resolve_field(plan.metric, "dest_borough")
+            where_clauses.append(f"{borough_map.column} = {_sql_literal(value.strip().title(), True)}")
         else:
+            field_map = schema.resolve_field(plan.metric, canonical_field)
             where_clauses.append(f"{field_map.column} = {_sql_literal(value, field_map.is_text)}")
 
     group_by_name = _group_by_name(plan)

@@ -82,7 +82,7 @@ def save_message(
             conn.execute(table.insert().values(
                 session_id=session_id, role=role, content=content, route=route, sql=sql, user_id=user_id,
             ))
-    except SQLAlchemyError as exc:
+    except Exception as exc:
         logger.warning("session_store.save_message degraded (session history not persisted): %s", exc)
 
 
@@ -98,7 +98,7 @@ def session_exists(
                 cond = cond & (table.c.user_id == user_id)
             row = conn.execute(select(table.c.id).where(cond).limit(1)).first()
             return row is not None
-    except SQLAlchemyError as exc:
+    except Exception as exc:
         logger.warning("session_store.session_exists degraded (treating as not found): %s", exc)
         return False
 
@@ -121,7 +121,7 @@ def get_session_history(
                 row["timestamp"] = row["timestamp"].isoformat()
                 result.append(row)
             return result
-    except SQLAlchemyError as exc:
+    except Exception as exc:
         logger.warning("session_store.get_session_history degraded (returning empty): %s", exc)
         return []
 

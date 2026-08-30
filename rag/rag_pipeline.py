@@ -72,21 +72,49 @@ def _format_numeric_answer(result: dict) -> str:
     return "Based on the marts:\n" + "\n".join(f"- {line}" for line in lines) + suffix
 
 
+_GREETING_RESPONSE = (
+    "Hello! I am ATLAS, your NYC TLC Spatial Intelligence Analyst. I can query our warehouse "
+    "of 1.4B+ trip records across all 263 NYC taxi zones, compute average fares and surge patterns, "
+    "compare airport corridor demand, or explain network mobility dynamics.\n\n"
+    "**Try asking:**\n"
+    "- *What are the top 5 pickup zones by average fare?*\n"
+    "- *How many trips originated from JFK Airport?*\n"
+    "- *Why is Midtown Manhattan such a high-volume corridor?*"
+)
+
+
+def _is_greeting(q: str) -> bool:
+    from router.query_classifier import _GREETING_HINTS
+    return bool(_GREETING_HINTS.search(q.strip()))
+
+
 def _answer_numeric(question: str, db_path: Path = DEFAULT_DB_PATH, schema: CityMobilitySchema = NYC_SCHEMA) -> dict:
-    # USE_FINETUNED_QUERY_PLAN (spec-014 FR-7): the fine-tuned local model now
-    # beats the hosted zero-shot path on its own eval (see the design doc's
-    # 2026-08-27 results) -- same return shape as sql_agent.answer(), so this
-    # is a direct swap, not a new code path.
-    agent = query_plan_agent if query_plan_agent.USE_FINETUNED_QUERY_PLAN else sql_agent
-    result = agent.answer(question, db_path=db_path, schema=schema)
-    return {
-        "question": question,
-        "route": NUMERIC,
-        "answer": _format_numeric_answer(result),
-        "sql": result["sql"],
-        "rows": result["rows"],
-        "sources": None,
-    }
+    try:
+        agent = query_plan_agent if query_plan_agent.USE_FINETUNED_QUERY_PLAN else sql_agent
+        result = agent.answer(question, db_path=db_path, schema=schema)
+        return {
+            "question": question,
+            "route": NUMERIC,
+            "answer": _format_numeric_answer(result),
+            "sql": result["sql"],
+            "rows": result["rows"],
+            "sources": None,
+        }
+    except Exception as exc:
+        exc_str = str(exc)
+        print(f"[warn] numeric query plan failed ({exc}); falling back to explanatory route", file=sys.stderr)
+        # If the LLM returned a conversational string or greeting:
+        for prefix in ("Hello", "Hi", "Hey", "Could you", "How can I", "What would you", "Please specify"):
+            if prefix.lower() in exc_str.lower():
+                return {
+                    "question": question,
+                    "route": EXPLANATORY,
+                    "answer": _GREETING_RESPONSE,
+                    "sql": None,
+                    "rows": None,
+                    "sources": [],
+                }
+        return _answer_explanatory(question)
 
 
 def _hit_label(h: dict) -> str:
@@ -167,17 +195,27 @@ def answer(
     user_id: int | None = None,
 ) -> dict:
     active_session_id = session_id or str(uuid.uuid4())
-    route = classify(question)
-    if route == NUMERIC:
-        res = _answer_numeric(question, db_path=db_path, schema=schema)
-    elif allow_explanatory:
-        res = _answer_explanatory(question, collection=collection)
-    else:
+    if _is_greeting(question):
         res = {
-            "question": question, "route": EXPLANATORY,
-            "answer": f"No insight documents exist for {schema.name} yet -- ask a specific numeric question about demand instead.",
-            "sql": None, "rows": None, "sources": [],
+            "question": question,
+            "route": EXPLANATORY,
+            "answer": _GREETING_RESPONSE,
+            "sql": None,
+            "rows": None,
+            "sources": [],
         }
+    else:
+        route = classify(question)
+        if route == NUMERIC:
+            res = _answer_numeric(question, db_path=db_path, schema=schema)
+        elif allow_explanatory:
+            res = _answer_explanatory(question, collection=collection)
+        else:
+            res = {
+                "question": question, "route": EXPLANATORY,
+                "answer": f"No insight documents exist for {schema.name} yet -- ask a specific numeric question about demand instead.",
+                "sql": None, "rows": None, "sources": [],
+            }
 
     res["session_id"] = active_session_id
     session_store.save_message(active_session_id, "user", question, user_id=user_id)
@@ -190,14 +228,28 @@ def answer_stream(
 ) -> Generator[dict, None, None]:
     """Streaming generator variant yielding tokens/chunks and final complete payload."""
     active_session_id = session_id or str(uuid.uuid4())
-    route = classify(question)
-
     session_store.save_message(active_session_id, "user", question, user_id=user_id)
 
+    if _is_greeting(question):
+        payload = {
+            "question": question,
+            "route": EXPLANATORY,
+            "answer": _GREETING_RESPONSE,
+            "sql": None,
+            "rows": None,
+            "sources": [],
+            "session_id": active_session_id,
+        }
+        session_store.save_message(active_session_id, "assistant", _GREETING_RESPONSE, route=EXPLANATORY, user_id=user_id)
+        yield {"type": "chunk", "text": _GREETING_RESPONSE}
+        yield {"type": "done", "payload": payload}
+        return
+
+    route = classify(question)
     if route == NUMERIC:
         res = _answer_numeric(question)
         res["session_id"] = active_session_id
-        session_store.save_message(active_session_id, "assistant", res["answer"], route=NUMERIC, sql=res.get("sql"), user_id=user_id)
+        session_store.save_message(active_session_id, "assistant", res["answer"], route=res.get("route", NUMERIC), sql=res.get("sql"), user_id=user_id)
         yield {"type": "chunk", "text": res["answer"]}
         yield {"type": "done", "payload": res}
         return

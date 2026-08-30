@@ -79,7 +79,13 @@ def generate_plan(question: str, schema: CityMobilitySchema, model: str) -> Quer
         # template -- nothing to version here.
     )
     text = _strip_fences(resp.choices[0].message.content or "")
-    return QueryPlan.from_dict(json.loads(text))
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return QueryPlan.from_dict(data)
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        raise ValueError(f"Model returned non-JSON QueryPlan: {text!r}") from exc
+    raise ValueError(f"Model output did not match QueryPlan dict schema: {text!r}")
 
 
 def answer(question: str, schema: CityMobilitySchema = NYC_SCHEMA, db_path: Path = DEFAULT_DB_PATH) -> dict:

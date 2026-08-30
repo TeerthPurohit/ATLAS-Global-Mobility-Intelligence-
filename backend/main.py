@@ -34,7 +34,7 @@ from backend.errors import DomainError  # noqa: E402
 from backend.registry import cities as cities_registry  # noqa: E402
 from backend.registry import models as models_registry  # noqa: E402
 from backend.registry import transit as transit_registry  # noqa: E402
-from backend.routers import auth, chat, city, context, journey, model_predictions, platform, predictions, zones, mobility, analytics  # noqa: E402
+from backend.routers import auth, chat, city, context, journey, model_predictions, platform, predictions, zones, mobility, analytics, docs_api  # noqa: E402
 from backend.services import auth_service, journey_service, model_service, platform_service, tariff_profiles  # noqa: E402
 
 
@@ -127,6 +127,7 @@ _REQUIRE_SESSION = [Depends(auth_service.get_current_user)]
 
 app.include_router(auth.router)
 app.include_router(platform.router)
+app.include_router(docs_api.router)
 app.include_router(predictions.router, dependencies=_REQUIRE_SESSION)
 app.include_router(model_predictions.router, dependencies=_REQUIRE_SESSION)
 app.include_router(zones.router, dependencies=_REQUIRE_SESSION)

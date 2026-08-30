@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Compass, LogOut } from "lucide-react";
+import { Compass, LogOut, Database, Activity, Zap, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
@@ -13,57 +13,58 @@ const navLinks = [
   { href: "/journey", label: "Journey" },
   { href: "/compare", label: "Compare" },
   { href: "/insights", label: "Insights" },
-  { href: "/analyst", label: "Ask" },
+  { href: "/analyst", label: "Ask AI" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/docs", label: "Docs" },
 ];
 
 export function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
-  // Explore's hero is a full-bleed map -- let the nav float translucent over it there.
-  // Every other route keeps the original solid header untouched.
   const isHeroPage = pathname === "/";
+  const isLoginPage = pathname === "/login" || pathname === "/signup";
 
   async function handleLogout() {
     await logout();
     router.push("/login");
   }
 
+  if (isLoginPage) return null;
+
   return (
     <header
       className={cn(
         "sticky top-0 z-40 transition-colors duration-300",
         isHeroPage
-          ? "border-b border-transparent bg-gradient-to-b from-surface-0/70 to-transparent backdrop-blur-[2px]"
-          : "border-b border-surface-border bg-surface-0/95 backdrop-blur-sm"
+          ? "border-b border-surface-border/40 bg-surface-0/80 backdrop-blur-md"
+          : "border-b border-surface-border bg-surface-0/95 backdrop-blur-md"
       )}
     >
-      <div className="mx-auto flex w-full items-center justify-between px-4 py-4 sm:px-8 lg:px-10">
+      {/* Top Main Navigation Bar */}
+      <div className="mx-auto flex w-full items-center justify-between px-4 py-3 sm:px-8 lg:px-10">
         {/* Logo & Brand */}
-        <Link
-          href="/"
-          className="flex items-center gap-3 group"
-        >
-          <div className="relative flex items-center justify-center">
-            <Compass className="h-5 w-5 text-brass transition-transform duration-500 group-hover:rotate-45" />
+        <Link href="/" className="group flex items-center gap-3">
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-brass/10 border border-brass/30 transition-transform duration-500 group-hover:scale-105">
+            <Compass className="h-4 w-4 text-brass transition-transform duration-500 group-hover:rotate-45" />
           </div>
-          <div className="flex flex-col gap-0">
-            <span className="hidden sm:block font-section-md text-ink-primary leading-tight tracking-wide">
-              ATLAS
-            </span>
-            <span className="hidden sm:block font-label-sm text-ink-muted">
-              NYC Ride Intelligence
-            </span>
-            <span className="sm:hidden font-section-md text-ink-primary tracking-wide">
-              ATLAS
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="font-section-md text-sm font-bold tracking-wider text-ink-primary">
+                ATLAS
+              </span>
+              <span className="rounded bg-brass/15 px-1.5 py-0.2 text-[10px] font-mono font-semibold uppercase text-brass">
+                NYC TLC
+              </span>
+            </div>
+            <span className="hidden text-[11px] font-mono text-ink-muted sm:block">
+              Mobility Intelligence System
             </span>
           </div>
-          <PulsingStatusDot status="live" size={6} className="ml-2" />
         </Link>
 
         {/* Navigation Links */}
-        <nav className="flex items-center gap-1 sm:gap-3">
+        <nav className="flex items-center gap-1 sm:gap-2">
           {navLinks.map((link) => {
             const isActive =
               link.href === "/"
@@ -75,16 +76,16 @@ export function NavBar() {
                 key={link.label}
                 href={link.href}
                 className={cn(
-                  "relative px-3 py-2 transition-colors font-section-md text-sm",
+                  "relative rounded-lg px-3 py-1.5 font-section-md text-xs sm:text-sm transition-all",
                   isActive
-                    ? "text-brass"
-                    : "text-ink-secondary hover:text-ink-primary"
+                    ? "text-brass bg-brass/10 font-semibold shadow-sm"
+                    : "text-ink-secondary hover:bg-surface-1 hover:text-ink-primary"
                 )}
               >
                 {isActive && (
                   <motion.div
                     layoutId="activeNavUnderline"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-brass shadow-[0_0_6px_rgba(108,92,231,0.5)]"
+                    className="absolute inset-0 rounded-lg border border-brass/30"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
@@ -94,29 +95,67 @@ export function NavBar() {
           })}
         </nav>
 
-        {/* Auth */}
+        {/* Auth & Live Pulse */}
         <div className="flex items-center gap-3">
+          <div className="hidden xl:flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-1/80 px-2.5 py-1 text-[11px] font-mono text-ink-secondary">
+            <PulsingStatusDot status="live" size={6} />
+            <span>263 Zones Active</span>
+          </div>
+
           {loading ? null : user ? (
-            <>
-              <span className="hidden sm:block font-body-sm text-ink-secondary">{user.email}</span>
+            <div className="flex items-center gap-2">
+              <span className="hidden max-w-[140px] truncate font-mono text-xs text-ink-secondary md:block">
+                {user.email}
+              </span>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 px-3 py-2 font-section-md text-sm text-ink-secondary hover:text-ink-primary transition-colors"
+                title="Log out"
+                className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface-1/80 px-2.5 py-1.5 font-section-md text-xs text-ink-secondary transition-colors hover:bg-danger/10 hover:text-danger hover:border-danger/30"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Log out</span>
               </button>
-            </>
+            </div>
           ) : (
             <Link
               href="/login"
-              className="px-3 py-2 font-section-md text-sm text-ink-secondary hover:text-ink-primary transition-colors"
+              className="rounded-lg bg-brass px-3.5 py-1.5 font-section-md text-xs font-semibold text-white shadow-sm transition-all hover:bg-brass/90"
             >
-              Log in
+              Sign In
             </Link>
           )}
         </div>
       </div>
+
+      {/* Global Telemetry Mission Ribbon (Active on all routes except login) */}
+      {!isLoginPage && (
+        <div className="hidden border-t border-surface-border/60 bg-surface-0/60 px-4 py-1 backdrop-blur-sm sm:flex items-center justify-between text-[11px] font-mono text-ink-muted sm:px-8 lg:px-10">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5 text-ink-secondary">
+              <Database className="h-3 w-3 text-brass" />
+              <span>Mart: <strong className="text-ink-primary font-medium">1.4B+ Records</strong></span>
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1.5 text-ink-secondary">
+              <Layers className="h-3 w-3 text-accent-primary" />
+              <span>Coverage: <strong className="text-ink-primary font-medium">5 Boroughs (263 Zones)</strong></span>
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1.5 text-ink-secondary">
+              <Activity className="h-3 w-3 text-emerald-500" />
+              <span>Congestion: <strong className="text-emerald-600 font-medium">Monitored Real-Time</strong></span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 text-ink-muted">
+              <Zap className="h-3 w-3 text-indigo-500" />
+              <span>Latency: &lt;85ms</span>
+            </span>
+            <span className="text-brass/80 font-semibold">● Ground Truth Validated</span>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

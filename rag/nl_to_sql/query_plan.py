@@ -16,26 +16,15 @@ from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 Intent = Literal["area_ranking", "metric_lookup", "top_n", "comparison", "hourly_pattern"]
-Metric = Literal["demand", "fare", "flow"]
+Metric = Literal["demand", "fare", "flow", "distance", "duration", "speed"]
 Aggregation = Literal["count", "avg", "sum", "max", "min"]
 Order = Literal["asc", "desc"]
 
 INTENTS: tuple[Intent, ...] = ("area_ranking", "metric_lookup", "top_n", "comparison", "hourly_pattern")
-METRICS: tuple[Metric, ...] = ("demand", "fare", "flow")
+METRICS: tuple[Metric, ...] = ("demand", "fare", "flow", "distance", "duration", "speed")
 AGGREGATIONS: tuple[Aggregation, ...] = ("count", "avg", "sum", "max", "min")
 
-# Canonical filter/group-by concepts a CityMobilitySchema may resolve, beyond
-# a metric's own value column. Not every schema/metric resolves every one of
-# these -- e.g. NYC's `zone_fare_stats` mart has no hour column, so "hour" is
-# simply absent from that metric's `filters` map (see nyc_schema.py).
-# `dest_area` is the destination side of a two-zone question (e.g. "trips
-# FROM JFK TO Times Sq") -- distinct from `area` (the origin/single-zone
-# filter every metric already had). Only `flow` resolves it (a flow row IS a
-# pickup/dropoff pair); found missing 2026-08-14 via the RAG eval set: with
-# no dest_area field, "trips from JFK to Times Sq" silently compiled to
-# "trips from JFK" (any destination) -- a confidently wrong number, not a
-# refusal, which is worse (ADR-004/rule 2).
-CANONICAL_FIELDS = ("area", "dest_area", "hour", "day_of_week", "date_range")
+CANONICAL_FIELDS = ("area", "dest_area", "borough", "dest_borough", "hour", "day_of_week", "date_range")
 
 
 @dataclass
@@ -44,6 +33,8 @@ class QueryFilters:
     day_of_week: int | None = None
     area: str | int | None = None
     dest_area: str | int | None = None
+    borough: str | None = None
+    dest_borough: str | None = None
     date_range: tuple[str, str] | None = None
 
     def active(self) -> dict[str, object]:
@@ -94,6 +85,8 @@ class QueryPlan:
             day_of_week=filters_data.get("day_of_week"),
             area=filters_data.get("area"),
             dest_area=filters_data.get("dest_area"),
+            borough=filters_data.get("borough"),
+            dest_borough=filters_data.get("dest_borough"),
             date_range=tuple(date_range) if date_range else None,  # type: ignore[arg-type]
         )
         return QueryPlan(

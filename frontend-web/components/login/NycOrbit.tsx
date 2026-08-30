@@ -1,45 +1,42 @@
 "use client";
 
-/**
- * NycOrbit — decorative auth-page backdrop: a real rotating 3D globe
- * (NycGlobeCanvas, globe.gl) showing only NYC's own zone geometry, not a
- * world map (ADR-011 dropped global coverage) -- so it stays a bare sphere
- * everywhere except the one landmass it exists to highlight, with arcs
- * converging on it and an auto-rotating camera. The only numbers on it are
- * real (same zone_hourly_demand total the home page shows) or omitted --
- * no invented transaction ticker.
- */
-
 import dynamic from "next/dynamic";
 import { Compass } from "lucide-react";
 import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
 
-const NycGlobeCanvas = dynamic(() => import("./NycGlobeCanvas"), { ssr: false });
+const NycGlobeCanvas = dynamic(() => import("./NycGlobeCanvas"), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="flex items-center gap-2.5 rounded-full border border-surface-border bg-surface-1/80 px-4 py-2 text-xs text-ink-muted backdrop-blur-md">
+        <span className="h-2 w-2 animate-ping rounded-full bg-brass" />
+        Initialising globe...
+      </div>
+    </div>
+  ),
+});
 
 export function NycOrbit({ className }: { className?: string }) {
   return (
     <div
-      className={`relative aspect-square w-full overflow-hidden rounded-[2rem] border border-surface-border bg-[radial-gradient(circle_at_50%_35%,var(--surface-2),var(--surface-0))] ${className ?? ""}`}
+      className={`relative aspect-square w-full max-w-[540px] mx-auto overflow-hidden rounded-[2.5rem] border border-surface-border bg-[radial-gradient(circle_at_50%_35%,var(--surface-2),var(--surface-0))] shadow-[0_24px_60px_-24px_rgba(108,92,231,0.25)] ${className ?? ""}`}
     >
+      {/* 3D WebGL Globe canvas */}
       <NycGlobeCanvas className="absolute inset-0 h-full w-full" />
 
-      {/* Brand mark */}
-      <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2">
+      {/* Ambient soft glow */}
+      <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-brass/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 -right-16 h-48 w-48 rounded-full bg-accent-primary/10 blur-3xl" />
+
+      {/* Minimal Brand & Live Pill */}
+      <div className="pointer-events-none absolute left-6 top-6 flex items-center gap-2 rounded-xl border border-surface-border/80 bg-surface-1/90 px-3.5 py-1.5 backdrop-blur-md shadow-xs">
         <Compass className="h-4 w-4 text-brass" />
-        <span className="font-section-md text-sm text-ink-primary">ATLAS</span>
+        <span className="font-section-md text-xs tracking-wider text-ink-primary font-bold">ATLAS</span>
       </div>
 
-      {/* Live pill */}
-      <div className="pointer-events-none absolute right-5 top-5 flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-1/90 px-3 py-1 font-label-sm text-ink-secondary shadow-sm">
+      <div className="pointer-events-none absolute right-6 top-6 flex items-center gap-1.5 rounded-full border border-surface-border/80 bg-surface-1/90 px-3 py-1 font-label-sm text-ink-secondary backdrop-blur-md shadow-xs">
         <PulsingStatusDot status="live" size={6} />
-        Live
-      </div>
-
-      {/* Provenance card -- true claim, not a fabricated transaction */}
-      <div className="pointer-events-none absolute bottom-6 right-5 max-w-[13rem] rounded-2xl border border-surface-border bg-surface-1/95 px-3 py-2 shadow-[0_12px_30px_-12px_rgba(108,92,231,0.35)]">
-        <p className="font-body-sm text-ink-secondary">
-          Real TLC trip records — no estimates, no priors.
-        </p>
+        <span className="text-[11px] font-medium text-ink-primary">Live</span>
       </div>
     </div>
   );
