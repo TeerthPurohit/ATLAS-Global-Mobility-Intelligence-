@@ -1,23 +1,24 @@
 {
   "seed": 42,
+  "training_sample_rows": null,
+  "training_mode": "streaming_external_memory_cuda",
   "date_range": {
     "train": [
-      "2024-01-01 00:00:04",
-      "2024-03-23 01:23:01"
+      "(streamed, not materialized)",
+      "2026-03-05 05:40:30"
     ],
     "val": [
-      "2024-03-23 01:23:02",
-      "2024-03-31 23:59:59"
+      "2026-03-05 05:40:31",
+      "2026-04-01 00:00:00"
     ],
     "test": [
-      "2024-06-01 00:00:00",
-      "2024-06-30 23:59:59"
+      "2026-04-01 00:00:00",
+      "(latest)"
     ]
   },
   "n_rows": {
-    "train": 4558329,
-    "val": 804411,
-    "test": 2636109
+    "val": 19258986,
+    "test": 20973025
   },
   "features": [
     "pickup_location_id",
@@ -34,49 +35,50 @@
   ],
   "target": "total_amount",
   "hyperparameters": {
-    "max_depth": 6,
-    "learning_rate": 0.05,
-    "n_estimators": 500
+    "max_depth": 8,
+    "learning_rate": 0.1,
+    "n_estimators": 300,
+    "device": "cuda"
   },
   "hyperparameter_search": [
     {
       "max_depth": 4,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 10.761114635375574,
-      "val_mae": 5.586873376490673
+      "val_rmse": 13.453373085671382,
+      "val_mae": 7.190941565896294
     },
     {
       "max_depth": 6,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 10.71086733044528,
-      "val_mae": 5.512331954644477
+      "val_rmse": 13.292896437964702,
+      "val_mae": 7.073354477747726
     },
     {
       "max_depth": 6,
       "learning_rate": 0.05,
       "n_estimators": 500,
-      "val_rmse": 10.706042738777644,
-      "val_mae": 5.509056677248609
+      "val_rmse": 13.300224530675017,
+      "val_mae": 7.078225077651114
     },
     {
       "max_depth": 8,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 10.730445824298188,
-      "val_mae": 5.495882830187339
+      "val_rmse": 13.207463905715864,
+      "val_mae": 7.00955151080164
     }
   ],
   "metrics": {
-    "val_rmse": 10.706042738777644,
-    "val_mae": 5.509056677248609,
-    "test_rmse": 12.610097876402572,
-    "test_mae": 6.286429705190707
+    "val_rmse": 13.207463905715864,
+    "val_mae": 7.00955151080164,
+    "test_rmse": 12.773381940043816,
+    "test_mae": 6.780044695807679
   },
   "library_versions": {
-    "xgboost": "3.3.0",
-    "pandas": "3.0.3",
-    "numpy": "2.5.1"
+    "xgboost": "3.2.0",
+    "pandas": "2.3.3",
+    "numpy": "2.0.2"
   }
 }
