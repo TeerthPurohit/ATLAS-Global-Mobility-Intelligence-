@@ -1,7 +1,7 @@
 {
   "seed": 42,
   "sample_rows": null,
-  "training_mode": "streaming_external_memory",
+  "training_mode": "streaming_external_memory_cuda",
   "free_flow_source": "estimated",
   "free_flow_methodology": "per-distance-bucket (trip_distance bucketed at 0.5mi) p85 of observed avg_speed_mph, i.e. the fastest observed trips at that distance approximate free-flow speed; NOT a measured/routed free-flow time -- see models/congestion/build_features.py module docstring for the full rationale, including the judgment call to use a high (not low) speed percentile",
   "date_range": {
@@ -37,50 +37,51 @@
   "hyperparameters": {
     "max_depth": 6,
     "learning_rate": 0.05,
-    "n_estimators": 500
+    "n_estimators": 500,
+    "device": "cuda"
   },
   "hyperparameter_search": [
     {
       "max_depth": 4,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 0.4754701615156439,
-      "val_mae": 0.34720348021367214
+      "val_rmse": 0.47569226315000185,
+      "val_mae": 0.3475078005102366
     },
     {
       "max_depth": 6,
       "learning_rate": 0.1,
       "n_estimators": 300,
-      "val_rmse": 0.4747354691663446,
-      "val_mae": 0.3463892245771624
+      "val_rmse": 0.47502143854587325,
+      "val_mae": 0.34666713830469026
     },
     {
       "max_depth": 6,
       "learning_rate": 0.05,
       "n_estimators": 500,
-      "val_rmse": 0.4744173218952611,
-      "val_mae": 0.34604604531087096
+      "val_rmse": 0.47431799862252094,
+      "val_mae": 0.3458670192274608
     }
   ],
   "feature_importances": {
-    "trip_distance": 0.10857041651675485,
-    "free_flow_duration_min": 0.06294616828940082,
-    "hour": 0.28372761212025077,
-    "day_of_week": 0.155636918829113,
-    "is_holiday": 0.14237605717210605,
-    "temperature_c": 0.0645811929466944,
-    "precipitation_mm": 0.018156969555757935,
-    "demand_index": 0.16400466456992216
+    "trip_distance": 0.11077391943153908,
+    "free_flow_duration_min": 0.05938569351825067,
+    "hour": 0.2795928667776595,
+    "day_of_week": 0.15429117892292252,
+    "is_holiday": 0.14341481112245005,
+    "temperature_c": 0.06153443019823072,
+    "precipitation_mm": 0.021927379648742095,
+    "demand_index": 0.16907972038020536
   },
   "metrics": {
-    "val_rmse": 0.4744173218952611,
-    "val_mae": 0.34604604531087096,
-    "test_rmse": 0.4849982853035901,
-    "test_mae": 0.3577318248879754
+    "val_rmse": 0.47431799862252094,
+    "val_mae": 0.3458670192274608,
+    "test_rmse": 0.4848540541933046,
+    "test_mae": 0.3571985524804472
   },
   "library_versions": {
-    "xgboost": "3.3.0",
-    "pandas": "2.2.3",
-    "numpy": "1.26.4"
+    "xgboost": "3.2.0",
+    "pandas": "2.3.3",
+    "numpy": "2.0.2"
   }
 }
