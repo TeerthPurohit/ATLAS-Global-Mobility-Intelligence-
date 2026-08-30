@@ -118,11 +118,22 @@ CHECKPOINT_PATH = ARTIFACT_DIR / "_streaming_checkpoint.json"
 # integer codes, which xgb.DMatrix built from an iterator has no way to
 # detect or warn about. That's a silent-wrong-number bug, not a crash, so
 # every batch must be cast against this same fixed domain instead.
-CATEGORICAL_DOMAINS: dict[str, list[int]] = {
-    "pickup_location_id": list(range(1, 266)),
-    "dropoff_location_id": list(range(1, 266)),
-    "pickup_hour": list(range(24)),
-    "pickup_day_of_week": list(range(7)),
+# Dtypes must match backend/services/model_service.py's _FARE_CATEGORY_DTYPES
+# EXACTLY -- XGBoost bakes the categorical index dtype into the saved model
+# and rejects a mismatched dtype at predict time ("Invalid new DataFrame
+# input ... the index type must match between the training and test set"),
+# not just a mismatched category value. Zone ids come from DuckDB INTEGER
+# columns (numpy int32); hour/day-of-week come from BIGINT (numpy int64) --
+# same as the in-memory load_data() path's fetchdf() always produced.
+_CATEGORICAL_DTYPES = {
+    "pickup_location_id": "int32", "dropoff_location_id": "int32",
+    "pickup_hour": "int64", "pickup_day_of_week": "int64",
+}
+CATEGORICAL_DOMAINS: dict[str, np.ndarray] = {
+    "pickup_location_id": np.arange(1, 266, dtype="int32"),
+    "dropoff_location_id": np.arange(1, 266, dtype="int32"),
+    "pickup_hour": np.arange(24, dtype="int64"),
+    "pickup_day_of_week": np.arange(7, dtype="int64"),
 }
 
 
@@ -132,7 +143,7 @@ def _log(msg: str) -> None:
 
 def _apply_categorical_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     for col, domain in CATEGORICAL_DOMAINS.items():
-        df[col] = pd.Categorical(df[col], categories=domain)
+        df[col] = pd.Categorical(df[col].astype(_CATEGORICAL_DTYPES[col]), categories=domain)
     return df
 
 
