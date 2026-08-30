@@ -1,24 +1,10 @@
 {
   "seed": 42,
-  "sample_rows": "provided_externally",
-  "date_range": {
-    "train": [
-      "2024-01-01 00:25:41",
-      "2026-03-12 14:08:05"
-    ],
-    "val": [
-      "2026-03-12 14:15:43",
-      "2026-03-31 23:46:40"
-    ],
-    "test": [
-      "2026-04-01 00:24:44",
-      "2026-04-30 23:56:09"
-    ]
-  },
+  "sample_rows": 113000000,
+  "training_mode": "gpu_ladder_streaming_cuda",
   "n_rows": {
-    "train": 13867,
-    "val": 2448,
-    "test": 3662
+    "train_val_requested": 113000000,
+    "test": 20952719
   },
   "features": [
     "trip_distance",
@@ -34,7 +20,8 @@
   "hyperparameters": {
     "max_depth": 6,
     "learning_rate": 0.1,
-    "n_estimators": 300
+    "n_estimators": 300,
+    "device": "cuda"
   },
   "quantiles": {
     "p10": 0.1,
@@ -44,30 +31,27 @@
   "metrics": {
     "p10": {
       "alpha": 0.1,
-      "pinball_loss": 0.8002194907221228,
-      "mae": 6.363376140594482
+      "mae": 6.394105911254883
     },
     "p50": {
       "alpha": 0.5,
-      "pinball_loss": 2.1604228517125046,
-      "mae": 4.320846080780029
+      "mae": 4.364684581756592
     },
     "p90": {
       "alpha": 0.9,
-      "pinball_loss": 1.209448003078796,
-      "mae": 8.030360221862793
+      "mae": 9.01294231414795
     }
   },
   "prediction_interval_coverage": {
     "nominal": 0.8,
-    "measured_p10_p90_coverage": 0.7575095576187876,
-    "n_test_rows": 3662,
-    "note": "empirically measured fraction of held-out test rows where actual duration fell within [p10_pred, p90_pred] -- not assumed or hardcoded; see the gap vs nominal 0.80 above"
+    "measured_p10_p90_coverage": 0.7946335270377081,
+    "n_test_rows": 20952719,
+    "note": "measured on the last GPU-ladder rung confirmed not broken -- see eta_gpu_ladder_report.json for the full rung-by-rung scan"
   },
-  "ordering_violations_p10_p50_p90": 19,
+  "ordering_violations_p10_p50_p90": 1435,
   "library_versions": {
-    "xgboost": "3.3.0",
-    "pandas": "2.2.3",
-    "numpy": "1.26.4"
+    "xgboost": "3.2.0",
+    "pandas": "2.3.3",
+    "numpy": "2.0.2"
   }
 }
