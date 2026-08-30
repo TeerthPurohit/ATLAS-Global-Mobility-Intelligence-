@@ -497,7 +497,7 @@ export default function AnalyticsPage() {
 
         {/* HISTORY TAB */}
         <TabsContent value="history" className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-surface-border bg-white dark:bg-surface-1 shadow-md">
+          <div className="overflow-hidden rounded-2xl border border-surface-border bg-surface-1 shadow-md">
             <div className="border-b border-surface-border/80 bg-surface-1 px-6 py-4 flex items-center justify-between">
               <div>
                 <h3 className="font-section-md text-sm font-bold text-ink-primary">

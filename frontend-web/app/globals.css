@@ -34,41 +34,29 @@
   --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
 }
 
-/* Dark fallback -- available via data-theme="dark", no longer the default. */
-:root[data-theme="dark"] {
-  --surface-0: #000000;
-  --surface-1: #0a0a0a;
-  --surface-2: #141414;
-  --surface-border: #1f1f1f;
-  --ink-primary: #f4efe4;
-  --ink-secondary: #b8bfd1;
-  --ink-muted: #6e7791;
-  --brass: #c9922a;
-  --brass-fg: #1b1002;
-  --verdigris: #6b8f84;
-  --oxide: #8c4a3c;
-  --warning: var(--brass);
-  --accent: var(--brass);
-  --accent-fg: var(--brass-fg);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --surface-0: #000000;
-    --surface-1: #0a0a0a;
-    --surface-2: #141414;
-    --surface-border: #1f1f1f;
-    --ink-primary: #f4efe4;
-    --ink-secondary: #b8bfd1;
-    --ink-muted: #6e7791;
-    --brass: #c9922a;
-    --brass-fg: #1b1002;
-    --verdigris: #6b8f84;
-    --oxide: #8c4a3c;
-    --warning: var(--brass);
-    --accent: var(--brass);
-    --accent-fg: var(--brass-fg);
-  }
+/* Dark theme tokens */
+:root[data-theme="dark"],
+.dark {
+  --surface-0: #0a0915;
+  --surface-1: #121024;
+  --surface-2: #1b1834;
+  --surface-border: #2a264a;
+  --parchment: #181630;
+  --ink-primary: #f8fafc;
+  --ink-secondary: #cbd5e1;
+  --ink-muted: #8b92b2;
+  --brass: #818cf8;
+  --brass-fg: #0f172a;
+  --verdigris: #2dd4bf;
+  --oxide: #f43f5e;
+  --success: #2dd4bf;
+  --warning: #fbbf24;
+  --danger: #f43f5e;
+  --accent: #818cf8;
+  --accent-fg: #0f172a;
+  --chart-sky: #60a5fa;
+  --chart-amber: #f59e0b;
+  --chart-pink: #f472b6;
 }
 
 body {
@@ -79,6 +67,16 @@ body {
     radial-gradient(at 50% 50%, rgba(108, 92, 231, 0.03) 0px, transparent 65%);
   background-attachment: fixed;
   color: var(--ink-primary);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+:root[data-theme="dark"] body,
+.dark body {
+  background-color: var(--surface-0);
+  background-image:
+    radial-gradient(at 95% 5%, rgba(129, 140, 248, 0.12) 0px, transparent 50%),
+    radial-gradient(at 5% 95%, rgba(45, 212, 191, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(129, 140, 248, 0.05) 0px, transparent 65%);
 }
 
 /* Typography system for editorial hierarchy */

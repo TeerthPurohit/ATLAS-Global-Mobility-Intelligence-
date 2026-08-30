@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
-import Map, { Marker, Layer, Source } from "react-map-gl/maplibre";
+import Map, { Marker } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { useWebGLPreservation, useReducedMotion } from "@/hooks/useWebGLPreservation";
 import { useReverseGeocode } from "@/hooks/useReverseGeocode";
+import { useTheme } from "@/context/ThemeContext";
 
 interface JourneyMapProps {
   pickup: { lat: number; lon: number };
@@ -20,77 +21,8 @@ interface JourneyMapProps {
   mobileFullScreen?: boolean;
 }
 
-const MAP_STYLE = {
-  version: 8 as const,
-  name: "Mobility Intelligence",
-  metadata: { "mapbox:autocomposite": true },
-  sources: {
-    openmaptiles: {
-      type: "vector" as const,
-      url: "https://tiles.openfreemap.org/styles/liberty",
-      attribution: "&copy; OpenMapTiles &copy; OpenStreetMap contributors",
-    },
-  },
-  layers: [
-    { id: "background", type: "background" as const, paint: { "background-color": "#0f0f0f" } },
-    {
-      id: "land",
-      type: "fill" as const,
-      source: "openmaptiles",
-      "source-layer": "landuse",
-      filter: ["in", "class", "park", "forest", "wood"],
-      paint: { "fill-color": "#1a1a1a", "fill-opacity": 0.8 },
-    },
-    {
-      id: "water",
-      type: "fill" as const,
-      source: "openmaptiles",
-      "source-layer": "water",
-      paint: { "fill-color": "#0d1b2a", "fill-opacity": 1 },
-    },
-    {
-      id: "roads",
-      type: "line" as const,
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      filter: ["in", "class", "motorway", "trunk", "primary", "secondary", "tertiary"],
-      paint: {
-        "line-color": "#2a2a2a",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.5, 12, 1.5, 16, 3],
-        "line-opacity": 0.6,
-      },
-    },
-    {
-      id: "road-labels",
-      type: "symbol" as const,
-      source: "openmaptiles",
-      "source-layer": "transportation",
-      filter: ["in", "class", "motorway", "trunk", "primary"],
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Open Sans Semibold"],
-        "text-size": 10,
-        "symbol-placement": "line",
-      },
-      paint: { "text-color": "#3a3a3a", "text-halo-color": "#0f0f0f", "text-halo-width": 1 },
-    },
-    {
-      id: "place-labels",
-      type: "symbol" as const,
-      source: "openmaptiles",
-      "source-layer": "place",
-      filter: [">=", "rank", 10],
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Open Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 12, 14],
-      },
-      paint: { "text-color": "#4a4a4a", "text-halo-color": "#0f0f0f", "text-halo-width": 1 },
-    },
-  ],
-  glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
-  sprite: "https://tiles.openfreemap.org/styles/liberty/sprite",
-};
+const LIGHT_MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+const DARK_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 const ROUTE_LINE_LAYER: maplibregl.AddLayerObject = {
   id: "route-line",
@@ -98,7 +30,7 @@ const ROUTE_LINE_LAYER: maplibregl.AddLayerObject = {
   source: "route-source",
   layout: { "line-join": "round", "line-cap": "round" },
   paint: {
-    "line-color": "#6c5ce7",
+    "line-color": "#818cf8",
     "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 6, 18, 10],
     "line-opacity": 0.9,
     "line-dasharray": [8, 4],
@@ -113,9 +45,13 @@ export function JourneyMap({
   routeGeometry,
   fitBounds = true,
   className,
-  height = 320,
-  mobileFullScreen = true,
+  height = 360,
+  mobileFullScreen = false,
 }: JourneyMapProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const currentStyle = isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE;
+
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -125,10 +61,7 @@ export function JourneyMap({
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [mapKey, setMapKey] = useState(0);
 
-  // WebGL context preservation on tab switch
   const { enablePreservation, disablePreservation } = useWebGLPreservation(mapRef);
-
-  // Reduced motion preference
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -158,7 +91,6 @@ export function JourneyMap({
     return [[minLon, minLat], [maxLon, maxLat]] as maplibregl.LngLatBoundsLike;
   }, [routeGeometry]);
 
-  // Detect mobile
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
@@ -170,7 +102,6 @@ export function JourneyMap({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Track container size
   useEffect(() => {
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -183,13 +114,12 @@ export function JourneyMap({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Initialize map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+      style: currentStyle,
       center: [center.longitude, center.latitude],
       zoom: 11,
       attributionControl: false,
@@ -205,7 +135,6 @@ export function JourneyMap({
       if (routeGeometry) {
         map.addSource(ROUTE_SOURCE_ID, { type: "geojson", data: routeGeometry });
         map.addLayer(ROUTE_LINE_LAYER as maplibregl.AddLayerObject);
-        setRouteAdded(true);
       }
     });
 
@@ -217,7 +146,22 @@ export function JourneyMap({
     };
   }, []);
 
-  // Update route when geometry changes
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return;
+    const map = mapRef.current;
+    map.setStyle(currentStyle);
+    map.once("style.load", () => {
+      if (routeGeometry) {
+        if (!map.getSource(ROUTE_SOURCE_ID)) {
+          map.addSource(ROUTE_SOURCE_ID, { type: "geojson", data: routeGeometry });
+        }
+        if (!map.getLayer(ROUTE_LINE_LAYER.id)) {
+          map.addLayer(ROUTE_LINE_LAYER as maplibregl.AddLayerObject);
+        }
+      }
+    });
+  }, [currentStyle, mapLoaded, routeGeometry]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;

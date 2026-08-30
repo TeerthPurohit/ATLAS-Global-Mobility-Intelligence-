@@ -140,7 +140,7 @@ export default function DocsPage() {
   return (
     <div className="flex h-[calc(100dvh-5.5rem)] w-full gap-6 overflow-hidden">
       {/* ── LEFT NAVIGATION SIDEBAR (Hermes-Style) ── */}
-      <aside className="hidden h-full w-72 shrink-0 flex-col rounded-2xl border border-surface-border bg-white dark:bg-surface-1 p-4 shadow-sm md:flex">
+      <aside className="hidden h-full w-72 shrink-0 flex-col rounded-2xl border border-surface-border bg-surface-1 p-4 shadow-sm md:flex">
         {/* Search Bar with Shortcut hint */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-muted" />
@@ -151,7 +151,7 @@ export default function DocsPage() {
             placeholder="Search documentation..."
             className="w-full rounded-xl border border-surface-border bg-surface-0/70 py-2 pl-9 pr-10 text-xs text-ink-primary placeholder-ink-muted focus:outline-none focus:ring-2 focus:ring-brass/40"
           />
-          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-surface-border bg-surface-1 px-1.5 py-0.5 font-mono text-[9px] text-ink-muted shadow-2xs">
+          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-surface-border bg-surface-0 px-1.5 py-0.5 font-mono text-[9px] text-ink-muted shadow-2xs">
             ⌘K
           </kbd>
         </div>
@@ -176,7 +176,7 @@ export default function DocsPage() {
                 className={cn(
                   "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition-all",
                   isSelected
-                    ? "bg-amber-400 text-ink-primary font-bold shadow-xs"
+                    ? "bg-brass text-white font-bold shadow-xs"
                     : "text-ink-secondary hover:bg-surface-0 hover:text-ink-primary"
                 )}
               >
@@ -194,7 +194,7 @@ export default function DocsPage() {
                   <span className="truncate">{cat.title}</span>
                 </div>
                 <ChevronRight
-                  className={cn("h-3.5 w-3.5 shrink-0 opacity-60", isSelected && "text-ink-primary opacity-100 font-bold")}
+                  className={cn("h-3.5 w-3.5 shrink-0 opacity-60", isSelected && "text-white opacity-100 font-bold")}
                 />
               </button>
             );
@@ -214,7 +214,7 @@ export default function DocsPage() {
       {/* ── MAIN DOCUMENTATION READING CANVAS ── */}
       <main
         id="docs-main-content"
-        className="flex flex-1 flex-col overflow-y-auto rounded-2xl border border-surface-border bg-white dark:bg-surface-1 shadow-sm p-6 sm:p-10 no-scrollbar scroll-smooth"
+        className="flex flex-1 flex-col overflow-y-auto rounded-2xl border border-surface-border bg-surface-1 shadow-sm p-6 sm:p-10 no-scrollbar scroll-smooth"
       >
         {/* Breadcrumb Header */}
         <div className="mb-6 flex items-center gap-2 text-xs font-mono text-ink-muted">

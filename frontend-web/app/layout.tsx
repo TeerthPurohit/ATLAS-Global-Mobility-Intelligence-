@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { AppProvider } from "@/context/AppContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { NavBar } from "@/components/layout/NavBar";
@@ -15,8 +16,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const saved = localStorage.getItem('atlas_theme');
+                const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', theme);
+                if (theme === 'dark') document.documentElement.classList.add('dark');
+              } catch (e) {}
+            `,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -26,17 +39,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen font-body-md bg-surface-0 text-ink-primary">
         <Providers>
-          <SmoothScrollProvider>
-            <AuthProvider>
-              <AppProvider>
-                <NavBar />
-                <CommandPalette />
-                <main className="min-h-[calc(100dvh-5rem)] w-full px-4 py-5 sm:px-8 sm:py-8 lg:px-10">
-                  <RequireAuth>{children}</RequireAuth>
-                </main>
-              </AppProvider>
-            </AuthProvider>
-          </SmoothScrollProvider>
+          <ThemeProvider>
+            <SmoothScrollProvider>
+              <AuthProvider>
+                <AppProvider>
+                  <NavBar />
+                  <CommandPalette />
+                  <main className="min-h-[calc(100dvh-5rem)] w-full px-4 py-5 sm:px-8 sm:py-8 lg:px-10">
+                    <RequireAuth>{children}</RequireAuth>
+                  </main>
+                </AppProvider>
+              </AuthProvider>
+            </SmoothScrollProvider>
+          </ThemeProvider>
         </Providers>
       </body>
     </html>

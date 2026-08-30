@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { PulsingStatusDot } from "@/components/magic/PulsingStatusDot";
 import { useAuth } from "@/context/AuthContext";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const navLinks = [
   { href: "/", label: "Explore" },
@@ -95,8 +96,10 @@ export function NavBar() {
           })}
         </nav>
 
-        {/* Auth & Live Pulse */}
-        <div className="flex items-center gap-3">
+        {/* Auth, Theme Toggle & Live Pulse */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <ThemeToggle />
+
           <div className="hidden xl:flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-1/80 px-2.5 py-1 text-[11px] font-mono text-ink-secondary">
             <PulsingStatusDot status="live" size={6} />
             <span>263 Zones Active</span>

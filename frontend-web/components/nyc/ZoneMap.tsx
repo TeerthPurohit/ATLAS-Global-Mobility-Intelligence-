@@ -31,11 +31,13 @@ import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { getZoneDemandTotals, type ZoneDemandTotal } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
+import { useTheme } from "@/context/ThemeContext";
 
 const NYC_VIEW = { longitude: -73.95, latitude: 40.71, zoom: 10.1 };
 const ENTRANCE_VIEW = { longitude: -73.95, latitude: 40.71, zoom: 7.1 };
 
-const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+const LIGHT_MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+const DARK_MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 interface HoveredZone {
   x: number;
@@ -56,6 +58,10 @@ interface Waypoint {
 
 export function ZoneMap() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const mapStyle = isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE;
+
   const mapRef = useRef<MapRef | null>(null);
   const [hovered, setHovered] = useState<HoveredZone | null>(null);
   const [selectedBorough, setSelectedBorough] = useState<string | null>(null);
@@ -240,7 +246,7 @@ export function ZoneMap() {
       <MapGL
         ref={mapRef}
         initialViewState={ENTRANCE_VIEW}
-        mapStyle={MAP_STYLE}
+        mapStyle={mapStyle}
         interactiveLayerIds={["zone-fill"]}
         cursor={hovered ? "pointer" : "grab"}
         onLoad={(e) => e.target.easeTo({ ...NYC_VIEW, duration: 2200, easing: (t) => t * (2 - t) })}
@@ -258,24 +264,38 @@ export function ZoneMap() {
               id="zone-fill"
               type="fill"
               paint={{
-                "fill-color": [
-                  "interpolate",
-                  ["linear"],
-                  ["get", "intensity"],
-                  0, "#e7e5fa",
-                  0.35, "#b3aaf0",
-                  0.7, "#8a78ea",
-                  1, "#6c5ce7",
-                ],
+                "fill-color": isDark
+                  ? [
+                      "interpolate",
+                      ["linear"],
+                      ["get", "intensity"],
+                      0, "#181433",
+                      0.35, "#3730a3",
+                      0.7, "#6366f1",
+                      1, "#a855f7",
+                    ]
+                  : [
+                      "interpolate",
+                      ["linear"],
+                      ["get", "intensity"],
+                      0, "#e7e5fa",
+                      0.35, "#b3aaf0",
+                      0.7, "#8a78ea",
+                      1, "#6c5ce7",
+                    ],
                 "fill-opacity": selectedBorough
-                  ? ["case", ["==", ["get", "borough"], selectedBorough], 0.85, 0.12]
-                  : 0.75,
+                  ? ["case", ["==", ["get", "borough"], selectedBorough], 0.85, 0.15]
+                  : isDark ? 0.8 : 0.75,
               }}
             />
             <Layer
               id="zone-outline"
               type="line"
-              paint={{ "line-color": "#6c5ce7", "line-width": 0.4, "line-opacity": 0.3 }}
+              paint={{
+                "line-color": isDark ? "#818cf8" : "#6c5ce7",
+                "line-width": 0.5,
+                "line-opacity": isDark ? 0.45 : 0.3,
+              }}
             />
           </Source>
         )}
