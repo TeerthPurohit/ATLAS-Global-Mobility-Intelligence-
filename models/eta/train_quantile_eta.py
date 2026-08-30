@@ -35,8 +35,9 @@ import xgboost as xgb
 from sklearn.metrics import mean_absolute_error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from congestion.build_features import DEFAULT_DB_PATH, FEATURE_COLUMNS, build_features
+from congestion.build_features import _RAW_TRIPS_WHERE, DEFAULT_DB_PATH, FEATURE_COLUMNS, build_features, transform_batch
 from congestion.streaming_features import (
+    DEFAULT_BATCH_ROWS,
     TrainDataIter,
     count_split,
     load_streaming_context,
@@ -294,14 +295,72 @@ GPU_LADDER_RUNGS = [
 GPU_COVERAGE_BREAK_THRESHOLD = 0.3  # nominal coverage is ~0.80; this low only happens via the known GPU quantileerror bug
 
 
-def _train_quantiles_once(
-    train_val: pd.DataFrame, test: pd.DataFrame, num_boost_round: int, device: str
+def _stream_sampled_train_batches(con, sample_rows: int, test_start, batch_rows: int):
+    """Same batched-Arrow-reader shape as `streaming_features.stream_raw_batches`,
+    but a `sample_rows`-row reservoir sample of the train_val period (before
+    `test_start`) instead of the whole period -- so the ladder can scale row
+    count with the SAME chunked, external-memory construction production's
+    full run uses (`TrainDataIter` + `QuantileDMatrix(iterator)`), instead of
+    switching to a different, un-validated in-memory code path per rung. This
+    also directly tests whether that streaming+GPU combination -- what the
+    original broken 92M-row run actually used -- is itself implicated,
+    independent of raw row count (see project memory
+    `project_eta_gpu_only_decision_2026_08_30.md`)."""
+    query = (
+        "select pickup_at, pickup_hour, pickup_day_of_week, pickup_date, pickup_location_id, "
+        f"trip_distance, trip_duration_minutes from int_trips_enriched where {_RAW_TRIPS_WHERE} "
+        f"and pickup_at < '{test_start}' USING SAMPLE {sample_rows} ROWS (reservoir, {SEED})"
+    )
+    result = con.execute(query)
+    reader = result.to_arrow_reader(batch_rows) if hasattr(result, "to_arrow_reader") else result.fetch_record_batch(batch_rows)
+    for record_batch in reader:
+        batch = record_batch.to_pandas()
+        batch["pickup_date"] = pd.to_datetime(batch["pickup_date"])
+        yield batch
+
+
+class _SampledTrainDataIter(xgb.DataIter):
+    """`TrainDataIter`'s sampled-to-a-fixed-row-count sibling for the GPU
+    ladder -- at most `batch_rows` feature rows are ever held in memory at
+    once, same external-memory shape production uses, just capped to
+    `sample_rows` via reservoir sampling instead of taking the whole
+    train_val period."""
+
+    def __init__(self, con, sample_rows: int, test_start, lookups, batch_rows: int = DEFAULT_BATCH_ROWS) -> None:
+        self._con = con
+        self._sample_rows = sample_rows
+        self._test_start = test_start
+        self._free_flow, self._holiday_flags, self._weather_demand = lookups
+        self._batch_rows = batch_rows
+        self._reader_iter = None
+        super().__init__()  # no cache_prefix -- QuantileDMatrix requires cache=False, same as TrainDataIter(cache=False)
+
+    def reset(self) -> None:
+        self._reader_iter = _stream_sampled_train_batches(self._con, self._sample_rows, self._test_start, self._batch_rows)
+
+    def next(self, input_data) -> int:
+        if self._reader_iter is None:
+            self.reset()
+        try:
+            raw_batch = next(self._reader_iter)
+        except StopIteration:
+            return 0
+        features = transform_batch(raw_batch, self._free_flow, self._holiday_flags, self._weather_demand)
+        if len(features) == 0:
+            return self.next(input_data)  # an all-filtered-out batch is not "no more data"
+        input_data(data=features[FEATURE_COLUMNS], label=features[TARGET_COLUMN])
+        return 1
+
+
+def _train_quantiles_streaming(
+    con, sample_rows: int, test_start, lookups, dtest: xgb.DMatrix, actual: np.ndarray,
+    num_boost_round: int, device: str, batch_rows: int,
 ) -> tuple[dict[str, xgb.Booster], dict[str, dict], float]:
-    """One shared train_val/test split -> boosters + per-quantile metrics +
-    measured coverage, for whichever `device` ("cpu" or "cuda")."""
-    dtrain = xgb.QuantileDMatrix(train_val[FEATURE_COLUMNS], label=train_val[TARGET_COLUMN])
-    dtest = xgb.DMatrix(test[FEATURE_COLUMNS])
-    actual = test[TARGET_COLUMN].to_numpy()
+    """One rung's worth of training (all three quantiles) via the streamed,
+    row-count-capped `_SampledTrainDataIter` -> boosters + per-quantile
+    metrics + measured coverage against the shared, fixed `dtest`/`actual`."""
+    it = _SampledTrainDataIter(con, sample_rows, test_start, lookups, batch_rows)
+    dtrain = xgb.QuantileDMatrix(it)
     boosters: dict[str, xgb.Booster] = {}
     metrics: dict[str, dict] = {}
     for name, alpha in QUANTILES.items():
@@ -320,71 +379,79 @@ def _train_quantiles_once(
 
 def train_gpu_row_ladder(
     rungs: list[int] = GPU_LADDER_RUNGS, probe_rounds: int = 100, final_rounds: int = 300,
-    device: str = "cuda", output_dir: Path = ARTIFACT_DIR,
+    device: str = "cuda", output_dir: Path = ARTIFACT_DIR, batch_rows: int = DEFAULT_BATCH_ROWS,
 ) -> dict:
     """Diagnostic + production in one pass: trains quantile models at
     increasing row counts (cheap `probe_rounds` each) to find where
     `reg:quantileerror` + `device="cuda"` breaks -- measured coverage
     collapses from ~0.80 to near-zero above some row count between 10.25M
     (confirmed correct) and 92M (confirmed broken), see project memory
-    `project_eta_gpu_only_decision_2026_08_30.md`. Stops at the first
-    broken rung or hard failure (e.g. OOM), then retrains the LAST safe
-    rung at full `final_rounds` and saves it as the real production
-    eta_p10/p50/p90_model.json -- so one Kaggle run both finds the break
-    point and ships a real, honestly-measured model instead of requiring
-    a second run."""
+    `project_eta_gpu_only_decision_2026_08_30.md`. Each rung streams its
+    sampled train_val rows in `batch_rows`-sized chunks (external-memory,
+    same as production's full run) instead of materializing the whole rung
+    in pandas at once -- an earlier in-memory version of this ladder OOM'd
+    at 40M rows on Kaggle. Stops at the first broken rung or hard failure,
+    then retrains the LAST safe rung at full `final_rounds` and saves it as
+    the real production eta_p10/p50/p90_model.json."""
     con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    bounds, lookups = load_streaming_context(con)
+    _, _, test_start = bounds
+    _log("materializing fixed test split (same for every rung)")
+    t0 = time.perf_counter()
+    test_df = materialize_split(con, "test", bounds, lookups, batch_rows=batch_rows)
+    _log(f"test split ready in {time.perf_counter()-t0:.1f}s: {len(test_df)} rows")
+    dtest = xgb.DMatrix(test_df[FEATURE_COLUMNS])
+    actual = test_df[TARGET_COLUMN].to_numpy()
+
     ladder_results = []
     last_safe_rung = None
-    last_safe_split = None
     for rung in rungs:
-        _log(f"ladder rung {rung:,} rows -- building features")
+        _log(f"ladder rung {rung:,} rows -- streaming + training on GPU")
         try:
             t0 = time.perf_counter()
-            df = build_features(con, sample_rows=rung)
-            train, val, test = split_demand_blocks(df, "pickup_at")
-            train_val = pd.concat([train, val])
-            _, metrics, coverage = _train_quantiles_once(train_val, test, probe_rounds, device)
+            _, metrics, coverage = _train_quantiles_streaming(
+                con, rung, test_start, lookups, dtest, actual, probe_rounds, device, batch_rows
+            )
             elapsed = time.perf_counter() - t0
             row = {
-                "rung_requested": rung, "n_train_val": len(train_val), "n_test": len(test),
-                "mae": {k: v["mae"] for k, v in metrics.items()}, "coverage": coverage, "elapsed_s": round(elapsed, 1),
+                "rung_requested": rung, "mae": {k: v["mae"] for k, v in metrics.items()},
+                "coverage": coverage, "elapsed_s": round(elapsed, 1),
             }
             ladder_results.append(row)
             _log(f"ladder rung {rung:,}: coverage={coverage:.4f} mae={row['mae']} ({elapsed:.0f}s)")
             if coverage < GPU_COVERAGE_BREAK_THRESHOLD:
                 _log(f"ladder rung {rung:,}: BROKEN (coverage {coverage:.4f} << nominal 0.80) -- stopping ladder here")
                 break
-            last_safe_rung, last_safe_split = rung, (train_val, test)
+            last_safe_rung = rung
         except Exception as exc:  # noqa: BLE001 -- one bad rung (OOM, CUDA error) must not kill the whole ladder silently
             _log(f"ladder rung {rung:,}: FAILED with {type(exc).__name__}: {exc}")
             ladder_results.append({"rung_requested": rung, "error": f"{type(exc).__name__}: {exc}"})
             break
 
-    result = {"ladder": ladder_results, "last_safe_rung": last_safe_rung, "device": device}
+    result = {"ladder": ladder_results, "last_safe_rung": last_safe_rung, "device": device, "n_test_rows": len(test_df)}
     (output_dir / "eta_gpu_ladder_report.json").write_text(json.dumps(result, indent=2))
     if last_safe_rung is None:
         _log("no rung trained successfully -- nothing to save")
         return result
 
     _log(f"retraining production models at last safe rung {last_safe_rung:,} rows, {final_rounds} rounds")
-    train_val, test = last_safe_split
-    boosters, metrics, coverage = _train_quantiles_once(train_val, test, final_rounds, device)
+    boosters, metrics, coverage = _train_quantiles_streaming(
+        con, last_safe_rung, test_start, lookups, dtest, actual, final_rounds, device, batch_rows
+    )
     for name, booster in boosters.items():
         booster.save_model(str(output_dir / f"eta_{name}_model.json"))
-    actual = test[TARGET_COLUMN].to_numpy()
     ordering_violations = int(np.sum(
         (metrics["p10"]["pred"] > metrics["p50"]["pred"]) | (metrics["p50"]["pred"] > metrics["p90"]["pred"])
     ))
     metadata = {
-        "seed": SEED, "sample_rows": last_safe_rung, "training_mode": f"gpu_ladder_{device}",
-        "n_rows": {"train_val": len(train_val), "test": len(test)},
+        "seed": SEED, "sample_rows": last_safe_rung, "training_mode": f"gpu_ladder_streaming_{device}",
+        "n_rows": {"train_val_requested": last_safe_rung, "test": len(test_df)},
         "features": FEATURE_COLUMNS, "target": TARGET_COLUMN,
         "hyperparameters": {**XGB_PARAMS, "n_estimators": final_rounds, "device": device},
         "quantiles": QUANTILES,
         "metrics": {k: {"alpha": v["alpha"], "mae": v["mae"]} for k, v in metrics.items()},
         "prediction_interval_coverage": {
-            "nominal": 0.80, "measured_p10_p90_coverage": coverage, "n_test_rows": int(len(test)),  # noqa: RUF046
+            "nominal": 0.80, "measured_p10_p90_coverage": coverage, "n_test_rows": int(len(test_df)),  # noqa: RUF046
             "note": (
                 "measured on the last GPU-ladder rung confirmed not broken -- see "
                 "eta_gpu_ladder_report.json for the full rung-by-rung scan"
