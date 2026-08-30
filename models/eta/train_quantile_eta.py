@@ -287,6 +287,117 @@ def _train_and_save_streaming(quantiles: dict[str, float] | None = None) -> dict
     return metadata
 
 
+GPU_LADDER_RUNGS = [
+    10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000, 60_000_000,
+    70_000_000, 80_000_000, 90_000_000, 100_000_000, 110_000_000, 113_000_000,
+]
+GPU_COVERAGE_BREAK_THRESHOLD = 0.3  # nominal coverage is ~0.80; this low only happens via the known GPU quantileerror bug
+
+
+def _train_quantiles_once(
+    train_val: pd.DataFrame, test: pd.DataFrame, num_boost_round: int, device: str
+) -> tuple[dict[str, xgb.Booster], dict[str, dict], float]:
+    """One shared train_val/test split -> boosters + per-quantile metrics +
+    measured coverage, for whichever `device` ("cpu" or "cuda")."""
+    dtrain = xgb.QuantileDMatrix(train_val[FEATURE_COLUMNS], label=train_val[TARGET_COLUMN])
+    dtest = xgb.DMatrix(test[FEATURE_COLUMNS])
+    actual = test[TARGET_COLUMN].to_numpy()
+    boosters: dict[str, xgb.Booster] = {}
+    metrics: dict[str, dict] = {}
+    for name, alpha in QUANTILES.items():
+        params = {
+            "max_depth": XGB_PARAMS["max_depth"], "learning_rate": XGB_PARAMS["learning_rate"],
+            "objective": "reg:quantileerror", "quantile_alpha": alpha,
+            "tree_method": "hist", "device": device, "seed": SEED,
+        }
+        booster = xgb.train(params, dtrain, num_boost_round=num_boost_round)
+        pred = booster.predict(dtest)
+        boosters[name] = booster
+        metrics[name] = {"alpha": alpha, "mae": float(mean_absolute_error(actual, pred)), "pred": pred}
+    coverage = float(np.mean((actual >= metrics["p10"]["pred"]) & (actual <= metrics["p90"]["pred"])))
+    return boosters, metrics, coverage
+
+
+def train_gpu_row_ladder(
+    rungs: list[int] = GPU_LADDER_RUNGS, probe_rounds: int = 100, final_rounds: int = 300,
+    device: str = "cuda", output_dir: Path = ARTIFACT_DIR,
+) -> dict:
+    """Diagnostic + production in one pass: trains quantile models at
+    increasing row counts (cheap `probe_rounds` each) to find where
+    `reg:quantileerror` + `device="cuda"` breaks -- measured coverage
+    collapses from ~0.80 to near-zero above some row count between 10.25M
+    (confirmed correct) and 92M (confirmed broken), see project memory
+    `project_eta_gpu_only_decision_2026_08_30.md`. Stops at the first
+    broken rung or hard failure (e.g. OOM), then retrains the LAST safe
+    rung at full `final_rounds` and saves it as the real production
+    eta_p10/p50/p90_model.json -- so one Kaggle run both finds the break
+    point and ships a real, honestly-measured model instead of requiring
+    a second run."""
+    con = duckdb.connect(str(DEFAULT_DB_PATH), read_only=True)
+    ladder_results = []
+    last_safe_rung = None
+    last_safe_split = None
+    for rung in rungs:
+        _log(f"ladder rung {rung:,} rows -- building features")
+        try:
+            t0 = time.perf_counter()
+            df = build_features(con, sample_rows=rung)
+            train, val, test = split_demand_blocks(df, "pickup_at")
+            train_val = pd.concat([train, val])
+            _, metrics, coverage = _train_quantiles_once(train_val, test, probe_rounds, device)
+            elapsed = time.perf_counter() - t0
+            row = {
+                "rung_requested": rung, "n_train_val": len(train_val), "n_test": len(test),
+                "mae": {k: v["mae"] for k, v in metrics.items()}, "coverage": coverage, "elapsed_s": round(elapsed, 1),
+            }
+            ladder_results.append(row)
+            _log(f"ladder rung {rung:,}: coverage={coverage:.4f} mae={row['mae']} ({elapsed:.0f}s)")
+            if coverage < GPU_COVERAGE_BREAK_THRESHOLD:
+                _log(f"ladder rung {rung:,}: BROKEN (coverage {coverage:.4f} << nominal 0.80) -- stopping ladder here")
+                break
+            last_safe_rung, last_safe_split = rung, (train_val, test)
+        except Exception as exc:  # noqa: BLE001 -- one bad rung (OOM, CUDA error) must not kill the whole ladder silently
+            _log(f"ladder rung {rung:,}: FAILED with {type(exc).__name__}: {exc}")
+            ladder_results.append({"rung_requested": rung, "error": f"{type(exc).__name__}: {exc}"})
+            break
+
+    result = {"ladder": ladder_results, "last_safe_rung": last_safe_rung, "device": device}
+    (output_dir / "eta_gpu_ladder_report.json").write_text(json.dumps(result, indent=2))
+    if last_safe_rung is None:
+        _log("no rung trained successfully -- nothing to save")
+        return result
+
+    _log(f"retraining production models at last safe rung {last_safe_rung:,} rows, {final_rounds} rounds")
+    train_val, test = last_safe_split
+    boosters, metrics, coverage = _train_quantiles_once(train_val, test, final_rounds, device)
+    for name, booster in boosters.items():
+        booster.save_model(str(output_dir / f"eta_{name}_model.json"))
+    actual = test[TARGET_COLUMN].to_numpy()
+    ordering_violations = int(np.sum(
+        (metrics["p10"]["pred"] > metrics["p50"]["pred"]) | (metrics["p50"]["pred"] > metrics["p90"]["pred"])
+    ))
+    metadata = {
+        "seed": SEED, "sample_rows": last_safe_rung, "training_mode": f"gpu_ladder_{device}",
+        "n_rows": {"train_val": len(train_val), "test": len(test)},
+        "features": FEATURE_COLUMNS, "target": TARGET_COLUMN,
+        "hyperparameters": {**XGB_PARAMS, "n_estimators": final_rounds, "device": device},
+        "quantiles": QUANTILES,
+        "metrics": {k: {"alpha": v["alpha"], "mae": v["mae"]} for k, v in metrics.items()},
+        "prediction_interval_coverage": {
+            "nominal": 0.80, "measured_p10_p90_coverage": coverage, "n_test_rows": int(len(test)),  # noqa: RUF046
+            "note": (
+                "measured on the last GPU-ladder rung confirmed not broken -- see "
+                "eta_gpu_ladder_report.json for the full rung-by-rung scan"
+            ),
+        },
+        "ordering_violations_p10_p50_p90": ordering_violations,
+        "library_versions": {"xgboost": xgb.__version__, "pandas": pd.__version__, "numpy": np.__version__},
+    }
+    (output_dir / "eta_metadata.json").write_text(json.dumps(metadata, indent=2))
+    _log(f"gpu ladder complete: last safe rung {last_safe_rung:,}, coverage {coverage:.4f}")
+    return metadata
+
+
 def train_and_save(
     df: pd.DataFrame | None = None, sample_rows: int | None = 300_000, output_dir: Path = ARTIFACT_DIR,
     quantiles: dict[str, float] | None = None,
