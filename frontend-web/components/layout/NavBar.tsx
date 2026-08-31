@@ -14,9 +14,8 @@ const navLinks = [
   { href: "/journey", label: "Journey" },
   { href: "/compare", label: "Compare" },
   { href: "/insights", label: "Insights" },
-  { href: "/analyst", label: "Ask AI" },
+  { href: "/ask-ai", label: "Ask AI" },
   { href: "/analytics", label: "Analytics" },
-  { href: "/docs", label: "Docs" },
 ];
 
 export function NavBar() {
@@ -155,7 +154,7 @@ export function NavBar() {
               <Zap className="h-3 w-3 text-indigo-500" />
               <span>Latency: &lt;85ms</span>
             </span>
-            <span className="text-brass/80 font-semibold">● Ground Truth Validated</span>
+            <span className="text-teal-600 dark:text-teal-400 font-semibold">● Model & Mart Calibrated</span>
           </div>
         </div>
       )}

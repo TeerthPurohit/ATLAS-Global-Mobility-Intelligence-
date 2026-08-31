@@ -45,6 +45,11 @@ class PredictionResult:
     # (ADR-007), so the predictor computes the score ONCE here and each
     # consumer shapes it. None means "no numeric score exists".
     score: float | None = None
+    # Empirical model validation metrics and MAE error bounds
+    mae: float | None = None
+    rmse: float | None = None
+    error_band: tuple[float, float] | None = None
+    is_deterministic: bool = False
 
     def __post_init__(self) -> None:
         if self.score is not None and not 0.0 <= self.score <= 1.0:

@@ -36,7 +36,7 @@ function FareCardContent({ data }: { data: FareResponse }) {
     <Card>
       <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
         <DollarSign className="h-4 w-4 text-brass" />
-        Fare Estimate
+        Modeled Fleet Fare
       </CardTitle>
       <div className="mt-3 space-y-3">
         <PredictionField label="Total Fare" prediction={farePred} isCurrency emphasis />

@@ -22,6 +22,7 @@ if str(RAG_DIR) not in sys.path:
 
 import llm_usage  # noqa: E402
 import semantic_cache  # noqa: E402
+from config import QDRANT_API_KEY, QDRANT_URL  # noqa: E402
 
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 DBT_TARGET = REPO_ROOT / "dbt_project" / "target"
@@ -278,7 +279,7 @@ def check_health() -> dict:
         from config import QDRANT_URL
         from qdrant_client import QdrantClient
 
-        client = QdrantClient(url=QDRANT_URL, timeout=2)
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=2)
         client.get_collections()
         qdrant_ok = True
     except Exception as exc:  # noqa: BLE001

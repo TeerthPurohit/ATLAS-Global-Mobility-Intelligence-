@@ -42,7 +42,7 @@ export function QuickActions({ hasCapabilities, className }: QuickActionsProps) 
       label: "AI Analyst",
       desc: "Interactive intelligence",
       icon: MessageSquare,
-      href: "/analyst",
+      href: "/ask-ai",
       disabled: false,
       color: "text-verdigris border-verdigris/30 bg-verdigris/10",
     },

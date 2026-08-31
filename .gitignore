@@ -8,6 +8,7 @@ data/warehouse/*
 *.duckdb
 *.duckdb.wal
 *.db
+!data/warehouse/deployed.duckdb
 
 # ── Streaming-training resume state (transient, regenerate locally) ──
 _streaming_checkpoint.json
@@ -100,3 +101,8 @@ infra/cdk/cdk.out/
 # graphify upgrade. The graph itself (graph.json/html, GRAPH_REPORT.md) is tracked.
 graphify-out/cache/
 kaggle.json
+
+# ── Local databases / generated deployment state ────────────────
+data/*.db
+data/*.db.wal
+data/warehouse/dataset-metadata.json

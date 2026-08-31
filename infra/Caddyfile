@@ -1,0 +1,17 @@
+# Caddyfile for Oracle Cloud A1 Reverse Proxy with Auto-SSL
+# Replace 'api.yourdomain.com' with your actual domain or DuckDNS hostname (e.g., my-tlc-api.duckdns.org)
+# If using raw IP without a domain during testing, use ':80' instead.
+
+{$DOMAIN:localhost} {
+    # Forward all API traffic to FastAPI Backend
+    reverse_proxy backend:8000
+
+    # Compression and Security Headers
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+    }
+}

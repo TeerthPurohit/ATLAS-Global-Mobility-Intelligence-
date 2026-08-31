@@ -75,24 +75,11 @@ export default function AnalystPage() {
   useEffect(() => {
     if (authLoading || !user) return;
     refreshSessions();
-    const saved = localStorage.getItem(SESSION_KEY);
-    if (!saved) return;
-    setSessionId(saved);
-    getChatHistory(saved)
-      .then((history) =>
-        setTurns(
-          history.map((m: ChatMessage) => ({
-            role: m.role === "user" ? "user" : "assistant",
-            content: m.content,
-            route: m.route,
-            sql: m.sql,
-          }))
-        )
-      )
-      .catch(() => {
-        localStorage.removeItem(SESSION_KEY);
-        setSessionId(undefined);
-      });
+    // Always start with a fresh, empty conversation on initial entry (like ChatGPT)
+    setSessionId(undefined);
+    setTurns([]);
+    setWsError(null);
+    localStorage.removeItem(SESSION_KEY);
   }, [authLoading, user, refreshSessions]);
 
   useEffect(() => {
@@ -180,7 +167,21 @@ export default function AnalystPage() {
         },
         onError: () => {
           setStreaming(false);
-          setWsError("Failed to connect to the intelligence backend. Please verify the service is running.");
+          setWsError("Connection interrupted. Please ensure the backend service is running and retry.");
+          setTurns((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (last.role === "assistant" && !last.content) {
+              const next = [...prev];
+              next[next.length - 1] = {
+                role: "assistant",
+                content: "⚠️ Connection was interrupted while retrieving data. Please retry your question.",
+                pending: false,
+              };
+              return next;
+            }
+            return prev;
+          });
         },
         onClose: finalizePending,
       }
@@ -629,9 +630,20 @@ function TurnBubble({ turn, onPickPrompt }: { turn: Turn; onPickPrompt?: (prompt
 
         {/* Content with rich formatting and structured tables */}
         <div className="text-sm text-ink-primary leading-relaxed font-body-md">
-          <FormattedMessage content={turn.content} onPickPrompt={onPickPrompt} />
-          {turn.pending && (
-            <span className="ml-1 inline-block animate-pulse font-bold text-brass">▍</span>
+          {turn.content ? (
+            <>
+              <FormattedMessage content={turn.content} onPickPrompt={onPickPrompt} />
+              {turn.pending && (
+                <span className="ml-1 inline-block animate-pulse font-bold text-brass">▍</span>
+              )}
+            </>
+          ) : turn.pending ? (
+            <div className="flex items-center gap-2 py-1 text-xs font-mono text-ink-secondary">
+              <PulsingStatusDot status="live" size={6} />
+              <span>Querying 1.4B+ TLC trip mart records...</span>
+            </div>
+          ) : (
+            <p className="text-xs text-ink-muted italic">No response returned.</p>
           )}
         </div>
 

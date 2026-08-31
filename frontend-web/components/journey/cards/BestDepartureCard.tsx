@@ -34,21 +34,21 @@ function BestDepartureCardContent({ data }: { data: DepartureTimeResponse }) {
       <div className="flex items-center justify-between border-b border-surface-border/60 pb-3 mb-4">
         <CardTitle className="font-display text-base tracking-wide flex items-center gap-2">
           <Clock className="h-4 w-4 text-brass" />
-          Optimal Departure Window
+          Lowest Historical Traffic Window
         </CardTitle>
         <span className="rounded-full bg-brass/10 border border-brass/20 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-brass">
-          ML Demand Sweep
+          TLC Demand Sweep
         </span>
       </div>
       <div className="mt-3 space-y-3">
         <PredictionField
-          label="Recommended Departure"
+          label="Recommended Window"
           prediction={{
-            value: data.recommended_departure || "08:00 AM",
+            value: data.recommended_departure || "04:00 AM",
             unit: null,
             basis: data.status || "computed",
             source: "TLC Demand Sweep",
-            reason: data.reason || "Lowest expected corridor traffic",
+            reason: data.reason || "Lowest historical corridor traffic demand",
             data_vintage: null,
             value_usd: null,
           }}
@@ -56,7 +56,7 @@ function BestDepartureCardContent({ data }: { data: DepartureTimeResponse }) {
         <PredictionField
           label="Confidence Rating"
           prediction={{
-            value: Math.round((data.confidence || 0.95) * 100),
+            value: Math.round((data.confidence ?? 0.88) * 100),
             unit: "%",
             basis: data.status || "computed",
             source: "TLC Hourly Profile",

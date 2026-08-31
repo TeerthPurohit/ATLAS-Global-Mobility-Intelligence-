@@ -47,7 +47,7 @@ function SurgeCardContent({ data }: { data: SurgeResponse }) {
         Surge Risk
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Surge Multiplier" prediction={pred} />
+        <PredictionField label="Surge Risk Score" prediction={pred} />
         <PredictionField label="Confidence" prediction={confPred} />
       </div>
       {data.request_id && (

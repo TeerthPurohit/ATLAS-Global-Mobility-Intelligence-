@@ -42,11 +42,11 @@ const BOROUGH_DISTRIBUTION = [
 ];
 
 const VEHICLE_FLEET_STATS = [
-  { type: "Standard Sedan", share: "54%", avgFare: "$23.40", co2: "320g/mi", surge: "1.00x" },
-  { type: "Executive SUV", share: "22%", avgFare: "$38.50", co2: "460g/mi", surge: "1.35x" },
-  { type: "Green Fleet (EV)", share: "14%", avgFare: "$24.90", co2: "0g/mi (Net Zero)", surge: "1.05x" },
-  { type: "Luxury Premium", share: "7%", avgFare: "$58.00", co2: "410g/mi", surge: "1.80x" },
-  { type: "Accessible WAV", share: "3%", avgFare: "$23.40", co2: "380g/mi", surge: "1.00x" },
+  { type: "Standard Sedan", share: "54%", avgFare: "$23.40", co2: "320g/mi", surge: "Base Rate" },
+  { type: "Executive SUV", share: "22%", avgFare: "$38.50", co2: "460g/mi", surge: "+35% Class Factor" },
+  { type: "Green Fleet (EV)", share: "14%", avgFare: "$24.90", co2: "0g/mi (Net Zero)", surge: "Zero Emissions" },
+  { type: "Luxury Premium", share: "7%", avgFare: "$58.00", co2: "410g/mi", surge: "+80% Luxury Class" },
+  { type: "Accessible WAV", share: "3%", avgFare: "$23.40", co2: "380g/mi", surge: "Parity Pricing" },
 ];
 
 export default function AnalyticsPage() {
@@ -75,6 +75,8 @@ export default function AnalyticsPage() {
     queryFn: () => getAnalyticsTrends(period),
     staleTime: 5 * 60_000,
   });
+
+  const boroughData = (summary as any)?.borough_distribution || BOROUGH_DISTRIBUTION;
 
   return (
     <div className="flex flex-col gap-8 pb-12">
@@ -123,7 +125,7 @@ export default function AnalyticsPage() {
                 Total Predictions
               </span>
               <p className="mt-1.5 font-display-md text-2xl font-extrabold text-ink-primary">
-                {summaryLoading ? "..." : (summary?.total_predictions?.toLocaleString() || "55")}
+                {summaryLoading ? "..." : (summary?.total_predictions?.toLocaleString() || "7")}
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brass/10 text-brass">
@@ -146,7 +148,7 @@ export default function AnalyticsPage() {
                 TLC Database Mart
               </span>
               <p className="mt-1.5 font-display-md text-2xl font-extrabold text-ink-primary">
-                1.4B+ Records
+                {(summary as any)?.total_warehouse_records || "1.4B+"} Records
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600">
@@ -154,7 +156,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-surface-border/60 pt-2 text-[11px] text-ink-muted">
-            <span className="text-ink-primary font-medium">263 Official Zones</span>
+            <span className="text-ink-primary font-medium">{(summary as any)?.official_zones || 263} Official Zones</span>
             <span className="font-mono text-emerald-600 font-semibold">100% Calibrated</span>
           </div>
         </Card>
@@ -167,7 +169,7 @@ export default function AnalyticsPage() {
                 Avg Calibrated Fare
               </span>
               <p className="mt-1.5 font-display-md text-2xl font-extrabold text-brass">
-                $24.80
+                ${((summary as any)?.avg_calibrated_fare || 28.45).toFixed(2)}
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">
@@ -175,8 +177,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-surface-border/60 pt-2 text-[11px] text-ink-muted">
-            <span>Peak Hour Surge</span>
-            <span className="font-mono text-ink-primary font-semibold">1.18x Mult</span>
+            <span>Surge Risk Range</span>
+            <span className="font-mono text-ink-primary font-semibold">+12% to +26%</span>
           </div>
         </Card>
 
@@ -188,7 +190,7 @@ export default function AnalyticsPage() {
                 Query Latency
               </span>
               <p className="mt-1.5 font-display-md text-2xl font-extrabold text-emerald-600">
-                &lt; 85ms
+                &lt; {((summary as any)?.p95_latency_ms || 85)}ms
               </p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
@@ -252,7 +254,7 @@ export default function AnalyticsPage() {
               </div>
 
               <div className="flex flex-col gap-4">
-                {BOROUGH_DISTRIBUTION.map((item) => (
+                {boroughData.map((item: any) => (
                   <div key={item.borough} className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-ink-primary">{item.borough}</span>
@@ -281,7 +283,7 @@ export default function AnalyticsPage() {
                       Vehicle Fleet Matrix
                     </h3>
                     <p className="text-xs text-ink-secondary">
-                      Pricing multipliers & emissions rating.
+                      Calibrated pricing adjustments & tailpipe ratings.
                     </p>
                   </div>
                   <Car className="h-4 w-4 text-brass" />
@@ -299,7 +301,7 @@ export default function AnalyticsPage() {
                       </div>
                       <div className="text-right font-mono">
                         <p className="font-bold text-brass">{tier.avgFare}</p>
-                        <p className="text-[10px] text-ink-muted">{tier.surge} Mult</p>
+                        <p className="text-[10px] text-ink-muted font-medium">{tier.surge}</p>
                       </div>
                     </div>
                   ))}
@@ -310,7 +312,7 @@ export default function AnalyticsPage() {
                 <span className="flex items-center gap-1.5 font-medium">
                   <ShieldCheck className="h-4 w-4" /> Green Fleet ESG Score: 94/100
                 </span>
-                <span className="font-mono text-[11px]">Zero-Emission Goal</span>
+                <span className="font-mono text-[11px]">Zero Tailpipe Target</span>
               </div>
             </Card>
           </div>
@@ -531,34 +533,43 @@ export default function AnalyticsPage() {
                         {
                           requested_at: new Date().toISOString(),
                           city_id: "nyc",
-                          pickup_lat: 40.6413,
-                          pickup_lon: -73.7781,
-                          dropoff_lat: 40.7580,
-                          dropoff_lon: -73.9855,
-                          fare_value: 64.5,
+                          pickup_lat: 40.6720,
+                          pickup_lon: -73.9455,
+                          dropoff_lat: 40.7016,
+                          dropoff_lon: -73.9221,
+                          fare_value: 23.50,
                           fare_basis: "modeled_estimate",
-                          confidence_value: 96,
-                        },
-                        {
-                          requested_at: new Date(Date.now() - 3600000).toISOString(),
-                          city_id: "nyc",
-                          pickup_lat: 40.7071,
-                          pickup_lon: -74.0090,
-                          dropoff_lat: 40.7135,
-                          dropoff_lon: -73.9570,
-                          fare_value: 28.0,
-                          fare_basis: "computed",
-                          confidence_value: 94,
+                          confidence_value: 76,
+                          response_json: JSON.stringify({
+                            route_name: "Crown Heights North ➔ Bushwick North",
+                            fare: { value: 23.50, mae: 6.78, error_band: [16.72, 30.28] },
+                            confidence: { value: 0.76 },
+                          }),
                         },
                       ]
                   ).map((entry: any, i: number) => {
-                    const basisLower = String(entry.fare_basis || "computed").toLowerCase();
+                    const payload = typeof entry.response_json === "string"
+                      ? (() => { try { return JSON.parse(entry.response_json); } catch { return {}; } })()
+                      : (entry.response_json || {});
+                    
+                    const routeName = payload.route_name || (entry.pickup_lat && entry.dropoff_lat
+                      ? `(${Number(entry.pickup_lat).toFixed(3)}, ${Number(entry.pickup_lon).toFixed(3)}) → (${Number(entry.dropoff_lat).toFixed(3)}, ${Number(entry.dropoff_lon).toFixed(3)})`
+                      : "NYC TLC Corridor");
+                    
+                    const fareVal = payload.fare?.value ?? (entry.fare_value ? Number(entry.fare_value) : 23.50);
+                    const confVal = payload.confidence?.value
+                      ? (payload.confidence.value <= 1 ? Math.round(payload.confidence.value * 100) : Math.round(payload.confidence.value))
+                      : (entry.confidence_value ? Math.round(Number(entry.confidence_value)) : 85);
+                    
+                    const maeBand = payload.fare?.error_band
+                      ? `$${payload.fare.error_band[0]}–$${payload.fare.error_band[1]}`
+                      : `$${Math.max(0, fareVal - 6.78).toFixed(2)}–$${(fareVal + 6.78).toFixed(2)}`;
+
+                    const basisLower = String(entry.fare_basis || payload.fare?.basis || "modeled_estimate").toLowerCase();
                     const basisBadgeClass =
                       basisLower.includes("ground") || basisLower.includes("computed")
                         ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
-                        : basisLower.includes("modeled")
-                        ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-400"
-                        : "bg-surface-0 border-surface-border text-ink-muted";
+                        : "bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-400";
 
                     return (
                       <tr key={i} className="hover:bg-surface-0/60 transition-colors even:bg-surface-0/20">
@@ -570,21 +581,20 @@ export default function AnalyticsPage() {
                         <td className="px-6 py-3.5 font-semibold text-ink-primary uppercase tracking-wide">
                           {(entry.city_id as string) || "NYC"}
                         </td>
-                        <td className="px-6 py-3.5 font-mono text-ink-muted text-[11px]">
-                          {entry.pickup_lat && entry.dropoff_lat
-                            ? `(${Number(entry.pickup_lat).toFixed(3)}, ${Number(entry.pickup_lon).toFixed(3)}) → (${Number(entry.dropoff_lat).toFixed(3)}, ${Number(entry.dropoff_lon).toFixed(3)})`
-                            : "NYC TLC Zone Pair"}
+                        <td className="px-6 py-3.5 font-mono text-ink-primary text-xs font-medium">
+                          {routeName}
                         </td>
                         <td className="px-6 py-3.5 font-mono font-bold text-brass">
-                          {formatFare(entry.fare_value)}
+                          <div>${fareVal.toFixed(2)}</div>
+                          <div className="text-[10px] text-ink-muted font-normal">MAE {maeBand}</div>
                         </td>
                         <td className="px-6 py-3.5">
                           <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10px] uppercase font-semibold", basisBadgeClass)}>
-                            {String(entry.fare_basis || "computed").replace(/_/g, " ")}
+                            {basisLower.includes("ground") ? "COMPUTED" : "MODELED ESTIMATE"}
                           </span>
                         </td>
                         <td className="px-6 py-3.5 font-mono font-bold text-emerald-600">
-                          {formatConfidence(entry.confidence_value)}
+                          {confVal}%
                         </td>
                       </tr>
                     );

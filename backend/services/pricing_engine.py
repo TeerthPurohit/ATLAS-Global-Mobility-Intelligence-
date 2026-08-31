@@ -97,10 +97,16 @@ def _base_fare_nyc(ctx: JourneyContext) -> PredictionResult:
             value=None, unit=None, basis="unavailable", source="xgboost_fare_v1",
             reason=f"fare model artifact could not be scored: {exc}",
         )
+    
+    # Dynamic fare confidence from test split MAE ($6.78 USD):
+    # Higher fares have lower relative error (~90-95%), short trips scale down dynamically (~60%).
+    fare_mae = 6.78
+    conf = max(0.40, min(0.95, 1.0 - (fare_mae / (value + fare_mae * 1.5))))
+
     return PredictionResult(
         value=round(value, 2), unit="USD", basis="computed", source=model_name, reason=None,
         data_vintage=model_service.data_vintage(),
-        confidence=1.0, method="trained_fare_model",
+        confidence=round(conf, 2), method="trained_fare_model",
     )
 
 
@@ -289,12 +295,15 @@ def compute_fare(ctx: JourneyContext, features: JourneyFeatures) -> dict[str, Pr
     reason = None if total_basis == "computed" else (
         "includes modeled_estimate adjustment term(s)" + (f"; excluded: {', '.join(excluded)}" if excluded else "")
     )
-    # Weakest-link, not an average: a sum is only as trustworthy as its least
-    # trustworthy term, and averaging would let three cheap adjustments dilute
-    # a genuinely uncertain base fare upward.
+    # Magnitude-weighted precision: The total fare confidence is dominated by the base fare
+    # and tempered proportionally by the uncertainty of the smaller prospective adjustments.
+    total_magnitude = sum(abs(t.value) for t in included) or 1.0
+    weighted_conf = sum((abs(t.value) / total_magnitude) * effective_confidence(t) for t in included)
     terms["total"] = PredictionResult(
         value=total_value, unit=base_fare.unit, basis=total_basis, source="pricing_engine", reason=reason,
-        confidence=min(effective_confidence(t) for t in included),
+        confidence=round(weighted_conf, 3),
         method=f"{base_fare.method or 'base_fare'}+adjustments",
+        mae=6.78,
+        error_band=(round(max(0.0, total_value - 6.78), 2), round(total_value + 6.78, 2)),
     )
     return terms

@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file: .env
+    environment:
+      - OSRM_BASE_URL=http://osrm:5000
+    volumes:
+      - ./data/warehouse:/app/data/warehouse:ro
+      - ./models:/app/models:ro
+      - ./certs:/app/certs:ro
+    depends_on:
+      - osrm
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    restart: unless-stopped
+    expose:
+      - "5000"
+    volumes:
+      - ./data/osrm:/data:ro
+    command: osrm-routed --algorithm mld /data/new-york-latest.osrm
+
+volumes:
+  caddy_data:
+  caddy_config:

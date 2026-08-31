@@ -47,7 +47,7 @@ function CongestionCardContent({ data }: { data: CongestionResponse }) {
         Congestion
       </CardTitle>
       <div className="mt-3 space-y-3">
-        <PredictionField label="Congestion Level" prediction={pred} />
+        <PredictionField label="Route Congestion Severity" prediction={pred} />
         <PredictionField label="Confidence" prediction={confPred} />
       </div>
       {data.request_id && (

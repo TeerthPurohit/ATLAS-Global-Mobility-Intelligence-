@@ -35,7 +35,7 @@ import hashlib
 import time
 from typing import Any
 
-from config import QDRANT_URL
+from config import QDRANT_API_KEY, QDRANT_URL
 
 COLLECTION = "rag_answer_cache"
 EMBED_DIM = 1536  # matches embeddings/build_vector_store.py's OpenAI model
@@ -100,17 +100,25 @@ def _embed(text: str) -> list[float]:
 def _get_client(url: str = QDRANT_URL):
     from qdrant_client import QdrantClient
 
-    return QdrantClient(url=url)
+    return QdrantClient(url=url, api_key=QDRANT_API_KEY)
 
 
 def _ensure_collection(client, collection: str = COLLECTION) -> None:
-    from qdrant_client.models import Distance, VectorParams
+    from qdrant_client.models import Distance, VectorParams, PayloadSchemaType
 
     if not client.collection_exists(collection):
         client.create_collection(
             collection_name=collection,
             vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
         )
+    try:
+        client.create_payload_index(
+            collection_name=collection,
+            field_name="namespace",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+    except Exception:
+        pass
 
 
 def _point_id(namespace: str, question: str) -> int:

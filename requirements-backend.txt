@@ -2,6 +2,7 @@
 # Training/dbt/notebook deps (dbt-core, scipy, networkx, jupyter, matplotlib,
 # pytest) live in requirements.txt and have no place in the deployed API image.
 duckdb>=1.0,<2.0
+numpy>=1.24,<2.0
 pandas>=2.0,<3.0
 xgboost>=2.0,<3.0
 # xgboost's sklearn wrapper API (XGBRegressor, used by model_service.py to
@@ -33,6 +34,8 @@ sqlalchemy>=2.0,<3.0
 bcrypt>=4.0,<5.0
 # Pydantic EmailStr validation (SignupRequest/LoginRequest in backend/schemas.py).
 email-validator>=2.0,<3.0
+# Used by the backend's geographic lookup helpers imported by journey routes.
+geohash2>=1.1,<2.0
 
 fastapi>=0.110,<1.0
 uvicorn[standard]>=0.27,<1.0

@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config import OPENAI_EMBEDDING_MODEL, QDRANT_URL
+from config import OPENAI_EMBEDDING_MODEL, QDRANT_API_KEY, QDRANT_URL
 from insight_generation.generate_insight_docs import OUTPUT_PATH as INSIGHT_DOCS_PATH
 from insight_generation.generate_insight_docs import load_insight_docs
 
@@ -71,7 +71,7 @@ def _embed(texts: list[str]) -> list[list[float]]:
 def _get_client(url: str = QDRANT_URL):
     from qdrant_client import QdrantClient
 
-    return QdrantClient(url=url)
+    return QdrantClient(url=url, api_key=QDRANT_API_KEY)
 
 
 def _point_id(doc: dict) -> int:

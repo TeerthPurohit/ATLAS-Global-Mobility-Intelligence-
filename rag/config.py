@@ -13,7 +13,11 @@ load_dotenv()
 
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-nano")
 OPENAI_EMBEDDING_MODEL = os.environ.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse" / "nyc_rides.duckdb"
+DEFAULT_DB_PATH = Path(os.environ.get(
+    "DUCKDB_PATH",
+    str(Path(__file__).resolve().parent.parent / "data" / "warehouse" / "nyc_rides.duckdb"),
+))
 # Qdrant service from docker-compose.yml; localhost default for running
 # rag/ scripts outside the backend container during local dev.
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY") or None

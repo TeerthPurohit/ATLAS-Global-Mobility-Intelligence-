@@ -4,8 +4,23 @@ venv
 __pycache__
 *.pyc
 node_modules
-data
-models
+# Keep the small, tracked runtime lookup/model artifacts available to the
+# backend image. Raw data and local-only artifacts are excluded explicitly.
+data/raw
+data/*.db
+data/warehouse/*.wal
+data/warehouse/dataset-metadata.json
+models/notebooks
+models/query_plan_finetune
+models/**/logs
+models/**/__pycache__
+models/**/streaming_features.py
+models/**/compare_*.py
+models/**/validate_*.py
+models/**/loss_curve.png
+models/**/evaluation
+models/**/ewma_baseline
+models/**/linear_baseline
 notebooks
 frontend/dist
 frontend/node_modules

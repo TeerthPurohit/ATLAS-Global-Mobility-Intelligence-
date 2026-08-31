@@ -108,7 +108,7 @@ function ContextCardContent({
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-ink-primary truncate">
               {traffic?.congestion_level !== null
-                ? `${Math.round((traffic?.congestion_level || 0) * 100)}% Congestion`
+                ? `${Math.round((traffic?.congestion_level || 0) * 100)}% Local Traffic Index`
                 : "Smooth Traffic Flow"}
             </p>
             <p className="text-[11px] text-ink-muted mt-0.5">

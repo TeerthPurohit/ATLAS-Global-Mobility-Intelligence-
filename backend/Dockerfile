@@ -18,8 +18,13 @@ RUN pip install --no-cache-dir -r requirements-backend.txt
 COPY backend ./backend
 COPY rag ./rag
 COPY algorithms ./algorithms
+# These directories contain the runtime code and any production artifacts that
+# are present in the deployment checkout. The warehouse should be a slim,
+# precomputed file; raw TLC data must not be copied into the image.
+COPY data ./data
+COPY models ./models
 COPY dbt_project ./dbt_project
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
