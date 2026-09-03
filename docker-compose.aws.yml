@@ -22,6 +22,16 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # infra/Caddyfile's site address is `{$DOMAIN:localhost}` -- unset,
+      # Caddy matches only Host: localhost, which the public Elastic IP
+      # never sends, so requests would fall through with no route. `:80`
+      # is a valid Caddy site address meaning "any host, plain HTTP, no
+      # automatic HTTPS attempted" -- exactly right for a bare-IP backend
+      # with no domain of its own (the domain lives on the Vercel
+      # frontend, not here). Once a real domain is pointed at this
+      # instance, override DOMAIN to that hostname instead for auto-TLS.
+      - DOMAIN=:80
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
