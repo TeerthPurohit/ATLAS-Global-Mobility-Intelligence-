@@ -1,6 +1,7 @@
 """Correctness tests for POST /journey/estimate (ADR-007)."""
 
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,16 @@ OUTSIDE_COVERAGE = {"pickup_lat": 26.9124, "pickup_lon": 75.7873}
 def client():
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _logged_in(client):
+    # /journey/estimate requires login (main.py's _REQUIRE_SESSION). TestClient's
+    # cookie jar persists across calls on this shared client instance, so
+    # signing up once here covers every test below (same convention as test_api.py).
+    email = f"test-{uuid.uuid4()}@example.com"
+    resp = client.post("/auth/signup", json={"email": email, "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
 
 
 def _body(pickup=None, dropoff=None, vehicle_type="sedan", departure_time="2024-06-15T08:00:00"):

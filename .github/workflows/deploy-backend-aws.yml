@@ -1,0 +1,115 @@
+name: Deploy backend (AWS EC2)
+
+# Manual only (ADR-005: regenerating the deployed DuckDB serving artifact
+# and redeploying is an explicit manual step, not automatic on every push
+# -- see docs/deployment/README.md). Run scripts/build_deployed_duckdb.py
+# and commit/stage the resulting data/warehouse/deployed.duckdb locally
+# before running this.
+#
+# Requires these repo-level GitHub Actions variables, set once after
+# `cdk deploy NycTlcBackendServingStack` (see infra/cdk/backend_stack.py's
+# CfnOutputs):
+#   vars.AWS_REGION
+#   vars.AWS_BACKEND_ECR_REPO_URI       (CfnOutput: EcrRepositoryUri)
+#   vars.AWS_BACKEND_INSTANCE_ID        (CfnOutput: InstanceId)
+#   vars.AWS_BACKEND_DEPLOY_ROLE_ARN    (CfnOutput: GitHubActionsRoleArn)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # required for OIDC -- no long-lived AWS keys, see ADR-014
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPO_URI: ${{ vars.AWS_BACKEND_ECR_REPO_URI }}
+  IMAGE_TAG: ${{ github.sha }}
+  POLL_TIMEOUT_MINUTES: 10
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_BACKEND_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+            | docker login --username AWS --password-stdin "${{ env.ECR_REPO_URI }}"
+
+      - name: Set up QEMU (cross-build arm64 on this amd64 runner)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image (arm64 -- the instance is Graviton/t4g)
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -f backend/Dockerfile \
+            -t "${{ env.ECR_REPO_URI }}:${{ env.IMAGE_TAG }}" \
+            -t "${{ env.ECR_REPO_URI }}:latest" \
+            --push \
+            .
+
+      - name: Render remote deploy script
+        run: |
+          sed \
+            -e "s|__ECR_REPO_URI__|${{ env.ECR_REPO_URI }}|g" \
+            -e "s|__IMAGE_TAG__|${{ env.IMAGE_TAG }}|g" \
+            -e "s|__AWS_REGION__|${{ env.AWS_REGION }}|g" \
+            scripts/aws_backend_deploy_remote.sh > /tmp/remote-deploy.sh
+          {
+            echo "COMPOSE_B64='$(base64 -w0 docker-compose.aws.yml)'"
+            echo "CADDY_B64='$(base64 -w0 infra/Caddyfile)'"
+            cat /tmp/remote-deploy.sh
+          } > /tmp/remote-deploy-full.sh
+
+      - name: Run deploy on the instance (SSM)
+        id: deploy
+        run: |
+          SCRIPT_B64=$(base64 -w0 /tmp/remote-deploy-full.sh)
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=InstanceIds,Values=${{ vars.AWS_BACKEND_INSTANCE_ID }}" \
+            --parameters "{\"commands\":[\"echo ${SCRIPT_B64} | base64 -d | bash\"]}" \
+            --query "Command.CommandId" --output text)
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+          echo "Sent command $COMMAND_ID"
+
+      - name: Poll for deploy result
+        run: |
+          DEADLINE=$(( $(date +%s) + ${{ env.POLL_TIMEOUT_MINUTES }} * 60 ))
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "${{ steps.deploy.outputs.command_id }}" \
+              --instance-id "${{ vars.AWS_BACKEND_INSTANCE_ID }}" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            case "$STATUS" in
+              Success)
+                echo "Deploy succeeded"
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut)
+                echo "::error::Deploy command ended with status $STATUS"
+                aws ssm get-command-invocation \
+                  --command-id "${{ steps.deploy.outputs.command_id }}" \
+                  --instance-id "${{ vars.AWS_BACKEND_INSTANCE_ID }}" \
+                  --query "StandardErrorContent" --output text
+                exit 1
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
+          echo "::error::Timed out after ${{ env.POLL_TIMEOUT_MINUTES }} minutes waiting for the deploy command"
+          exit 1

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -18,6 +19,7 @@ if str(RAG_DIR) not in sys.path:
     sys.path.insert(0, str(RAG_DIR))
 
 import llm_usage  # noqa: E402
+import tracing  # noqa: E402
 
 # Structured logging (SPEC-013 FR-14 + logging rule: every API logs the steps
 # it goes through and which step it fails). loguru's default sink already
@@ -68,21 +70,32 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("All services loaded!")
     yield
+    tracing.flush()  # send any batched Langfuse spans before the process exits
 
 
 app = FastAPI(title="NYC Ride Intelligence API", lifespan=lifespan)
 
+# Browser origins allowed to call this API. Defaults to the local dev ports;
+# set CORS_ORIGINS (comma-separated) in a deployed environment to replace them
+# with the real frontend origin -- localhost has no business being allowed in
+# production. allow_credentials=True rules out "*": the session cookie
+# (auth_service.py) requires explicit origins.
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3004",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://frontend:5173",
+    "http://localhost",
+]
+CORS_ORIGINS = [
+    origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()
+] or DEFAULT_CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3004",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://frontend:5173",
-        "http://localhost",
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -7,6 +7,7 @@ city to ask for. What remains asserted is the part that still has two
 outcomes: a known vs. unknown *area_id*, and resolve()'s coverage boundary.
 """
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,16 @@ pytestmark = pytest.mark.skipif(not WAREHOUSE_PATH.exists(), reason="warehouse n
 def client():
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _logged_in(client):
+    # /api/areas* requires login (main.py's _REQUIRE_SESSION). TestClient's
+    # cookie jar persists across calls on this shared client instance, so
+    # signing up once here covers every test below (same convention as test_api.py).
+    email = f"test-{uuid.uuid4()}@example.com"
+    resp = client.post("/auth/signup", json={"email": email, "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
 
 
 def test_list_areas_matches_zone_count():

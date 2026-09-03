@@ -9,20 +9,38 @@ import os  # noqa: I001
 
 import aws_cdk as cdk
 
+from backend_stack import BackendServingStack
 from stack import DbtBuildStack
 
 app = cdk.App()
 
+_env = cdk.Environment(
+    account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
+    region=os.environ.get("CDK_DEFAULT_REGION", "us-east-1"),
+)
+_github_org = app.node.try_get_context("github_org") or "CHANGE-ME"
+_github_repo = app.node.try_get_context("github_repo") or "Uber-nyc-TLC-Dataset"
+_existing_oidc_provider_arn = app.node.try_get_context("existing_oidc_provider_arn")
+
 DbtBuildStack(
     app,
     "NycTlcDbtBuildStack",
-    github_org=app.node.try_get_context("github_org") or "CHANGE-ME",
-    github_repo=app.node.try_get_context("github_repo") or "Uber-nyc-TLC-Dataset",
-    existing_oidc_provider_arn=app.node.try_get_context("existing_oidc_provider_arn"),
-    env=cdk.Environment(
-        account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
-        region=os.environ.get("CDK_DEFAULT_REGION", "us-east-1"),
-    ),
+    github_org=_github_org,
+    github_repo=_github_repo,
+    existing_oidc_provider_arn=_existing_oidc_provider_arn,
+    env=_env,
+)
+
+# ADR-014. Deploy this one with `-c existing_oidc_provider_arn=<arn>` once
+# NycTlcDbtBuildStack has been deployed at least once -- AWS allows only one
+# GitHub OIDC provider per account, and that stack creates it first.
+BackendServingStack(
+    app,
+    "NycTlcBackendServingStack",
+    github_org=_github_org,
+    github_repo=_github_repo,
+    existing_oidc_provider_arn=_existing_oidc_provider_arn,
+    env=_env,
 )
 
 app.synth()

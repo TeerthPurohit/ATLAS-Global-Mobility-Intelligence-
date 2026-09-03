@@ -27,15 +27,27 @@ platform with an SRE budget.
 
 ## Deployment target
 
-- Backend: a single free-tier host (Render/Railway per `project_plan.md`)
-  running FastAPI, with a **read-only, precomputed** copy of the DuckDB file
-  (marts + prediction tables only — not the 8-10M row raw trips table).
-- Frontend: static hosting (Vercel/Netlify), talks to the backend over
-  HTTPS.
-- No message queue, no cache layer. Vector store: Qdrant by default; a
-  DuckDB cosine-similarity table is the lighter-footprint fallback for
-  deployments where running a separate service isn't worth it, per
-  `project_plan.md` Layer 4.
+- Backend: a single AWS EC2 instance (`t4g.small`, Graviton/ARM64) running
+  FastAPI behind Caddy (auto-TLS) via Docker Compose, with a **read-only,
+  precomputed** copy of the DuckDB file (marts + prediction tables only —
+  not the 8-10M row raw trips table) baked into the image. Chosen over
+  ECS/Fargate+ALB (~3x the monthly cost for a single-task, no-autoscaling
+  deployment) and over staying on the Oracle Always-Free VM already running
+  the QueryPlan model (chosen for AWS's resume value, a deliberate
+  cost-vs-signal tradeoff) — see ADR-014. Infra is defined in
+  `infra/cdk/backend_stack.py`: one EC2 instance in the default VPC's
+  public subnet (no NAT gateway — a stateless single instance has no need
+  to hide behind one), an Elastic IP, an ECR repo, an IAM instance role
+  scoped to SSM Session Manager (no SSH key pair) + ECR pull, and an
+  OIDC-federated GitHub Actions role (no static AWS keys) for
+  `.github/workflows/deploy-backend-aws.yml`. Postgres (Neon, pooled
+  endpoint) and vector search (Qdrant Cloud) are both external managed
+  free-tier services, not self-hosted on this instance.
+- Frontend: Vercel, talks to the backend over HTTPS.
+- No message queue, no cache layer, no self-hosted vector store — Qdrant
+  Cloud's free tier is the real target (`QDRANT_URL`/`QDRANT_API_KEY`); the
+  local `qdrant` container in `docker-compose.yml` is a dev-only
+  convenience, not what production runs.
 
 ## What's explicitly out of scope
 

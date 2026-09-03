@@ -8,8 +8,11 @@ node_modules
 # backend image. Raw data and local-only artifacts are excluded explicitly.
 data/raw
 data/*.db
-data/warehouse/*.wal
-data/warehouse/dataset-metadata.json
+# The 12GB local warehouse never enters the build context (ADR-005) -- only the
+# slim serving artifact from scripts/build_deployed_duckdb.py does. Without the
+# negation below, `data/warehouse/*` would exclude that too.
+data/warehouse/*
+!data/warehouse/deployed.duckdb
 models/notebooks
 models/query_plan_finetune
 models/**/logs
@@ -18,11 +21,22 @@ models/**/streaming_features.py
 models/**/compare_*.py
 models/**/validate_*.py
 models/**/loss_curve.png
-models/**/evaluation
-models/**/ewma_baseline
-models/**/linear_baseline
 notebooks
 frontend/dist
 frontend/node_modules
-**/output
 .env
+# platform_service.py reads these four files at startup for the model-
+# comparison dashboard / algorithm benchmarks (MODEL_METADATA_PATHS,
+# COMPARE_RESULTS_PATH, KDTREE_BENCHMARK_PATH, PAGERANK_HUBS_PATH). A bare
+# directory-name exclude can't be re-included by a later `!` negation (same
+# caveat the data/warehouse/* rule above works around) -- so these exclude
+# only the directories' contents and negate the specific files needed.
+models/**/evaluation/*
+!models/evaluation/compare_results.json
+models/**/ewma_baseline/*
+!models/ewma_baseline/ewma_baseline_metadata.json
+models/**/linear_baseline/*
+!models/linear_baseline/linear_model_metadata.json
+**/output/*
+!algorithms/spatial/output/kdtree_benchmark.json
+!algorithms/graph/output/pagerank_hubs.json

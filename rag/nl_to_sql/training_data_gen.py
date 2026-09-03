@@ -30,8 +30,14 @@ from synthetic_schemas import HELD_OUT_SCHEMA, TRAIN_SYNTHETIC_SCHEMAS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "models" / "query_plan_finetune" / "data"
 
-METRIC_PHRASE = {"demand": "trip demand", "fare": "average fare", "flow": "trip flow"}
-AGG_FOR_METRIC = {"demand": "sum", "fare": "avg", "flow": "sum"}
+METRIC_PHRASE = {
+    "demand": "trip demand", "fare": "average fare", "flow": "trip flow",
+    "distance": "average trip distance", "duration": "average trip duration", "speed": "average speed",
+}
+AGG_FOR_METRIC = {
+    "demand": "sum", "fare": "avg", "flow": "sum",
+    "distance": "avg", "duration": "avg", "speed": "avg",
+}
 
 # Example area values for *questions*, never a claimed real statistic (rule
 # 2) -- NYC values reuse real zone ids/names already referenced elsewhere in

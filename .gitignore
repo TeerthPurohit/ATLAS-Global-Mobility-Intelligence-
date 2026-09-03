@@ -8,7 +8,11 @@ data/warehouse/*
 *.duckdb
 *.duckdb.wal
 *.db
-!data/warehouse/deployed.duckdb
+# deployed.duckdb is a build output of scripts/build_deployed_duckdb.py, not a
+# source file. It was previously un-ignored here, but it measures ~212MB --
+# past GitHub's hard 100MB per-file limit, so committing it fails the push.
+# It is rebuilt from the warehouse and shipped to the deploy host out of band
+# (see docs/deployment/README.md).
 
 # ── Streaming-training resume state (transient, regenerate locally) ──
 _streaming_checkpoint.json

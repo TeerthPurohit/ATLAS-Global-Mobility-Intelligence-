@@ -33,6 +33,7 @@ from prompts.synthesis_prompt import TEMPLATE as SYNTHESIS_SYSTEM_PROMPT, VERSIO
 from router.query_classifier import EXPLANATORY, NUMERIC, classify
 import semantic_cache
 import session_store
+import tracing
 
 
 _MONEY_COLS = ("fare", "amount", "price", "cost", "tip", "toll", "revenue")
@@ -166,7 +167,9 @@ def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COL
     if cached is not None:
         return cached
 
-    hits = vector_search(question, k=k, collection=collection)
+    with tracing.trace_span(name="rag_pipeline.retrieve_context", as_type="retriever", input=question):
+        hits = vector_search(question, k=k, collection=collection)
+        tracing.update_span(output=[_hit_source(h) for h in hits])
     if not hits:
         return {
             "question": question,
@@ -195,27 +198,29 @@ def answer(
     user_id: int | None = None,
 ) -> dict:
     active_session_id = session_id or str(uuid.uuid4())
-    if _is_greeting(question):
-        res = {
-            "question": question,
-            "route": EXPLANATORY,
-            "answer": _GREETING_RESPONSE,
-            "sql": None,
-            "rows": None,
-            "sources": [],
-        }
-    else:
-        route = classify(question)
-        if route == NUMERIC:
-            res = _answer_numeric(question, db_path=db_path, schema=schema)
-        elif allow_explanatory:
-            res = _answer_explanatory(question, collection=collection)
-        else:
+    with tracing.trace_request(name="rag_pipeline.answer", question=question, session_id=active_session_id, user_id=user_id):
+        if _is_greeting(question):
             res = {
-                "question": question, "route": EXPLANATORY,
-                "answer": f"No insight documents exist for {schema.name} yet -- ask a specific numeric question about demand instead.",
-                "sql": None, "rows": None, "sources": [],
+                "question": question,
+                "route": EXPLANATORY,
+                "answer": _GREETING_RESPONSE,
+                "sql": None,
+                "rows": None,
+                "sources": [],
             }
+        else:
+            route = classify(question)
+            if route == NUMERIC:
+                res = _answer_numeric(question, db_path=db_path, schema=schema)
+            elif allow_explanatory:
+                res = _answer_explanatory(question, collection=collection)
+            else:
+                res = {
+                    "question": question, "route": EXPLANATORY,
+                    "answer": f"No insight documents exist for {schema.name} yet -- ask a specific numeric question about demand instead.",
+                    "sql": None, "rows": None, "sources": [],
+                }
+        tracing.update_trace(output=res["answer"], route=res["route"])
 
     res["session_id"] = active_session_id
     session_store.save_message(active_session_id, "user", question, user_id=user_id)
@@ -230,97 +235,104 @@ def answer_stream(
     active_session_id = session_id or str(uuid.uuid4())
     session_store.save_message(active_session_id, "user", question, user_id=user_id)
 
-    if _is_greeting(question):
+    with tracing.trace_request(name="rag_pipeline.answer_stream", question=question, session_id=active_session_id, user_id=user_id):
+        if _is_greeting(question):
+            payload = {
+                "question": question,
+                "route": EXPLANATORY,
+                "answer": _GREETING_RESPONSE,
+                "sql": None,
+                "rows": None,
+                "sources": [],
+                "session_id": active_session_id,
+            }
+            session_store.save_message(active_session_id, "assistant", _GREETING_RESPONSE, route=EXPLANATORY, user_id=user_id)
+            tracing.update_trace(output=_GREETING_RESPONSE, route=EXPLANATORY)
+            yield {"type": "chunk", "text": _GREETING_RESPONSE}
+            yield {"type": "done", "payload": payload}
+            return
+
+        route = classify(question)
+        if route == NUMERIC:
+            res = _answer_numeric(question)
+            res["session_id"] = active_session_id
+            session_store.save_message(active_session_id, "assistant", res["answer"], route=res.get("route", NUMERIC), sql=res.get("sql"), user_id=user_id)
+            tracing.update_trace(output=res["answer"], route=res.get("route", NUMERIC))
+            yield {"type": "chunk", "text": res["answer"]}
+            yield {"type": "done", "payload": res}
+            return
+
+        # Explanatory route with streaming LLM synthesis
+        with tracing.trace_span(name="rag_pipeline.retrieve_context", as_type="retriever", input=question):
+            hits = vector_search(question, k=3, collection=collection)
+            tracing.update_span(output=[_hit_source(h) for h in hits])
+        if not hits:
+            fallback_ans = "No insight documents are available yet for this question -- not yet measured."
+            payload = {
+                "question": question,
+                "route": EXPLANATORY,
+                "answer": fallback_ans,
+                "sql": None,
+                "rows": None,
+                "sources": [],
+                "session_id": active_session_id,
+            }
+            session_store.save_message(active_session_id, "assistant", fallback_ans, route=EXPLANATORY, user_id=user_id)
+            tracing.update_trace(output=fallback_ans, route=EXPLANATORY)
+            yield {"type": "chunk", "text": fallback_ans}
+            yield {"type": "done", "payload": payload}
+            return
+
+        context = "\n\n".join(f"[{_hit_label(h)}] {h['doc_text']}" for h in hits)
+        allowed = set(extract_numbers(context))
+        accumulated_text = ""
+
+        try:
+            stream = chat_completion(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT.format(context=context)},
+                    {"role": "user", "content": question},
+                ],
+                temperature=0.2,
+                max_completion_tokens=250,
+                stream=True,
+                trace_name="rag_pipeline.synthesize_explanatory_stream",
+                prompt_version=SYNTHESIS_PROMPT_VERSION,
+            )
+            for chunk in stream:
+                if not chunk.choices:
+                    # The final chunk of a stream_options={"include_usage": True}
+                    # response carries usage with an empty choices list (llm_client.py
+                    # injects this automatically now for token/cost recording) --
+                    # skip it here rather than indexing into an empty list.
+                    continue
+                token = chunk.choices[0].delta.content or ""
+                if token:
+                    accumulated_text += token
+                    yield {"type": "chunk", "text": token}
+        except Exception as exc:  # noqa: BLE001
+            print(f"[warn] streaming synthesis failed ({exc}); falling back to retrieved doc", file=sys.stderr)
+            accumulated_text = hits[0]["doc_text"]
+            yield {"type": "chunk", "text": accumulated_text}
+
+        final_text = accumulated_text.strip()
+        if not final_text or not validate_grounding(final_text, allowed):
+            print("[warn] synthesis introduced an ungrounded number; returning retrieved doc verbatim", file=sys.stderr)
+            final_text = hits[0]["doc_text"]
+
         payload = {
             "question": question,
             "route": EXPLANATORY,
-            "answer": _GREETING_RESPONSE,
+            "answer": final_text,
             "sql": None,
             "rows": None,
-            "sources": [],
+            "sources": [_hit_source(h) for h in hits],
             "session_id": active_session_id,
         }
-        session_store.save_message(active_session_id, "assistant", _GREETING_RESPONSE, route=EXPLANATORY, user_id=user_id)
-        yield {"type": "chunk", "text": _GREETING_RESPONSE}
+        session_store.save_message(active_session_id, "assistant", final_text, route=EXPLANATORY, user_id=user_id)
+        tracing.update_trace(output=final_text, route=EXPLANATORY)
         yield {"type": "done", "payload": payload}
-        return
-
-    route = classify(question)
-    if route == NUMERIC:
-        res = _answer_numeric(question)
-        res["session_id"] = active_session_id
-        session_store.save_message(active_session_id, "assistant", res["answer"], route=res.get("route", NUMERIC), sql=res.get("sql"), user_id=user_id)
-        yield {"type": "chunk", "text": res["answer"]}
-        yield {"type": "done", "payload": res}
-        return
-
-    # Explanatory route with streaming LLM synthesis
-    hits = vector_search(question, k=3, collection=collection)
-    if not hits:
-        fallback_ans = "No insight documents are available yet for this question -- not yet measured."
-        payload = {
-            "question": question,
-            "route": EXPLANATORY,
-            "answer": fallback_ans,
-            "sql": None,
-            "rows": None,
-            "sources": [],
-            "session_id": active_session_id,
-        }
-        session_store.save_message(active_session_id, "assistant", fallback_ans, route=EXPLANATORY, user_id=user_id)
-        yield {"type": "chunk", "text": fallback_ans}
-        yield {"type": "done", "payload": payload}
-        return
-
-    context = "\n\n".join(f"[{_hit_label(h)}] {h['doc_text']}" for h in hits)
-    allowed = set(extract_numbers(context))
-    accumulated_text = ""
-
-    try:
-        stream = chat_completion(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT.format(context=context)},
-                {"role": "user", "content": question},
-            ],
-            temperature=0.2,
-            max_completion_tokens=250,
-            stream=True,
-            trace_name="rag_pipeline.synthesize_explanatory_stream",
-            prompt_version=SYNTHESIS_PROMPT_VERSION,
-        )
-        for chunk in stream:
-            if not chunk.choices:
-                # The final chunk of a stream_options={"include_usage": True}
-                # response carries usage with an empty choices list (llm_client.py
-                # injects this automatically now for token/cost recording) --
-                # skip it here rather than indexing into an empty list.
-                continue
-            token = chunk.choices[0].delta.content or ""
-            if token:
-                accumulated_text += token
-                yield {"type": "chunk", "text": token}
-    except Exception as exc:  # noqa: BLE001
-        print(f"[warn] streaming synthesis failed ({exc}); falling back to retrieved doc", file=sys.stderr)
-        accumulated_text = hits[0]["doc_text"]
-        yield {"type": "chunk", "text": accumulated_text}
-
-    final_text = accumulated_text.strip()
-    if not final_text or not validate_grounding(final_text, allowed):
-        print("[warn] synthesis introduced an ungrounded number; returning retrieved doc verbatim", file=sys.stderr)
-        final_text = hits[0]["doc_text"]
-
-    payload = {
-        "question": question,
-        "route": EXPLANATORY,
-        "answer": final_text,
-        "sql": None,
-        "rows": None,
-        "sources": [_hit_source(h) for h in hits],
-        "session_id": active_session_id,
-    }
-    session_store.save_message(active_session_id, "assistant", final_text, route=EXPLANATORY, user_id=user_id)
-    yield {"type": "done", "payload": payload}
 
 
 def demo() -> None:

@@ -8,6 +8,7 @@ training data or full-table scans on a request path, and no warehouse either).
 
 import json
 import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -46,6 +47,16 @@ def _row(offset_minutes: int, city_id: str, fare: float, distance: float) -> dic
 def client():
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _logged_in(client):
+    # /api/analytics/* requires login (main.py's _REQUIRE_SESSION). TestClient's
+    # cookie jar persists across calls on this shared client instance, so
+    # signing up once here covers every test below (same convention as test_api.py).
+    email = f"test-{uuid.uuid4()}@example.com"
+    resp = client.post("/auth/signup", json={"email": email, "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
 
 
 def test_summary_empty_history_is_shaped_not_500(client, monkeypatch):

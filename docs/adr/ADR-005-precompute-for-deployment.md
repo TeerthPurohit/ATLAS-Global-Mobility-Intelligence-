@@ -1,6 +1,10 @@
 # ADR-005: Precompute for deployment, never run the full pipeline live
 
-**Status:** Accepted (Layer 5, not yet started)
+**Status:** Accepted and implemented — `backend/Dockerfile`,
+`scripts/build_deployed_duckdb.py`, and `tests/test_serving_artifact.py`
+are real, working code (2026-09-02 measured: 12.0 GB → 212 MB). See
+[ADR-014](ADR-014-aws-ec2-backend-serving.md) for where the resulting
+image is deployed.
 
 ## Context
 

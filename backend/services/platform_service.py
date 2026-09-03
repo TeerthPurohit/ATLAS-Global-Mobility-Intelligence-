@@ -22,7 +22,7 @@ if str(RAG_DIR) not in sys.path:
 
 import llm_usage  # noqa: E402
 import semantic_cache  # noqa: E402
-from config import QDRANT_API_KEY, QDRANT_URL  # noqa: E402
+from config import QDRANT_API_KEY  # noqa: E402
 
 WAREHOUSE_PATH = REPO_ROOT / "data" / "warehouse" / "nyc_rides.duckdb"
 DBT_TARGET = REPO_ROOT / "dbt_project" / "target"
@@ -212,17 +212,43 @@ def get_hourly_demand_profile() -> list[dict]:
     return [{"hour": int(h), "demand": int(d), "fare": round(float(f), 2)} for h, d, f in rows]
 
 
+def _serving_metadata(con: duckdb.DuckDBPyConnection) -> dict:
+    """Facts measured at build time by scripts/build_deployed_duckdb.py for the
+    tables the slim serving artifact doesn't ship. Empty against the full local
+    warehouse, where those tables are queryable directly."""
+    try:
+        rows = con.execute("select key, value from serving_metadata").fetchall()
+    except duckdb.Error:
+        return {}
+    return {key: json.loads(value) for key, value in rows}
+
+
+def _row_count(con: duckdb.DuckDBPyConnection, table: str, metadata: dict) -> int | None:
+    """Live count when the table is present, else the build-time measurement.
+    None when neither has it -- report the gap, never a fabricated number."""
+    try:
+        return con.execute(f'select count(*) from "{table}"').fetchone()[0]
+    except duckdb.Error:
+        return metadata.get("row_counts", {}).get(table)
+
+
+def _columns(con: duckdb.DuckDBPyConnection, table: str, metadata: dict) -> list[dict] | None:
+    try:
+        return con.execute(f'describe "{table}"').fetchdf().to_dict(orient="records")
+    except duckdb.Error:
+        return metadata.get("table_columns", {}).get(table)
+
+
 def get_warehouse_stats() -> dict:
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
-        row_counts = {
-            table: con.execute(f'select count(*) from "{table}"').fetchone()[0] for table in WAREHOUSE_TABLES
-        }
+        metadata = _serving_metadata(con)
+        row_counts = {table: _row_count(con, table, metadata) for table in WAREHOUSE_TABLES}
     finally:
         con.close()
     return {
         "row_counts": row_counts,
-        "total_rows": sum(row_counts.values()),
+        "total_rows": sum(count for count in row_counts.values() if count is not None),
         "warehouse_file_bytes": WAREHOUSE_PATH.stat().st_size,
         "warehouse_last_modified": WAREHOUSE_PATH.stat().st_mtime,
     }
@@ -231,11 +257,15 @@ def get_warehouse_stats() -> dict:
 def get_warehouse_tables() -> list[dict]:
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
-        tables = []
-        for table in WAREHOUSE_TABLES:
-            columns = con.execute(f'describe "{table}"').fetchdf().to_dict(orient="records")
-            row_count = con.execute(f'select count(*) from "{table}"').fetchone()[0]
-            tables.append({"table": table, "row_count": row_count, "columns": columns})
+        metadata = _serving_metadata(con)
+        tables = [
+            {
+                "table": table,
+                "row_count": _row_count(con, table, metadata),
+                "columns": _columns(con, table, metadata),
+            }
+            for table in WAREHOUSE_TABLES
+        ]
     finally:
         con.close()
     return tables

@@ -124,7 +124,10 @@ def answer(
         "plan": plan.to_dict(),
         "sql": sql,
         "columns": list(df.columns),
-        "rows": df.to_dict(orient="records"),
+        # NaN (from SQL NULLs, e.g. AVG over an empty group) is not valid JSON --
+        # json.dumps emits it as a bare `NaN` token, which breaks JSON.parse
+        # client-side. Swap to None (-> JSON null) before it leaves this layer.
+        "rows": df.astype(object).where(df.notna(), None).to_dict(orient="records"),
     }
 
 

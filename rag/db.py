@@ -44,7 +44,21 @@ def build_engine(conninfo: str | None = None) -> Engine:
     # else: no override -- the DSN's own sslmode/channel_binding query
     # params govern (Neon's connection string already specifies both, using
     # its publicly-trusted cert -- no custom root CA needed).
-    return create_engine(_to_sqlalchemy_dsn(dsn), connect_args=connect_args, pool_pre_ping=True)
+    # pool_size/max_overflow bounded explicitly (SQLAlchemy's unbounded
+    # defaults are 5+10): this process runs on a single small deployment
+    # instance talking to Neon's free-tier connection cap, and almost every
+    # authenticated route opens a connection via auth_service.get_current_user
+    # -- an unbounded pool risks exhausting Neon's cap under a burst.
+    # pool_recycle=300 matches Neon's own pooled-endpoint connection lifetime
+    # guidance (use the "-pooler" DSN in production -- see .env.example).
+    return create_engine(
+        _to_sqlalchemy_dsn(dsn),
+        connect_args=connect_args,
+        pool_pre_ping=True,
+        pool_size=3,
+        max_overflow=2,
+        pool_recycle=300,
+    )
 
 
 _default_engine: Engine | None = None

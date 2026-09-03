@@ -1,0 +1,42 @@
+version: '3.8'
+
+# Runs on the EC2 instance provisioned by infra/cdk/backend_stack.py
+# (ADR-014). Written to /opt/app/docker-compose.yml by
+# .github/workflows/deploy-backend-aws.yml on each deploy -- not built
+# locally, the backend image is pulled from ECR.
+#
+# Deliberately just caddy + backend, unlike docker-compose.oracle.yml:
+# - No osrm service: backend/adapters/routing_osrm.py already defaults
+#   OSRM_URL to OSRM's public demo server with a haversine fallback if
+#   it's unavailable -- the same behavior the default (non-oracle)
+#   docker-compose.yml gets today by never setting OSRM_BASE_URL. Self-
+#   hosting osrm-routed's in-memory NYC road network isn't needed and
+#   would compete for this instance's 2GB RAM for no functional gain.
+# - No qdrant service: the real target is Qdrant Cloud's free tier
+#   (QDRANT_URL/QDRANT_API_KEY in .env), not a local dev container.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  backend:
+    image: ${ECR_REPO_URI}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file: .env
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 1
+
+volumes:
+  caddy_data:
+  caddy_config:

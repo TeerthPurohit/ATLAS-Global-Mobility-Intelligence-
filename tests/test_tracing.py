@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rag"))
 import tracing
 
 
-def test_log_generation_is_a_safe_noop_without_langfuse_configured():
-    assert tracing._client is None, "test assumes LANGFUSE_PUBLIC_KEY is unset in this environment"
+def test_log_generation_is_a_safe_noop_without_langfuse_configured(monkeypatch):
+    monkeypatch.setattr(tracing, "_client", None)
     tracing.log_generation(
         name="test.trace", model="gpt-5.4-nano", prompt_version="v1",
         messages=[{"role": "user", "content": "hello"}], output="hi",

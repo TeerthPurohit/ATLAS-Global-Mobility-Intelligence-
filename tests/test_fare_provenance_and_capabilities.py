@@ -86,7 +86,10 @@ def test_fare_is_computed_by_the_trained_model(monkeypatch):
     assert result.unit == "USD"
     assert result.method == "trained_fare_model"
     assert result.source == "xgboost_fare_v1"
-    assert result.confidence == 1.0
+    # Dynamic MAE-based confidence (pricing_engine._base_fare_nyc), not a flat
+    # 1.0 -- for value=42.5 and the test-split MAE of $6.78 the formula
+    # resolves to 0.87.
+    assert result.confidence == 0.87
 
 
 def test_fare_model_failure_degrades_honestly(monkeypatch):
@@ -178,8 +181,11 @@ def test_unavailable_component_cannot_increase_confidence():
     computed = PredictionResult(value=1.0, unit="x", basis="computed", source="s")
     unavailable = PredictionResult(value=None, unit=None, basis="unavailable", source="s", reason="n/a")
     assert unavailable.confidence == 0.0
-    without = journey_predictors.predict_confidence({"a": computed})
-    with_gap = journey_predictors.predict_confidence({"a": computed, "b": unavailable})
+    # predict_confidence() only reads its named components (fare/demand/
+    # congestion/ride_availability) -- generic keys like "a"/"b" are never
+    # looked at, which is why this must use a real component name.
+    without = journey_predictors.predict_confidence({"fare": computed})
+    with_gap = journey_predictors.predict_confidence({"fare": computed, "demand": unavailable})
     assert with_gap.value < without.value
 
 

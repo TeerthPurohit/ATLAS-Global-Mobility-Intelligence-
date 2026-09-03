@@ -10,6 +10,7 @@ need. Nothing in the request path re-scans the warehouse.
 """
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -42,10 +43,39 @@ def load() -> None:
 
     con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
     try:
-        row = con.execute("SELECT avg(avg_speed_mph) FROM int_trips_enriched WHERE avg_speed_mph IS NOT NULL").fetchone()
+        _baseline_speed_mph = _load_baseline_speed(con)
     finally:
         con.close()
-    _baseline_speed_mph = float(row[0]) if row and row[0] is not None else None
+
+
+def _load_baseline_speed(con: duckdb.DuckDBPyConnection) -> float | None:
+    """Citywide baseline avg_speed_mph, used to turn a zone-pair's historical
+    speed into a 0-1 traffic score.
+
+    Prefers the value measured at artifact build time by
+    scripts/build_deployed_duckdb.py: the deployed slim warehouse ships no
+    int_trips_enriched to scan (ADR-005), and even locally this saves a ~3.5s
+    scan of 113M rows on every process start. Falls back to the live scan
+    against a full warehouse, and to None when neither is available -- callers
+    already skip the traffic score when this is None."""
+    try:
+        row = con.execute(
+            "select value from serving_metadata where key = 'baseline_avg_speed_mph'"
+        ).fetchone()
+        if row and row[0] is not None:
+            precomputed = json.loads(row[0])
+            if precomputed is not None:
+                return float(precomputed)
+    except duckdb.Error:
+        pass  # full local warehouse: no serving_metadata table, scan instead
+
+    try:
+        row = con.execute(
+            "SELECT avg(avg_speed_mph) FROM int_trips_enriched WHERE avg_speed_mph IS NOT NULL"
+        ).fetchone()
+    except duckdb.Error:
+        return None
+    return float(row[0]) if row and row[0] is not None else None
 
 
 def _historical_pair(pickup_zone_id: int, dropoff_zone_id: int) -> tuple[float | None, float | None]:
