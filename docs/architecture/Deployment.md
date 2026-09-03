@@ -20,7 +20,7 @@
    secrets manager beyond `.env` is deliberately out of scope for now).
    `docker-compose.oracle.yml` remains the deployment path for the
    Oracle Always-Free VM already running the QueryPlan model, unchanged.
-4. Deploy `frontend-web/` to Vercel, pointed at the deployed backend URL.
+4. Deploy `frontend/` to Vercel, pointed at the deployed backend URL.
 5. Smoke-test both UC-3 (numeric) and UC-4 (explanatory) chat paths against
    the live URL before calling it done.
 6. Record a short demo GIF/video as a backup artifact — free-tier hosts can

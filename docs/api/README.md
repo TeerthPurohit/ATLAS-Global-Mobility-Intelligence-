@@ -140,7 +140,7 @@ legacy `/predict/demand` / `/predict/fare` routes above, not through `city`.
 
 Per-signal journey predictors -- `route`, `fare`, `demand`, `congestion`,
 `availability`, `surge`, `carbon`, `departure-time` -- each backing one
-card in `frontend-web/components/journey/cards/`. Same envelope/`basis`
+card in `frontend/components/journey/cards/`. Same envelope/`basis`
 discipline as `/journey/estimate` (ADR-007): unavailable signals return
 200 with `basis="unavailable"`, never a fabricated number.
 

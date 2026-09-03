@@ -352,7 +352,7 @@ def test_backward_compat_journey_estimate(client):
     assert body["fare"]["value"] > 0
 
 
-# ── Frontend-integration contract (frontend-web/lib/api.ts) ───────────────────
+# ── Frontend-integration contract (frontend/lib/api.ts) ───────────────────
 # Every consumer contract below must be satisfied by the live backend: exact
 # paths, bare/wrapped shapes, echoed city_id/area_id, and the ChatRoute union.
 

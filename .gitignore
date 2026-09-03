@@ -50,6 +50,8 @@ models/query_plan_finetune/merged/
 # ── IDE / OS ────────────────────────────────────────
 .claude/
 .cursor/
+.codex/
+.superpowers/
 .vscode/
 .idea/
 *.swp
@@ -63,20 +65,21 @@ Thumbs.db
 logs/
 
 # ── Node / Frontend ────────────────────────────────
-frontend/node_modules/
+node_modules/
 frontend/dist/
-frontend-web/node_modules/
-frontend-web/.next/
-frontend-web/*.tsbuildinfo
-frontend-web/dev.log
+frontend/.next/
+frontend/*.tsbuildinfo
+frontend/dev.log
 
 # ── Docker ──────────────────────────────────────────
 .docker/
+.docker-tmp-config/
 site
 
 # ── Python caches / test artifacts ─────────────────────────────────
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .cache/
 .coverage
 .coverage.*
@@ -96,6 +99,10 @@ pnpm-debug.log*
 # ── IDE / editor extras
 *.iml
 .ropeproject/
+
+# Impeccable's local session cache -- absolute machine-local file paths,
+# not project config (unlike the tracked .impeccable/config.json).
+**/.impeccable/hook.cache.json
 
 
 # CDK synth output -- build artifact, never source

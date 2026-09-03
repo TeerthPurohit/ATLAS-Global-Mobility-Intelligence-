@@ -26,7 +26,7 @@ README.md text eol=lf
 
 # Specific frontend paths (source files) - keep LF
 frontend/** text eol=lf
-frontend-web/** text eol=lf
+frontend/** text eol=lf
 
 # Binary files (do not attempt to normalize)
 *.png    binary

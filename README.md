@@ -41,7 +41,7 @@ one city has ever been registered.
   paid fine-tune paused per [ADR-010](docs/adr/ADR-010-query-plan-finetuning-budget-exception.md)).
 - **Serving** — a typed FastAPI backend (`backend/`) with model artifacts
   and registries preloaded at startup, and a Next.js map-first frontend
-  (`frontend-web/`).
+  (`frontend/`).
 
 ## Architecture
 
@@ -51,7 +51,7 @@ Layer 1  dbt transform      staging → intermediate → marts (dbt_project/)
 Layer 2  Algorithms         spatial / graph / timeseries (algorithms/)
 Layer 3  Model ladder       linear → EWMA → XGBoost → LSTM (models/)
 Layer 4  Hybrid RAG         NL→QueryPlan→SQL, vector retrieval (rag/)
-Layer 5  Serving            FastAPI (backend/) + Next.js (frontend-web/)
+Layer 5  Serving            FastAPI (backend/) + Next.js (frontend/)
 ```
 
 Each layer only reads what the previous one produced — the backend never
@@ -93,7 +93,7 @@ cd backend && uvicorn main:app --reload  # http://localhost:8000
 ```
 
 ```bash
-cd frontend-web
+cd frontend
 npm install
 npm run dev                    # http://localhost:3000
 ```
@@ -101,7 +101,7 @@ npm run dev                    # http://localhost:3000
 ## Repository layout
 
 `backend/`, `dbt_project/`, `data/`, `models/`, `algorithms/`, `rag/`,
-`scripts/`, `frontend-web/`, `docs/`, `specs/` (one spec per layer/feature,
+`scripts/`, `frontend/`, `docs/`, `specs/` (one spec per layer/feature,
 written against `project_plan.md`), `.claude/` (project constitution,
 subagents, skills — see `.claude/CLAUDE.md`).
 

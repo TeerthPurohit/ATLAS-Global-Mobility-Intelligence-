@@ -22,7 +22,7 @@ checklist *progress*).
       NYC is `full_rag` -- real SQL plus vector-retrieval synthesis.
 - [x] **Layer 5 — Serving & Presentation.** FastAPI backend (city, journey,
       prediction, mobility, context, analytics routers) and the Next.js
-      `frontend-web` app with an NYC zone-map hero.
+      `frontend` app with an NYC zone-map hero.
 
 **Scope note (2026-08-23):** the 519-city global layer that briefly sat on
 top of Layer 5 was removed ([ADR-011](../adr/ADR-011-retreat-from-global-coverage.md)),

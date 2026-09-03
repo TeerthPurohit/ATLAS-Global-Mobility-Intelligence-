@@ -20,7 +20,7 @@
 > **2026-08-30 theme note**: Sections 04 (Visual Language), 10 (Color
 > Tokens), and 40 (Dark Theme) below describe a slate/obsidian dark
 > enterprise palette that was never actually shipped — the real token
-> system in `frontend-web/app/globals.css` was a "parchment/brass" theme,
+> system in `frontend/app/globals.css` was a "parchment/brass" theme,
 > dark by default. Per direct user request, the app was reskinned to a
 > **light-primary** theme: lavender canvas (`--surface-0`), white cards
 > (`--surface-1`), and an indigo/teal/coral accent triad (`--brass`

@@ -45,7 +45,7 @@ DOCS_SPEC: dict[str, Any] = {
                         "```\n\n"
                         "#### 3. Launch the Web Dashboard\n\n"
                         "```bash\n"
-                        "cd frontend-web\n"
+                        "cd frontend\n"
                         "npm install\n"
                         "npm run dev\n"
                         "```\n\n"
