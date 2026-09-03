@@ -66,6 +66,8 @@ class BackendServingStack(Stack):
         *,
         github_org: str,
         github_repo: str,
+        github_org_id: str,
+        github_repo_id: str,
         existing_oidc_provider_arn: str | None = None,
         **kwargs,
     ) -> None:
@@ -161,9 +163,18 @@ class BackendServingStack(Stack):
                     "StringEquals": {
                         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                     },
+                    # GitHub's OIDC `sub` claim includes each side's immutable
+                    # numeric ID (repo:ORG@ORG_ID/REPO@REPO_ID:ref:...), not
+                    # just the display name -- a plain-name-only condition
+                    # never matches a real token (confirmed via CloudTrail
+                    # against a real failed AssumeRoleWithWebIdentity call).
+                    # Get the IDs with `gh api users/<org> --jq .id` and
+                    # `gh api repos/<org>/<repo> --jq .id`. Using the IDs also
+                    # means this condition survives a future org/repo rename
+                    # without redeploying.
                     "StringLike": {
                         "token.actions.githubusercontent.com:sub": (
-                            f"repo:{github_org}/{github_repo}:ref:refs/heads/main"
+                            f"repo:{github_org}@{github_org_id}/{github_repo}@{github_repo_id}:ref:refs/heads/main"
                         )
                     },
                 },

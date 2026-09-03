@@ -55,6 +55,8 @@ class DbtBuildStack(Stack):
         *,
         github_org: str,
         github_repo: str,
+        github_org_id: str,
+        github_repo_id: str,
         existing_oidc_provider_arn: str | None = None,
         **kwargs,
     ) -> None:
@@ -146,9 +148,20 @@ class DbtBuildStack(Stack):
                     },
                     # Restrict to this repo's main branch and manual dispatch --
                     # matches the workflow's `on:` triggers, not every ref.
+                    # GitHub's OIDC `sub` claim includes each side's immutable
+                    # numeric ID (repo:ORG@ORG_ID/REPO@REPO_ID:ref:...), not
+                    # just the display name -- confirmed via CloudTrail against
+                    # a real failed AssumeRoleWithWebIdentity call (a
+                    # plain-name-only condition never matches a real token,
+                    # it's not optional/new-repos-only). Get the IDs with
+                    # `gh api users/<org> --jq .id` and
+                    # `gh api repos/<org>/<repo> --jq .id`. Using the IDs also
+                    # means this condition survives a future org/repo rename
+                    # without redeploying -- that's the whole reason GitHub
+                    # puts them in the claim.
                     "StringLike": {
                         "token.actions.githubusercontent.com:sub": (
-                            f"repo:{github_org}/{github_repo}:ref:refs/heads/main"
+                            f"repo:{github_org}@{github_org_id}/{github_repo}@{github_repo_id}:ref:refs/heads/main"
                         )
                     },
                 },
