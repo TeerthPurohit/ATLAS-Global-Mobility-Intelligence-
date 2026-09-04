@@ -46,6 +46,7 @@ interface Turn {
   route?: ChatRoute | null;
   sql?: string | null;
   pending?: boolean;
+  modelLabel?: string | null;
 }
 
 const SESSION_KEY = "analyst_session_id";
@@ -133,7 +134,14 @@ export default function AnalystPage() {
             });
             return;
           }
-          if (frame.type === "chunk") {
+          if (frame.type === "model") {
+            setTurns((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              next[next.length - 1] = { ...last, modelLabel: frame.label };
+              return next;
+            });
+          } else if (frame.type === "chunk") {
             setTurns((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
@@ -605,6 +613,11 @@ function TurnBubble({ turn, onPickPrompt }: { turn: Turn; onPickPrompt?: (prompt
         {/* Header Badges */}
         <div className="flex items-center justify-between gap-2 border-b border-surface-border/60 pb-3 mb-3">
           <div className="flex items-center gap-2">
+            {turn.modelLabel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-verdigris/25 bg-verdigris/10 px-2.5 py-0.5 text-[11px] font-mono font-semibold text-verdigris">
+                {turn.modelLabel}
+              </span>
+            ) : null}
             {turn.route ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-brass/25 bg-brass/10 px-2.5 py-0.5 text-[11px] font-mono font-semibold text-brass">
                 {turn.route === "numeric" ? "SQL Query (Mart)" : "Grounded Retrieval"}

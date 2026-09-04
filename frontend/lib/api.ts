@@ -215,10 +215,18 @@ export interface ChatStreamDone {
   type: "done";
   payload: ChatResponse;
 }
+// Sent once, before the first "chunk" -- which LLM tier answered
+// (local fine-tune / DeepSeek / OpenAI fallback, see rag/llm_client.py).
+// Only emitted on the explanatory route's LLM-synthesis path; numeric/
+// greeting answers don't stream from an LLM, so no model frame for those.
+export interface ChatStreamModel {
+  type: "model";
+  label: string;
+}
 export interface ChatStreamError {
   error: string;
 }
-export type ChatStreamFrame = ChatStreamChunk | ChatStreamDone | ChatStreamError;
+export type ChatStreamFrame = ChatStreamChunk | ChatStreamDone | ChatStreamModel | ChatStreamError;
 
 // --- Insights (backend/routers/platform.py -> rag/insight_generation) ---
 // Real per-zone paragraphs grounded in mart data (see generate_insight_docs.py's
@@ -264,16 +272,47 @@ export function streamChat(
   req: ChatRequest,
   handlers: { onFrame: (frame: ChatStreamFrame) => void; onError?: (err: Event) => void; onClose?: () => void }
 ): () => void {
-  // API_BASE_URL is a relative path now (proxied), so build the ws(s):// URL
-  // from the current page's own origin instead of string-swapping http->ws.
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${window.location.host}${API_BASE_URL}/chat/stream`;
-  const ws = new WebSocket(wsUrl);
-  ws.onopen = () => ws.send(JSON.stringify(req));
-  ws.onmessage = (evt) => handlers.onFrame(JSON.parse(evt.data));
-  ws.onerror = (evt) => handlers.onError?.(evt);
-  ws.onclose = () => handlers.onClose?.();
-  return () => ws.close();
+  // Server-Sent Events over a plain POST, not a WebSocket: Vercel's
+  // rewrites() proxy (next.config.js) only forwards HTTP request/response
+  // cycles to an external destination, not a WS upgrade -- a WS client here
+  // reached the backend as a plain GET and 404'd. SSE is plain HTTP
+  // streaming, which the same proxy already handles correctly.
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(req),
+        signal: controller.signal,
+      });
+      if (!resp.ok || !resp.body) {
+        throw new Error(`chat/stream failed: ${resp.status} ${await resp.text()}`);
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+        for (const frame of frames) {
+          const dataLine = frame.split("\n").find((line) => line.startsWith("data: "));
+          if (dataLine) handlers.onFrame(JSON.parse(dataLine.slice("data: ".length)));
+        }
+      }
+      handlers.onClose?.();
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") handlers.onError?.(err as Event);
+      handlers.onClose?.();
+    }
+  })();
+
+  return () => controller.abort();
 }
 
 // ============================================================================

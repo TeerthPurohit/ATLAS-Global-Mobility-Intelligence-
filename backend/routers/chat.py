@@ -3,7 +3,8 @@
 from __future__ import annotations  # noqa: I001
 
 import json
-from fastapi import APIRouter, Cookie, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from backend.errors import DomainError
@@ -96,56 +97,44 @@ def delete_session(session_id: str, current_user: dict = Depends(auth_service.ge
     return {"ok": True}
 
 
-@router.websocket("/stream")
-async def websocket_chat_stream(
-    websocket: WebSocket, session_token: str | None = Cookie(default=None, alias=auth_service.SESSION_COOKIE_NAME)
-):
-    await websocket.accept()
-    logger.info("WS /chat/stream step=accepted")
-    user = auth_service.get_user_by_session(session_token) if session_token else None
-    if user is None:
-        logger.warning("WS /chat/stream step=validation_failed reason=not_authenticated")
-        await websocket.send_json({"error": "Not authenticated"})
-        await websocket.close(code=1008)
-        return
-    try:
-        data_str = await websocket.receive_text()
-        data = json.loads(data_str)
-        question = data.get("question")
-        if not question:
-            logger.warning("WS /chat/stream step=validation_failed reason=missing_question")
-            await websocket.send_json({"error": "question is required"})
-            await websocket.close(code=1008)
-            return
+@router.post("/stream")
+def stream_chat(
+    req: ChatRequest, current_user: dict = Depends(auth_service.get_current_user)  # noqa: B008 -- FastAPI's Depends() idiom
+) -> StreamingResponse:
+    """Server-Sent Events chat stream (ADR-014 follow-up: replaces the prior
+    WebSocket route). Vercel's rewrites() proxy only forwards plain HTTP
+    request/response cycles to an external destination -- there is no
+    documented support for proxying a WS upgrade through to a backend that
+    isn't itself a Vercel Function, so a WS client connecting through the
+    deployed frontend's /api/* proxy never actually upgraded; the request
+    arrived at the backend as a plain GET and 404'd. SSE is plain HTTP
+    streaming, which the same rewrite already proxies correctly (proven by
+    every other route)."""
+    logger.info("POST /chat/stream step=start session_id={}", req.session_id)
 
-        session_id = data.get("session_id")
-        area_id = data.get("area_id")
-        logger.info("WS /chat/stream step=streaming session_id={}", session_id)
-        for chunk_item in rag_service.stream_answer(question=question, session_id=session_id, user_id=user["id"]):
-            if chunk_item.get("type") == "done":
-                payload = dict(chunk_item.get("payload") or {})
-                payload["city_id"] = CITY_ID
-                payload["area_id"] = area_id
-                payload["route"] = _normalize_route(payload.get("route"))
-                chunk_item = {**chunk_item, "payload": payload}
-            await websocket.send_json(chunk_item)
-
-        await websocket.close()
-        logger.info("WS /chat/stream step=done")
-    except WebSocketDisconnect:
-        logger.info("WS /chat/stream step=client_disconnected")
-    except Exception as exc:  # noqa: BLE001, F841
-        # Log the real exception server-side for investigation; never forward
-        # str(exc) to the client -- it can contain internal details (DB
-        # hostnames/ports, driver error text) that are none of the caller's
-        # business. Found via /debug 2026-08-13: an unreachable RDS Postgres
-        # connection string reached the frontend verbatim through this path
-        # before session_store.py/prediction_log.py were made to degrade
-        # gracefully (the actual root-cause fix); this is the defense-in-depth
-        # backstop for whatever the next unexpected failure turns out to be.
-        logger.exception("chat stream failed")
+    def event_stream():
         try:
-            await websocket.send_json({"error": "Something went wrong answering this question. Please try again."})
-            await websocket.close(code=1011)
-        except Exception:  # noqa: BLE001, S110
-            pass
+            for chunk_item in rag_service.stream_answer(
+                question=req.question, session_id=req.session_id, user_id=current_user["id"]
+            ):
+                if chunk_item.get("type") == "done":
+                    payload = dict(chunk_item.get("payload") or {})
+                    payload["city_id"] = CITY_ID
+                    payload["area_id"] = req.area_id
+                    payload["route"] = _normalize_route(payload.get("route"))
+                    chunk_item = {**chunk_item, "payload": payload}
+                yield f"data: {json.dumps(chunk_item)}\n\n"
+            logger.info("POST /chat/stream step=done")
+        except Exception as exc:  # noqa: BLE001, F841
+            # Log the real exception server-side for investigation; never forward
+            # str(exc) to the client -- it can contain internal details (DB
+            # hostnames/ports, driver error text) that are none of the caller's
+            # business. Found via /debug 2026-08-13: an unreachable RDS Postgres
+            # connection string reached the frontend verbatim through this path
+            # before session_store.py/prediction_log.py were made to degrade
+            # gracefully (the actual root-cause fix); this is the defense-in-depth
+            # backstop for whatever the next unexpected failure turns out to be.
+            logger.exception("chat stream failed")
+            yield f"data: {json.dumps({'error': 'Something went wrong answering this question. Please try again.'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -1,5 +1,6 @@
 """One happy-path test per backend route (standards.md testing bar)."""
 
+import json
 import sys
 import uuid
 from pathlib import Path
@@ -209,20 +210,25 @@ def test_chat_history_404(client):
     assert resp.json()["error"]["code"] == "SESSION_NOT_FOUND"
 
 
-def test_websocket_chat_stream(client):
-    with client.websocket_connect("/chat/stream") as websocket:
-        websocket.send_json({"question": "What is the average fare for trips in JFK Airport?"})
-        received = []
-        while True:
-            try:
-                data = websocket.receive_json()
-                received.append(data)
-                if data.get("type") == "done":
-                    break
-            except Exception:  # noqa: BLE001
-                break
-        assert len(received) >= 1
-        assert received[-1]["type"] == "done"
+def _parse_sse_frames(resp) -> list[dict]:
+    """POST /chat/stream (ADR-014 follow-up) streams Server-Sent Events
+    frames (`data: {json}\\n\\n`) instead of a WebSocket -- Vercel's proxy
+    can't upgrade a WS to an external backend, only forward plain HTTP.
+    TestClient buffers the whole streamed body into resp.text, so parsing
+    it after the fact is equivalent to reading it frame-by-frame."""
+    return [
+        json.loads(chunk[len("data: "):])
+        for chunk in resp.text.split("\n\n")
+        if chunk.startswith("data: ")
+    ]
+
+
+def test_chat_stream(client):
+    resp = client.post("/chat/stream", json={"question": "What is the average fare for trips in JFK Airport?"})
+    assert resp.status_code == 200
+    frames = _parse_sse_frames(resp)
+    assert len(frames) >= 1
+    assert frames[-1]["type"] == "done"
 
 
 # ── City capability endpoints -- one happy-path test per endpoint ──
@@ -417,21 +423,14 @@ def test_post_chat_echoes_city_and_area(client):
     assert body["route"] in ("numeric", "explanatory")
 
 
-def test_websocket_stream_echoes_city_and_area(client):
-    with client.websocket_connect("/chat/stream") as websocket:
-        websocket.send_json({
-            "question": "What is the average fare for trips in JFK Airport?",
-            "area_id": 132,
-        })
-        done = None
-        while True:
-            try:
-                data = websocket.receive_json()
-            except Exception:  # noqa: BLE001
-                break
-            if data.get("type") == "done":
-                done = data["payload"]
-                break
+def test_chat_stream_echoes_city_and_area(client):
+    resp = client.post(
+        "/chat/stream",
+        json={"question": "What is the average fare for trips in JFK Airport?", "area_id": 132},
+    )
+    assert resp.status_code == 200
+    frames = _parse_sse_frames(resp)
+    done = next((f["payload"] for f in frames if f.get("type") == "done"), None)
     assert done is not None
     assert done["city_id"] == "nyc"
     assert done["area_id"] == 132

@@ -25,7 +25,7 @@ from config import DEFAULT_DB_PATH, OPENAI_MODEL  # noqa: I001
 from embeddings.build_vector_store import COLLECTION as DEFAULT_COLLECTION
 from embeddings.build_vector_store import search as vector_search
 from insight_generation.generate_insight_docs import extract_numbers, validate_grounding
-from llm_client import chat_completion
+from llm_client import chat_completion, provider_label
 from nl_to_sql import query_plan_agent, sql_agent
 from nl_to_sql.nyc_schema import NYC_SCHEMA
 from nl_to_sql.query_plan import CityMobilitySchema
@@ -300,7 +300,15 @@ def answer_stream(
                 trace_name="rag_pipeline.synthesize_explanatory_stream",
                 prompt_version=SYNTHESIS_PROMPT_VERSION,
             )
+            model_frame_sent = False
             for chunk in stream:
+                if not model_frame_sent and getattr(chunk, "model", None):
+                    # Sent once, as early as possible -- before the first
+                    # answer token -- so the UI can show which tier answered
+                    # (local fine-tune / DeepSeek / OpenAI fallback) for the
+                    # rest of the stream.
+                    yield {"type": "model", "label": provider_label(chunk.model)}
+                    model_frame_sent = True
                 if not chunk.choices:
                     # The final chunk of a stream_options={"include_usage": True}
                     # response carries usage with an empty choices list (llm_client.py

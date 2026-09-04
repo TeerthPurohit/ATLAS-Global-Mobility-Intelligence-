@@ -4,7 +4,14 @@
 duckdb>=1.0,<2.0
 numpy>=1.24,<2.0
 pandas>=2.0,<3.0
-xgboost>=2.0,<3.0
+xgboost>=3.0,<4.0
+# Was pinned <3.0 -- the deployed image silently scored the fare model with
+# xgboost 2.1.4 while it was trained/verified against 3.3.0 (the real local
+# venv version, which had drifted past the stale pin). 2->3 changed
+# enable_categorical internals; the model scored without raising but
+# produced wrong (negative, clamped to $0.00 by model_service.predict_fare's
+# max(pred, 0.0)) fares. Keep this in sync with the local venv's actual
+# xgboost version, not just the pin's own range.
 # xgboost's sklearn wrapper API (XGBRegressor, used by model_service.py to
 # load saved models) requires scikit-learn just to instantiate, even for
 # inference-only use -- this is a real runtime dep here, not a training one.

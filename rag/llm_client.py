@@ -120,10 +120,29 @@ def _instrumented_stream(stream, *, trace_name: str | None, prompt_version: str 
             )
 
 
+def provider_label(model_name: str) -> str:
+    """Human label for whichever tier `_dispatch_completion` actually used,
+    derived from the model name on the returned/streamed response (chunks
+    carry `.model` from the provider that served them, not the `model`
+    kwarg the caller originally asked for)."""
+    if model_name == LOCAL_MODEL_NAME:
+        return "Fine-tuned Qwen"
+    if model_name == DEEPSEEK_MODEL:
+        return "DeepSeek"
+    return "OpenAI"
+
+
 def _dispatch_completion(*, model: str, **kwargs):
+    # Explicit timeouts on every tier: without one, the openai SDK's own
+    # default (600s) means a slow/overloaded provider hangs the whole
+    # request instead of failing fast into the next tier's degrade path --
+    # the same class of bug rag/db.py's connect_timeout=3 fixed for
+    # Postgres. Found via a real hang: 4 concurrent journey_narrative.generate
+    # calls (the Compare page) queued up against the single-instance local
+    # model VM and none ever returned or fell through to DeepSeek.
     if LOCAL_MODEL_BASE_URL:
         try:
-            client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL)
+            client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL, timeout=15.0)
             return client.chat.completions.create(model=LOCAL_MODEL_NAME, **kwargs)
         except Exception as exc:  # noqa: BLE001
             import sys
@@ -131,7 +150,7 @@ def _dispatch_completion(*, model: str, **kwargs):
 
     if DEEPSEEK_API_KEY:
         try:
-            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=20.0)
             return client.chat.completions.create(model=DEEPSEEK_MODEL, **kwargs)
         except Exception as exc:  # noqa: BLE001
             import sys
