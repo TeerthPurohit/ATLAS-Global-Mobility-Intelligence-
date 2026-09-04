@@ -81,7 +81,11 @@ def test_summary_derives_cities_dates_and_top(client, monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["total_predictions"] == 3
-    assert body["cities_served"] == 2
+    # ADR-012/013: cities_served/top_cities are scoped to the one city
+    # actually registered today (nyc) -- the "unresolved" row is real
+    # lifetime history (counted in total_predictions) but stale product
+    # state from the removed multi-city layer, not current coverage.
+    assert body["cities_served"] == 1
     assert body["date_range"]["start"] is not None and body["date_range"]["end"] is not None
     assert body["top_cities"][0]["city_id"] == "nyc"
 

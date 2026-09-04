@@ -40,3 +40,4 @@ models/**/linear_baseline/*
 **/output/*
 !algorithms/spatial/output/kdtree_benchmark.json
 !algorithms/graph/output/pagerank_hubs.json
+!rag/insight_generation/output/insight_docs.jsonl
