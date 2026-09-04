@@ -137,20 +137,31 @@ def _dispatch_completion(*, model: str, **kwargs):
     # the openai SDK's own default (600s) means a slow/overloaded provider
     # hangs the whole request instead of failing fast into the next tier's
     # degrade path -- the same class of bug rag/db.py's connect_timeout=3
-    # fixed for Postgres. Found via a real hang: 4 concurrent
-    # journey_narrative.generate calls (the Compare page) queued up against
-    # the single-instance local model VM and none ever returned.
+    # fixed for Postgres.
     #
     # A timeout alone wasn't enough: the SDK's own default max_retries=2
     # means one "attempt" is actually retried twice more internally before
     # the exception ever reaches this except block -- a 15s timeout was
-    # really a 45s wait (measured: journey/estimate calls taking ~50s
-    # total with the local model down, even though DeepSeek itself answers
-    # in under 1s when called directly). max_retries=0 makes the configured
-    # timeout the real, single wait per tier.
+    # really a 45s wait. max_retries=0 makes the configured timeout the
+    # real, single wait per tier.
+    #
+    # LOCAL_MODEL timeout=60.0, not a short one: measured directly against
+    # the Oracle VM, single-request latency is genuinely fast (0.86s for a
+    # short reply) -- the earlier 5s/15s timeouts were cutting the local
+    # model off before it could finish, not working around a hang. At the
+    # real measured ~6.4 tok/s generation rate, a full max_completion_tokens
+    # response (200-250 tokens, what journey_narrative/explanatory synthesis
+    # actually request) takes ~31-39s of generation alone, before any
+    # queueing under concurrent callers. Per user priority: the fine-tuned
+    # local model actually answering matters more than shaving latency --
+    # 60s gives a single request real room to finish rather than reflexively
+    # falling back. Concurrent callers (e.g. the Compare page's 4 parallel
+    # journey/estimate calls) can still queue behind each other on the
+    # single-instance VM and take correspondingly longer; that's the
+    # explicit tradeoff being made here, not an oversight.
     if LOCAL_MODEL_BASE_URL:
         try:
-            client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL, timeout=5.0, max_retries=0)
+            client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL, timeout=60.0, max_retries=0)
             return client.chat.completions.create(model=LOCAL_MODEL_NAME, **kwargs)
         except Exception as exc:  # noqa: BLE001
             import sys
