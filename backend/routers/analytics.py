@@ -117,33 +117,6 @@ def _get_duckdb_borough_stats() -> list[dict]:
         ]
 
 
-def _get_duckdb_hourly_trends() -> dict[str, list[float]]:
-    try:
-        con = duckdb.connect(str(WAREHOUSE_PATH), read_only=True)
-        rows = con.execute("""
-            SELECT 
-                pickup_hour,
-                sum(total_trips) / 365.0 as daily_trips,
-                avg(avg_fare) as avg_fare,
-                avg(avg_trip_distance_miles) as avg_dist
-            FROM zone_hourly_demand
-            GROUP BY pickup_hour
-            ORDER BY pickup_hour ASC
-        """).fetchall()
-        return {
-            "predictions": [round(float(r[1]), 1) for r in rows],
-            "avg_fare": [round(float(r[2]), 2) for r in rows],
-            "avg_distance": [round(float(r[3]), 2) for r in rows],
-        }
-    except Exception as exc:
-        logger.warning("analytics._get_duckdb_hourly_trends failed: {}", exc)
-        return {
-            "predictions": [12.4, 8.2, 5.1, 4.3, 6.8, 14.5, 28.2, 44.6, 52.1, 48.3, 42.5, 46.1, 49.8, 47.2, 51.4, 58.6, 64.2, 68.5, 62.4, 54.1, 46.2, 38.9, 29.5, 19.8],
-            "avg_fare": [28.5, 29.1, 30.2, 29.8, 27.4, 25.6, 26.2, 28.4, 29.1, 27.8, 26.9, 27.2, 27.8, 28.1, 29.4, 31.2, 32.8, 33.5, 31.8, 29.6, 28.9, 28.4, 28.2, 28.1],
-            "avg_distance": [5.2, 5.4, 5.8, 5.6, 4.9, 4.5, 4.6, 4.8, 4.9, 4.7, 4.5, 4.6, 4.7, 4.8, 5.0, 5.2, 5.4, 5.5, 5.3, 5.1, 4.9, 4.8, 4.9, 5.1],
-        }
-
-
 @router.get("/summary", response_model=AnalyticsSummaryResponse)
 def summary() -> AnalyticsSummaryResponse:
     """Analytics summary from prediction logs and DuckDB warehouse marts."""
@@ -301,21 +274,12 @@ def trends(
             bucket["distances"].append(float(distance))
 
     sorted_keys = sorted(buckets.keys())
-    if len(sorted_keys) >= 3:
-        logger.info("GET /api/analytics/trends step=done period={} buckets={}", period, len(sorted_keys))
-        return AnalyticsTrendsResponse(
-            trends={
-                "predictions": [buckets[k]["count"] for k in sorted_keys],
-                "avg_fare": [round(sum(buckets[k]["fares"]) / len(buckets[k]["fares"]), 2) if buckets[k]["fares"] else 0.0 for k in sorted_keys],
-                "avg_distance": [round(sum(buckets[k]["distances"]) / len(buckets[k]["distances"]), 2) if buckets[k]["distances"] else 0.0 for k in sorted_keys],
-            },
-            period=period,
-        )
-    
-    # Return DuckDB warehouse hourly diurnal pattern when log is newly initialized
-    duckdb_trends = _get_duckdb_hourly_trends()
-    logger.info("GET /api/analytics/trends step=done period={} using_duckdb_marts=True", period)
+    logger.info("GET /api/analytics/trends step=done period={} buckets={}", period, len(sorted_keys))
     return AnalyticsTrendsResponse(
-        trends=duckdb_trends,
+        trends={
+            "predictions": [buckets[k]["count"] for k in sorted_keys],
+            "avg_fare": [round(sum(buckets[k]["fares"]) / len(buckets[k]["fares"]), 2) if buckets[k]["fares"] else 0.0 for k in sorted_keys],
+            "avg_distance": [round(sum(buckets[k]["distances"]) / len(buckets[k]["distances"]), 2) if buckets[k]["distances"] else 0.0 for k in sorted_keys],
+        },
         period=period,
     )
