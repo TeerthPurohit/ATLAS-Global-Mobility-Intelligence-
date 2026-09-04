@@ -49,11 +49,17 @@ models/query_plan_finetune/merged/
 
 # ── IDE / OS ────────────────────────────────────────
 .claude/
+.agents/
 .cursor/
 .codex/
 .superpowers/
+.impeccable/
 .vscode/
 .idea/
+
+# ── AI tooling output (not project code) ───────────
+graphify-out/
+skill-observations/
 *.swp
 *.swo
 *~
