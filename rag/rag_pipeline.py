@@ -39,6 +39,44 @@ import tracing
 
 _MONEY_COLS = ("fare", "amount", "price", "cost", "tip", "toll", "revenue")
 
+# Deterministic backstop for the synthesis prompt's "bold every number"
+# formatting instruction: the local fine-tuned model (repurposed here from
+# its actual fine-tuning task, QueryPlan JSON generation) doesn't reliably
+# follow it -- tested live and got both a fully-bolded multi-fact answer
+# and, on a different question, a completely unformatted one from the same
+# prompt. Bolding the numbers ourselves after the fact guarantees the
+# frontend's markdown rendering has something to highlight regardless of
+# what the model actually produced.
+#
+# Proper thousands-separator grouping ((?:,\d{3})+), not a loose [\d,]* --
+# the first version matched a stray sentence comma right after a number
+# ("18:00, and" -> "**00,**") because a trailing comma with no following
+# digits still satisfied [\d,]*.
+_BOLD_NUMBER_RE = re.compile(r"\$?-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?%?")
+
+
+def _bold_numbers(text: str) -> str:
+    def repl(m: re.Match) -> str:
+        start, end = m.span()
+        raw = m.group(0)
+        if text[max(0, start - 2):start] == "**" and text[end:end + 2] == "**":
+            return raw  # already bolded by the model -- don't double-wrap
+        if not raw.startswith("$") and not raw.endswith("%"):
+            # Bare small numbers (hour/day-like, same <= 31 threshold
+            # validate_grounding treats as connective, not a fact) stay
+            # unbolded -- otherwise a clock time like "19:00" becomes two
+            # separately-bolded halves ("**19**:**00**"), which is noise,
+            # not emphasis. $ amounts and percentages are never skipped
+            # regardless of magnitude -- a $22 fare is a real fact.
+            try:
+                if abs(float(raw.replace(",", ""))) <= 31:
+                    return raw
+            except ValueError:
+                pass
+        return f"**{raw}**"
+
+    return _BOLD_NUMBER_RE.sub(repl, text)
+
 
 def _format_label(col: str) -> str:
     return col.replace("_", " ").title()
@@ -167,7 +205,7 @@ def _synthesize_explanatory(question: str, hits: list[dict]) -> tuple[str, str |
     if not text or not validate_grounding(text, allowed):
         print("[warn] synthesis introduced an ungrounded number; returning retrieved doc verbatim", file=sys.stderr)
         return hits[0]["doc_text"], None
-    return text, resp.model
+    return _bold_numbers(text), resp.model
 
 
 def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COLLECTION) -> dict:
@@ -346,6 +384,13 @@ def answer_stream(
         if not final_text or not validate_grounding(final_text, allowed):
             print("[warn] synthesis introduced an ungrounded number; returning retrieved doc verbatim", file=sys.stderr)
             final_text = hits[0]["doc_text"]
+        # Bolding happens on the final text only, not the live-streamed
+        # chunks -- the frontend replaces displayed content wholesale with
+        # this "done" payload's answer once streaming finishes, so the
+        # brief unformatted flicker during streaming is an acceptable
+        # tradeoff for not having to reconstruct partial ** pairs
+        # token-by-token mid-stream.
+        final_text = _bold_numbers(final_text)
 
         payload = {
             "question": question,
