@@ -124,10 +124,19 @@ def provider_label(model_name: str) -> str:
     """Human label for whichever tier `_dispatch_completion` actually used,
     derived from the model name on the returned/streamed response (chunks
     carry `.model` from the provider that served them, not the `model`
-    kwarg the caller originally asked for)."""
-    if model_name == LOCAL_MODEL_NAME:
+    kwarg the caller originally asked for).
+
+    Substring match, not equality: llama.cpp's OpenAI-compat server doesn't
+    echo back LOCAL_MODEL_NAME ("queryplan") -- it reports the loaded
+    GGUF's real file path (confirmed via a direct call:
+    "/opt/queryplan-model/model-f16.gguf"). An exact-equality check here
+    meant the local tier could never match, so every local-model answer
+    was silently mislabeled "OpenAI" with no error anywhere -- found by
+    noticing chat/stream responses kept saying "OpenAI" with no
+    corresponding "[warn] local model call failed" in the backend logs."""
+    if LOCAL_MODEL_NAME in model_name:
         return "Fine-tuned Qwen"
-    if model_name == DEEPSEEK_MODEL:
+    if DEEPSEEK_MODEL in model_name:
         return "DeepSeek"
     return "OpenAI"
 
