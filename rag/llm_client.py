@@ -133,16 +133,24 @@ def provider_label(model_name: str) -> str:
 
 
 def _dispatch_completion(*, model: str, **kwargs):
-    # Explicit timeouts on every tier: without one, the openai SDK's own
-    # default (600s) means a slow/overloaded provider hangs the whole
-    # request instead of failing fast into the next tier's degrade path --
-    # the same class of bug rag/db.py's connect_timeout=3 fixed for
-    # Postgres. Found via a real hang: 4 concurrent journey_narrative.generate
-    # calls (the Compare page) queued up against the single-instance local
-    # model VM and none ever returned or fell through to DeepSeek.
+    # Explicit timeouts AND max_retries=0 on every tier: without a timeout,
+    # the openai SDK's own default (600s) means a slow/overloaded provider
+    # hangs the whole request instead of failing fast into the next tier's
+    # degrade path -- the same class of bug rag/db.py's connect_timeout=3
+    # fixed for Postgres. Found via a real hang: 4 concurrent
+    # journey_narrative.generate calls (the Compare page) queued up against
+    # the single-instance local model VM and none ever returned.
+    #
+    # A timeout alone wasn't enough: the SDK's own default max_retries=2
+    # means one "attempt" is actually retried twice more internally before
+    # the exception ever reaches this except block -- a 15s timeout was
+    # really a 45s wait (measured: journey/estimate calls taking ~50s
+    # total with the local model down, even though DeepSeek itself answers
+    # in under 1s when called directly). max_retries=0 makes the configured
+    # timeout the real, single wait per tier.
     if LOCAL_MODEL_BASE_URL:
         try:
-            client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL, timeout=15.0)
+            client = OpenAI(api_key=LOCAL_MODEL_API_KEY, base_url=LOCAL_MODEL_BASE_URL, timeout=5.0, max_retries=0)
             return client.chat.completions.create(model=LOCAL_MODEL_NAME, **kwargs)
         except Exception as exc:  # noqa: BLE001
             import sys
@@ -150,7 +158,7 @@ def _dispatch_completion(*, model: str, **kwargs):
 
     if DEEPSEEK_API_KEY:
         try:
-            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=20.0)
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=10.0, max_retries=0)
             return client.chat.completions.create(model=DEEPSEEK_MODEL, **kwargs)
         except Exception as exc:  # noqa: BLE001
             import sys

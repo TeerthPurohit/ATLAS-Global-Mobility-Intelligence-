@@ -15,6 +15,7 @@ grounded) text is returned verbatim instead of the LLM's rewrite.
 """
 from __future__ import annotations
 
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -104,9 +105,13 @@ def _answer_numeric(question: str, db_path: Path = DEFAULT_DB_PATH, schema: City
     except Exception as exc:
         exc_str = str(exc)
         print(f"[warn] numeric query plan failed ({exc}); falling back to explanatory route", file=sys.stderr)
-        # If the LLM returned a conversational string or greeting:
+        # If the LLM returned a conversational string or greeting -- word-
+        # boundary match, not a plain substring check: "Hi" as a bare
+        # substring matched "the highest trip volume" inside the exception
+        # text, silently returning the generic greeting for a completely
+        # normal numeric question whose QueryPlan generation happened to fail.
         for prefix in ("Hello", "Hi", "Hey", "Could you", "How can I", "What would you", "Please specify"):
-            if prefix.lower() in exc_str.lower():
+            if re.search(rf"\b{re.escape(prefix)}\b", exc_str, re.IGNORECASE):
                 return {
                     "question": question,
                     "route": EXPLANATORY,
@@ -135,7 +140,10 @@ def _hit_source(h: dict) -> dict:
     return source
 
 
-def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
+def _synthesize_explanatory(question: str, hits: list[dict]) -> tuple[str, str | None]:
+    """Returns (text, model_name) -- model_name is None whenever the answer
+    is the retrieved doc verbatim (fallback path, no LLM actually spoke),
+    so callers can skip the "which model answered" frame in that case."""
     context = "\n\n".join(f"[{_hit_label(h)}] {h['doc_text']}" for h in hits)
     allowed = set(extract_numbers(context))
 
@@ -154,12 +162,12 @@ def _synthesize_explanatory(question: str, hits: list[dict]) -> str:
         text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # noqa: BLE001
         print(f"[warn] explanatory synthesis failed ({exc}); returning retrieved doc verbatim", file=sys.stderr)
-        return hits[0]["doc_text"]
+        return hits[0]["doc_text"], None
 
     if not text or not validate_grounding(text, allowed):
         print("[warn] synthesis introduced an ungrounded number; returning retrieved doc verbatim", file=sys.stderr)
-        return hits[0]["doc_text"]
-    return text
+        return hits[0]["doc_text"], None
+    return text, resp.model
 
 
 def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COLLECTION) -> dict:
@@ -179,7 +187,7 @@ def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COL
             "rows": None,
             "sources": [],
         }
-    answer_text = _synthesize_explanatory(question, hits)
+    answer_text, model_used = _synthesize_explanatory(question, hits)
     result = {
         "question": question,
         "route": EXPLANATORY,
@@ -188,6 +196,8 @@ def _answer_explanatory(question: str, k: int = 3, collection: str = DEFAULT_COL
         "rows": None,
         "sources": [_hit_source(h) for h in hits],
     }
+    if model_used:
+        result["_model"] = model_used
     semantic_cache.put(question, namespace=collection, result=result)
     return result
 
@@ -258,6 +268,14 @@ def answer_stream(
             res["session_id"] = active_session_id
             session_store.save_message(active_session_id, "assistant", res["answer"], route=res.get("route", NUMERIC), sql=res.get("sql"), user_id=user_id)
             tracing.update_trace(output=res["answer"], route=res.get("route", NUMERIC))
+            # _answer_numeric falls through to the same non-streaming
+            # explanatory synthesis _answer_explanatory() uses when QueryPlan
+            # generation fails -- that path calls an LLM too, just not the
+            # streaming one below, so it needs its own "which model
+            # answered" frame rather than silently never sending one.
+            model_used = res.pop("_model", None)
+            if model_used:
+                yield {"type": "model", "label": provider_label(model_used)}
             yield {"type": "chunk", "text": res["answer"]}
             yield {"type": "done", "payload": res}
             return
